@@ -8,20 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { getProducts as getLocalProducts, getRoutes as getLocalRoutes, setDailyStock, getDailyStock, addRoute, deactivateRoute, type Product as DbProduct, type Route as DbRoute, type DailyStock as DbDailyStock, type StockItem as DbStockItem } from "@/lib/localDb";
+import { getProducts, getRoutes, setDailyStock, getDailyStock, addRoute, deactivateRoute, type Product, type Route, type DailyStock, type StockItem } from "@/lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "@/lib/routeUtils";
-import { listenForProductUpdates } from "@/lib/productSync";
-import { seedDefaultProductsIfMissing } from "@/lib/defaultProducts";
-import { ArrowLeft, Route, Package, Plus, Minus, Trash2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Route as RouteIcon, Package, Plus, Minus, Trash2, RefreshCw } from "lucide-react";
 import { isWithinAuthGracePeriod, nameMatchesQueryByWordPrefix } from "@/lib/utils";
 
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  pcs_price?: number;
-  box_price?: number;
-}
+
 
 interface RouteOption {
   id: string;
@@ -30,18 +22,14 @@ interface RouteOption {
 }
 
 
-interface StockItem {
-  productId: string;
-  unit: 'box' | 'pcs';
-  quantity: number;
-}
+
 
 const StartRoute = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [user, setUser] = useState<{ id?: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  
+
   const [selectedRoute, setSelectedRoute] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [routes, setRoutes] = useState<RouteOption[]>([]);
@@ -69,19 +57,7 @@ const StartRoute = () => {
     }
   }, [user]);
 
-  // Listen for product updates from other pages
-  useEffect(() => {
-    const cleanup = listenForProductUpdates((event) => {
-      console.log('StartRoute received product update event:', event);
-      if (event.type === 'product-updated' || event.type === 'product-deleted') {
-        console.log('Refreshing StartRoute data due to product update');
-        // Refresh products data when products are updated elsewhere
-        fetchData();
-      }
-    });
 
-    return cleanup;
-  }, []);
 
   useEffect(() => {
     if (selectedRoute) {
@@ -91,28 +67,28 @@ const StartRoute = () => {
 
   const fetchData = async () => {
     try {
-      // Ensure default products exist before fetching
-      await seedDefaultProductsIfMissing();
-      
-      // Fetch products and routes
-      const productsRes = getLocalProducts().filter((p: DbProduct) => (p.status || 'active') === 'active');
-      const routesRes = getLocalRoutes().filter((r: DbRoute) => r.is_active !== false);
+      // Fetch products and routes from Supabase
+      const productsRes = await getProducts();
+      const routesRes = await getRoutes();
 
-      if (productsRes) {
-        setProducts(productsRes);
+      const activeProducts = productsRes.filter((p) => (p.status || 'active') === 'active');
+      const activeRoutes = routesRes.filter((r) => r.is_active !== false);
+
+      if (activeProducts) {
+        setProducts(activeProducts);
         // Initialize stock list as empty; entries are added per product+unit
         setStock([]);
       }
-      
-      if (routesRes) {
+
+      if (activeRoutes) {
         // Map old route names to new Route 1, 2, 3 format and filter out hidden routes
-        const mappedRoutes = routesRes
+        const mappedRoutes = activeRoutes
           .filter(route => shouldDisplayRoute(route.name))
           .map(route => ({
             ...route,
             displayName: mapRouteName(route.name)
           }));
-        
+
         setRoutes(mappedRoutes);
       }
     } catch (error) {
@@ -127,17 +103,17 @@ const StartRoute = () => {
   const checkExistingStock = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const data = getDailyStock(selectedRoute, today) as DbDailyStock | null;
+      const data = await getDailyStock(selectedRoute, today);
       if (data) {
         // Stock already exists for today
         toast({
           title: "Stock Already Set",
           description: "Initial stock for this route has already been set today. Loading existing stock...",
         });
-        
+
         // Load existing stock
         if (data && Array.isArray(data.stock)) {
-          const items = data.stock as DbStockItem[];
+          const items = data.stock;
           setStock(items.map((s) => ({
             productId: s.productId,
             unit: s.unit ?? 'pcs',
@@ -151,8 +127,8 @@ const StartRoute = () => {
   };
 
   const updateStock = (productId: string, unit: 'box' | 'pcs', change: number) => {
-    setStock(prev => 
-      prev.map(item => 
+    setStock(prev =>
+      prev.map(item =>
         item.productId === productId && item.unit === unit
           ? { ...item, quantity: Math.max(0, item.quantity + change) }
           : item
@@ -174,7 +150,8 @@ const StartRoute = () => {
     try {
       // Prevent duplicate route names (case-insensitive)
       const nameToCheck = newRouteName.trim();
-      const existing = getLocalRoutes().find((r: DbRoute) => String(r.name).toLowerCase() === String(nameToCheck).toLowerCase());
+      const allRoutes = await getRoutes();
+      const existing = allRoutes.find((r) => String(r.name).toLowerCase() === String(nameToCheck).toLowerCase());
       if (existing) {
         toast({
           title: "Route name already exists",
@@ -184,7 +161,7 @@ const StartRoute = () => {
         setCreatingRoute(false);
         return;
       }
-      const data = addRoute(nameToCheck);
+      const data = await addRoute(nameToCheck);
       setRoutes((prev) => [
         ...prev,
         { id: data.id, name: data.name, displayName: mapRouteName(data.name) },
@@ -216,16 +193,16 @@ const StartRoute = () => {
     setDeletingRoute(true);
     try {
       // Soft delete: set is_active to false instead of deleting
-      deactivateRoute(routeId);
+      await deactivateRoute(routeId);
 
       // Remove the route from local state
       setRoutes(prev => prev.filter(route => route.id !== routeId));
-      
+
       // If the deleted route was selected, clear selection
       if (selectedRoute === routeId) {
         setSelectedRoute("");
       }
-      
+
       toast({
         title: "Success!",
         description: "Route deactivated successfully",
@@ -243,8 +220,8 @@ const StartRoute = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    
+
+
 
     setLoading(true);
 
@@ -262,7 +239,7 @@ const StartRoute = () => {
       }
 
       const today = new Date().toISOString().split('T')[0];
-      setDailyStock(selectedRoute, today, nonZeroStock);
+      await setDailyStock(selectedRoute, today, nonZeroStock);
 
       // Store route in localStorage for use in other pages
       localStorage.setItem('currentRoute', selectedRoute);
@@ -272,7 +249,7 @@ const StartRoute = () => {
         title: "Route Started!",
         description: "Your daily stock has been recorded successfully",
       });
-      
+
       navigate("/dashboard");
     } catch (error: unknown) {
       toast({
@@ -350,7 +327,7 @@ const StartRoute = () => {
             </Button>
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-r from-business-blue to-business-blue-dark rounded-lg sm:rounded-xl flex items-center justify-center">
-                <Route className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                <RouteIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div>
                 <h1 className="text-lg sm:text-xl font-bold text-foreground">Start Route</h1>
@@ -378,13 +355,13 @@ const StartRoute = () => {
               Select your route and set initial stock levels
             </CardDescription>
           </CardHeader>
-          
+
           <CardContent className="px-4 sm:px-6">
             <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
               {/* Route Selection */}
               <div className="space-y-2">
                 <Label className="text-sm sm:text-base font-semibold flex items-center gap-2">
-                  <Route className="w-4 h-4" />
+                  <RouteIcon className="w-4 h-4" />
                   Select Route
                 </Label>
                 <div className="flex gap-2 flex-wrap">
@@ -438,7 +415,7 @@ const StartRoute = () => {
                       })}
                     </SelectContent>
                   </Select>
-                  
+
                   <Dialog open={showNewRouteDialog} onOpenChange={setShowNewRouteDialog}>
                     <DialogTrigger asChild>
                       <Button

@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { getProducts as getLocalProducts, upsertProduct, softDeleteProduct } from "@/lib/localDb";
-import { notifyProductUpdate, notifyProductDelete } from "@/lib/productSync";
+import { getProducts, upsertProduct, softDeleteProduct, type Product } from "@/lib/supabase";
 import { ArrowLeft, Plus, Edit2, Trash2, Package, Save, X } from "lucide-react";
 import {
   AlertDialog,
@@ -20,27 +19,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  pcs_price?: number;
-  box_price?: number;
-  pcs_per_box?: number;
-  description: string | null;
-  status: string | null;
-  created_at: string;
-}
+
 
 const AddProduct = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  
+
   // Form state
   const [name, setName] = useState("");
   const [boxPrice, setBoxPrice] = useState("");
@@ -54,8 +43,9 @@ const AddProduct = () => {
 
   const fetchProducts = async () => {
     try {
-      const data = (getLocalProducts() || []).sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)));
-      setProducts(data || []);
+      const data = await getProducts();
+      const sorted = data.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      setProducts(sorted);
     } catch (error: any) {
       console.error("Error fetching products:", error);
       toast({
@@ -129,15 +119,13 @@ const AddProduct = () => {
       };
 
       if (editingId) {
-        const updated = upsertProduct({ id: editingId, ...productData } as any);
-        notifyProductUpdate(editingId, productData);
+        await upsertProduct({ id: editingId, ...productData });
         toast({
           title: "Product Updated!",
           description: `${name} has been updated successfully`,
         });
       } else {
-        const created = upsertProduct(productData as any);
-        notifyProductUpdate(created.id, productData);
+        await upsertProduct(productData);
         toast({
           title: "Product Added!",
           description: `${name} has been added successfully`,
@@ -160,22 +148,19 @@ const AddProduct = () => {
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    
+
     setLoading(true);
     try {
       const productToDelete = products.find(p => p.id === deleteId);
       if (!productToDelete) throw new Error("Product not found");
-      
-      softDeleteProduct(deleteId);
-      
-      console.log('AddProduct: Notifying about product delete', deleteId);
-      notifyProductDelete(deleteId);
-      
+
+      await softDeleteProduct(deleteId);
+
       toast({
         title: "Product Deleted",
         description: `${productToDelete.name} has been removed`,
       });
-      
+
       setDeleteId(null);
       fetchProducts();
     } catch (error: any) {
@@ -235,7 +220,7 @@ const AddProduct = () => {
               {editingId ? "Update product details" : "Enter product details to add to inventory"}
             </CardDescription>
           </CardHeader>
-          
+
           <CardContent className="px-4 sm:px-6">
             <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
               {/* Product Name */}
@@ -357,7 +342,7 @@ const AddProduct = () => {
                     </>
                   )}
                 </Button>
-                
+
                 {editingId && (
                   <Button
                     type="button"
@@ -384,7 +369,7 @@ const AddProduct = () => {
               {activeProducts.length} active products
             </CardDescription>
           </CardHeader>
-          
+
           <CardContent className="px-4 sm:px-6 pb-6">
             {products.length === 0 ? (
               <div className="text-center py-8">
@@ -397,43 +382,43 @@ const AddProduct = () => {
                   const boxPrice = product.box_price ?? product.price ?? ((product.pcs_price ?? 0) * ppb);
                   const pcsPrice = product.pcs_price ?? ((product.box_price ?? product.price ?? 0) / ppb);
                   return (
-                  <Card key={product.id} className="border border-border hover:border-primary/50 transition-colors">
-                    <CardContent className="p-3 sm:p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-foreground text-base mb-1">{product.name}</h4>
-                          <p className="text-sm text-muted-foreground mb-1">Box: ₹{boxPrice.toFixed(2)} · PCS: ₹{pcsPrice.toFixed(2)} · Pcs/Box: {ppb}</p>
-                          {product.description && (
-                            <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
-                          )}
+                    <Card key={product.id} className="border border-border hover:border-primary/50 transition-colors">
+                      <CardContent className="p-3 sm:p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-foreground text-base mb-1">{product.name}</h4>
+                            <p className="text-sm text-muted-foreground mb-1">Box: ₹{boxPrice.toFixed(2)} · PCS: ₹{pcsPrice.toFixed(2)} · Pcs/Box: {ppb}</p>
+                            {product.description && (
+                              <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
+                            )}
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => handleEdit(product)}
+                              className="h-9 w-9 touch-manipulation"
+                              title="Edit product"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => setDeleteId(product.id)}
+                              className="h-9 w-9 text-destructive hover:text-destructive touch-manipulation"
+                              title="Delete product"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
-                        
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => handleEdit(product)}
-                            className="h-9 w-9 touch-manipulation"
-                            title="Edit product"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => setDeleteId(product.id)}
-                            className="h-9 w-9 text-destructive hover:text-destructive touch-manipulation"
-                            title="Delete product"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
                   );
                 })}
-                
+
                 {inactiveProducts.length > 0 && (
                   <>
                     <div className="pt-4 pb-2">
@@ -441,45 +426,45 @@ const AddProduct = () => {
                         Inactive Products ({inactiveProducts.length})
                       </h4>
                     </div>
-                {inactiveProducts.map((product) => {
-                  const ppb = product.pcs_per_box ?? 24;
-                  const boxPrice = product.box_price ?? product.price ?? ((product.pcs_price ?? 0) * ppb);
-                  const pcsPrice = product.pcs_price ?? ((product.box_price ?? product.price ?? 0) / ppb);
-                  return (
-                  <Card key={product.id} className="border border-border opacity-60">
-                    <CardContent className="p-3 sm:p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-foreground text-base mb-1">{product.name}</h4>
-                          <p className="text-sm text-muted-foreground mb-1">Box: ₹{boxPrice.toFixed(2)} · PCS: ₹{pcsPrice.toFixed(2)} · Pcs/Box: {ppb}</p>
-                          {product.description && (
-                            <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
-                          )}
-                        </div>
-                            
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => handleEdit(product)}
-                                className="h-9 w-9 touch-manipulation"
-                                title="Edit product"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => setDeleteId(product.id)}
-                                className="h-9 w-9 text-destructive hover:text-destructive touch-manipulation"
-                                title="Delete product"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                    {inactiveProducts.map((product) => {
+                      const ppb = product.pcs_per_box ?? 24;
+                      const boxPrice = product.box_price ?? product.price ?? ((product.pcs_price ?? 0) * ppb);
+                      const pcsPrice = product.pcs_price ?? ((product.box_price ?? product.price ?? 0) / ppb);
+                      return (
+                        <Card key={product.id} className="border border-border opacity-60">
+                          <CardContent className="p-3 sm:p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-semibold text-foreground text-base mb-1">{product.name}</h4>
+                                <p className="text-sm text-muted-foreground mb-1">Box: ₹{boxPrice.toFixed(2)} · PCS: ₹{pcsPrice.toFixed(2)} · Pcs/Box: {ppb}</p>
+                                {product.description && (
+                                  <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
+                                )}
+                              </div>
+
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => handleEdit(product)}
+                                  className="h-9 w-9 touch-manipulation"
+                                  title="Edit product"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => setDeleteId(product.id)}
+                                  className="h-9 w-9 text-destructive hover:text-destructive touch-manipulation"
+                                  title="Delete product"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                          </CardContent>
+                        </Card>
                       );
                     })}
                   </>

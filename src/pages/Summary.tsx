@@ -6,19 +6,11 @@ import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { useToast } from "../hooks/use-toast";
-import { getRoutes as getLocalRoutes, getProducts as getLocalProducts, getDailyStock, getSalesFor, type Product as DbProduct, type DailyStock as DbDailyStock, type Sale as DbSale } from "../lib/localDb";
+import { getRoutes, getProducts, getDailyStock, getSalesFor, type Product, type DailyStock, type Sale } from "../lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "../lib/routeUtils";
-import { listenForProductUpdates } from "../lib/productSync";
 import { ArrowLeft, BarChart3, Printer, Calendar, TrendingUp, Package, DollarSign } from "lucide-react";
 
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  pcs_price?: number;
-  box_price?: number;
-  pcs_per_box?: number;
-}
+
 
 interface RouteOption {
   id: string;
@@ -72,7 +64,7 @@ function getPcsPerBoxFromProduct(product: any): number {
 const Summary = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedRoute, setSelectedRoute] = useState("");
   const [routes, setRoutes] = useState<RouteOption[]>([]);
@@ -103,24 +95,13 @@ const Summary = () => {
     fetchRoutes();
   }, []);
 
-  // Listen for product updates from other pages
-  useEffect(() => {
-    const cleanup = listenForProductUpdates((event) => {
-      if (event.type === 'product-updated' || event.type === 'product-deleted') {
-        // Refresh data when products are updated elsewhere
-        if (selectedRoute && selectedDate) {
-          generateSummary();
-        }
-      }
-    });
 
-    return cleanup;
-  }, [selectedRoute, selectedDate]);
 
   const fetchRoutes = async () => {
     try {
-      const data = getLocalRoutes().filter((r: any) => r.is_active !== false);
-      const mappedAndFilteredRoutes = data
+      const data = await getRoutes();
+      const activeRoutes = data.filter((r) => r.is_active !== false);
+      const mappedAndFilteredRoutes = activeRoutes
         .filter(route => shouldDisplayRoute(route.name))
         .map(route => ({
           ...route,
@@ -148,13 +129,14 @@ const Summary = () => {
 
     setLoading(true);
     try {
-      const products = (getLocalProducts() || []).filter((p: DbProduct) => (p.status || 'active') === 'active') as DbProduct[];
-      const dailyStock = getDailyStock(selectedRoute, selectedDate) as DbDailyStock | null;
-      const sales = getSalesFor(selectedDate, selectedRoute) as DbSale[];
+      const products = await getProducts();
+      const activeProducts = products.filter((p) => (p.status || 'active') === 'active');
+      const dailyStock = await getDailyStock(selectedRoute, selectedDate);
+      const sales = await getSalesFor(selectedDate, selectedRoute);
 
       // Calculate summary with separate box and pcs units
       const summary: SummaryItem[] = [];
-      
+
       if (products) {
         products.forEach(product => {
           // Read initial stock per unit from daily_stock (treated as START)
@@ -247,30 +229,30 @@ const Summary = () => {
   const getRouteName = () => {
     const route = routes.find(r => r.id === selectedRoute);
     if (!route) return "Unknown Route";
-    
+
     // route names are already mapped in fetchRoutes
     return route.name;
   };
-  
+
   // Helper function to build the receipt content string
   const getReceiptContent = () => {
     const t = totals;
     const grandTotalStr = grandTotal.toFixed(2);
     const generatedDate = new Date().toLocaleString('en-IN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
     }).replace(',', ''); // Remove comma for cleaner output
-    
+
     const routeName = getRouteName();
     // Format date as DD-MM-YYYY to match image
     const formattedDate = new Date(selectedDate).toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
     }).replace(/\//g, '-');
 
     // 32-character width for 58mm printer
@@ -291,11 +273,11 @@ const Summary = () => {
     content += "---------------+--------+-------\n";
 
     summaryData.forEach(item => {
-        // Keep line width to 32 chars with separators: 15 + 1 + 8 + 1 + 7 = 32
-        const name = item.productName.substring(0, 15).padEnd(15, ' ');
-        const sold = `${item.soldBox}|${item.soldPcs}`.padEnd(8, ' ');
-        const left = `${item.remainingBox}|${item.remainingPcs}`.padEnd(7, ' ');
-        content += `${name}|${sold}|${left}\n`;
+      // Keep line width to 32 chars with separators: 15 + 1 + 8 + 1 + 7 = 32
+      const name = item.productName.substring(0, 15).padEnd(15, ' ');
+      const sold = `${item.soldBox}|${item.soldPcs}`.padEnd(8, ' ');
+      const left = `${item.remainingBox}|${item.remainingPcs}`.padEnd(7, ' ');
+      content += `${name}|${sold}|${left}\n`;
     });
 
     content += "--------------------------------\n";
@@ -307,7 +289,7 @@ const Summary = () => {
     content += `Generated: ${generatedDate}\n`;
     content += "Powered by apexdeploy.in\n";
     content += "================================\n";
-    
+
     return content;
   };
 
@@ -343,7 +325,7 @@ const Summary = () => {
                 Select date and route to view sales report
               </CardDescription>
             </CardHeader>
-            
+
             <CardContent className="px-4 sm:px-6">
               <div className="space-y-6 sm:space-y-8">
                 {/* Date Selection */}
@@ -431,10 +413,10 @@ const Summary = () => {
                   <h1 className="text-2xl sm:text-3xl font-bold text-foreground print:text-xl">Fresh Soda Sales</h1>
                   <p className="text-base sm:text-lg font-semibold text-muted-foreground print:text-sm">Day Summary Report</p>
                   <div className="mt-3 space-y-1 text-sm text-muted-foreground print:text-xs print:mt-2">
-                    <p><strong>Date:</strong> {new Date(selectedDate).toLocaleDateString('en-IN', { 
-                      day: '2-digit', 
-                      month: 'long', 
-                      year: 'numeric' 
+                    <p><strong>Date:</strong> {new Date(selectedDate).toLocaleDateString('en-IN', {
+                      day: '2-digit',
+                      month: 'long',
+                      year: 'numeric'
                     })}</p>
                     <p><strong>Route:</strong> {getRouteName()}</p>
                   </div>
@@ -561,13 +543,13 @@ const Summary = () => {
 
       {/* Top-level print container (rendered into document.body via portal) */}
       {showSummary && createPortal(
-        <div 
+        <div
           id="print-summary-receipt"
           // These inline styles are a fallback, the @media print CSS is primary
-          style={{ 
-            whiteSpace: 'pre', 
-            fontFamily: '"Courier New", Courier, monospace', 
-            fontSize: '11px', 
+          style={{
+            whiteSpace: 'pre',
+            fontFamily: '"Courier New", Courier, monospace',
+            fontSize: '11px',
             lineHeight: '1.3',
             color: '#000',
             display: 'none' // Hidden by default, only shown by print CSS

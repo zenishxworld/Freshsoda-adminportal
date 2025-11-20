@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,21 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { getProducts as getLocalProducts, getDailyStock, getSalesFor, appendSale, getRoutes, type Product as DbProduct, type Route as DbRoute, type DailyStock as DbDailyStock, type Sale as DbSale } from "../lib/localDb";
+import { getProducts, getDailyStock, getSalesFor, appendSale, getRoutes, type Product, type Route, type DailyStock, type Sale } from "../lib/supabase";
 import { mapRouteName } from "../lib/routeUtils";
-import { listenForProductUpdates, type ProductUpdateEvent } from "../lib/productSync";
-import { seedDefaultProductsIfMissing, UNIT_PRICE_MAP } from "../lib/defaultProducts";
 import { ArrowLeft, ShoppingCart, Plus, Minus, Printer, Store, Check, RefreshCw, X, MapPin, Phone } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { nameMatchesQueryByWordPrefix } from "../lib/utils";
 
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  pcs_price?: number;
-  box_price?: number;
-}
+
 
 interface SaleItem {
   productId: string;
@@ -117,10 +109,10 @@ const ShopBilling = () => {
     if (typeof ps === 'string') {
       const parsed = JSON.parse(ps);
       if (Array.isArray(parsed)) return parsed as SoldItem[];
-    if (typeof parsed === 'object' && parsed !== null) {
-      const obj2 = parsed as { items?: unknown };
-      if (Array.isArray(obj2.items)) return obj2.items as SoldItem[];
-    }
+      if (typeof parsed === 'object' && parsed !== null) {
+        const obj2 = parsed as { items?: unknown };
+        if (Array.isArray(obj2.items)) return obj2.items as SoldItem[];
+      }
     }
     return [];
   }, []);
@@ -156,7 +148,7 @@ const ShopBilling = () => {
       console.warn('Failed to load shop suggestions', err);
     }
   }, [authUserId]);
-   const saveShopNameToLocal = (_routeId: string, name: string) => {
+  const saveShopNameToLocal = (_routeId: string, name: string) => {
     const localKey = `shopNames:${authUserId || 'anon'}`;
     const existing = JSON.parse(localStorage.getItem(localKey) || '[]');
     let updated: string[] = Array.isArray(existing) ? existing : [];
@@ -203,22 +195,12 @@ const ShopBilling = () => {
     fetchProductsAndStock(route, date);
   }, [navigate, toast, loadShopSuggestions, fetchProductsAndStock]);
 
-  useEffect(() => {
-    const cleanup = listenForProductUpdates((event: ProductUpdateEvent) => {
-      console.log('ShopBilling received product update event:', event);
-      if (event.type === 'product-updated' || event.type === 'product-deleted') {
-        if (currentRoute && currentDate) {
-          fetchProductsAndStock(currentRoute, currentDate);
-        }
-      }
-    });
-    return cleanup;
-  }, [currentRoute, currentDate, fetchProductsAndStock]);
+
 
   // Helper to compute pcs-per-box directly from a product object during fetch.
   // This avoids relying on the React state update timing for `products`.
   const getPcsPerBoxFromProduct = (product: unknown): number => {
-    const p = product as Partial<DbProduct>;
+    const p = product as Partial<Product>;
     if (typeof p.pcs_per_box === 'number' && p.pcs_per_box > 0) return p.pcs_per_box;
     const box = (p.box_price ?? p.price) as number | undefined;
     const pcs = (p.pcs_price ?? (box ? box / 24 : undefined)) as number | undefined;
@@ -229,17 +211,17 @@ const ShopBilling = () => {
   // --- fetchProductsAndStock remains largely the same ---
   const fetchProductsAndStock = useCallback(async (route: string, date: string) => {
     try {
-      const routes = getRoutes() as DbRoute[];
+      const routes = await getRoutes();
       const r = routes.find((rr) => String(rr.id) === String(route));
       if (r) setCurrentRouteName(mapRouteName(r.name));
 
-      await seedDefaultProductsIfMissing();
-      const productsData = (getLocalProducts() || []).filter((p: DbProduct) => (p.status || 'active') === 'active') as DbProduct[];
-      setProducts(productsData);
+      const productsData = await getProducts();
+      const activeProducts = productsData.filter((p) => (p.status || 'active') === 'active');
+      setProducts(activeProducts);
 
-      const stockData = getDailyStock(route, date) as DbDailyStock | null;
+      const stockData = await getDailyStock(route, date);
 
-      const salesData = getSalesFor(date, route) as DbSale[];
+      const salesData = await getSalesFor(date, route);
 
       const saleItemsWithStock = productsData.flatMap(product => {
         let initialBox = 0, initialPcs = 0;
@@ -361,7 +343,7 @@ const ShopBilling = () => {
   };
 
   // --- Quick-add dialog helpers remain the same ---
-   const resetAddProductState = () => {
+  const resetAddProductState = () => {
     setProductQuery("");
     setSelectedProduct(null);
     setUnitMode('box');
@@ -423,7 +405,7 @@ const ShopBilling = () => {
 
 
   // --- calculateTotal, getSoldItems, isValidPhone, isValidForBilling remain the same ---
-   const calculateTotal = () => saleItems.reduce((sum, item) => sum + item.total, 0);
+  const calculateTotal = () => saleItems.reduce((sum, item) => sum + item.total, 0);
   const getSoldItems = () => saleItems.filter(item => item.quantity > 0);
   const isValidPhone = (p: string) => /^\d{10}$/.test(p);
   const isValidForBilling = () => {
@@ -489,7 +471,7 @@ const ShopBilling = () => {
 
     // 2) After print dialog opens, persist the sale
     try {
-      const saleForAppend: Omit<DbSale, 'id' | 'created_at'> = {
+      const saleForAppend: Omit<Sale, 'id' | 'created_at'> = {
         route_id: currentRoute,
         date: currentDate,
         shop_name: shopName,
@@ -500,7 +482,7 @@ const ShopBilling = () => {
         },
         total_amount: snapshot.total,
       };
-      appendSale(saleForAppend);
+      await appendSale(saleForAppend);
 
       // Persist shop hinting info
       if (currentRoute && shopName.trim()) {
@@ -582,7 +564,7 @@ const ShopBilling = () => {
         {!showBillPreviewUI ? (
           // Billing Form - Remains the same structure
           <Card className="border-0 shadow-strong">
-             <CardHeader className="text-center pb-4 sm:pb-6 px-4 sm:px-6">
+            <CardHeader className="text-center pb-4 sm:pb-6 px-4 sm:px-6">
               <CardTitle className="text-xl sm:text-2xl font-bold">New Sale</CardTitle>
               <CardDescription className="text-sm sm:text-base">
                 Enter shop details and select products
@@ -596,10 +578,10 @@ const ShopBilling = () => {
               )}
             </CardHeader>
 
-             <CardContent className="px-4 sm:px-6">
+            <CardContent className="px-4 sm:px-6">
               <div className="space-y-6 sm:space-y-8">
-                 {/* Shop Name Input with suggestions - remains same */}
-                 <div className="space-y-2">
+                {/* Shop Name Input with suggestions - remains same */}
+                <div className="space-y-2">
                   <Label className="text-sm sm:text-base font-semibold flex items-center gap-2">
                     <Store className="w-4 h-4" />
                     Shop Name
@@ -661,14 +643,14 @@ const ShopBilling = () => {
                       </div>
                     )}
                   </div>
-                 </div>
-                 {/* Address Input - remains same */}
-                 <div className="space-y-2">
-                   <Label className="text-sm sm:text-base font-semibold flex items-center gap-2"><MapPin className="w-4 h-4" /> Address / Village</Label>
-                   <Input type="text" placeholder="Enter address or village name" value={shopAddress} onChange={(e) => setShopAddress(e.target.value)} className="h-11 sm:h-10 text-base" />
-                 </div>
-                 {/* Phone Input - remains same */}
-                 <div className="space-y-2">
+                </div>
+                {/* Address Input - remains same */}
+                <div className="space-y-2">
+                  <Label className="text-sm sm:text-base font-semibold flex items-center gap-2"><MapPin className="w-4 h-4" /> Address / Village</Label>
+                  <Input type="text" placeholder="Enter address or village name" value={shopAddress} onChange={(e) => setShopAddress(e.target.value)} className="h-11 sm:h-10 text-base" />
+                </div>
+                {/* Phone Input - remains same */}
+                <div className="space-y-2">
                   <Label className="text-sm sm:text-base font-semibold flex items-center gap-2"><Phone className="w-4 h-4" /> Phone Number</Label>
                   <Input type="tel" inputMode="numeric" placeholder="Enter 10-digit mobile number" value={shopPhone}
                     onChange={(e) => { const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10); setShopPhone(digitsOnly); }}
@@ -678,7 +660,7 @@ const ShopBilling = () => {
                 </div>
 
                 {/* Products Selection Section - remains same structure */}
-                 <div className="space-y-3 sm:space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="text-base sm:text-lg font-semibold flex items-center gap-2"><ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" /> Select Products</Label>
                     <div className="flex items-center gap-2">
@@ -686,8 +668,8 @@ const ShopBilling = () => {
                       <Button variant="default" size="sm" onClick={() => setShowAddProductDialog(true)} className="h-9" title="Quick add product">Add Product</Button>
                     </div>
                   </div>
-                   {/* Quick Add Product Dialog - remains same */}
-                   <Dialog open={showAddProductDialog} onOpenChange={setShowAddProductDialog}>
+                  {/* Quick Add Product Dialog - remains same */}
+                  <Dialog open={showAddProductDialog} onOpenChange={setShowAddProductDialog}>
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader><DialogTitle>Add Product</DialogTitle><DialogDescription>Search and quickly add a product with unit mode.</DialogDescription></DialogHeader>
                       <div className="space-y-4">
@@ -722,9 +704,9 @@ const ShopBilling = () => {
                       </div>
                       <DialogFooter className="sm:justify-end"><Button variant="ghost" onClick={() => { setShowAddProductDialog(false); resetAddProductState(); }}>Cancel</Button><Button onClick={handleAddProductToSale} disabled={!selectedProduct || tempQuantity <= 0}>Add</Button></DialogFooter>
                     </DialogContent>
-                   </Dialog>
-                   {/* Quick Edit Added Items - remains same */}
-                   <div className="space-y-2">
+                  </Dialog>
+                  {/* Quick Edit Added Items - remains same */}
+                  <div className="space-y-2">
                     {saleItems.filter(i => i.quantity > 0).length > 0 && (
                       <div className="rounded-md border p-3">
                         <div className="text-sm font-semibold mb-2">Added Items</div>
@@ -747,8 +729,8 @@ const ShopBilling = () => {
                       </div>
                     )}
                   </div>
-                   {/* Product Cards List - remains same */}
-                   <div className="grid gap-3 sm:gap-4">
+                  {/* Product Cards List - remains same */}
+                  <div className="grid gap-3 sm:gap-4">
                     {(products.map((prod) => ({ prod, avail: (saleItems.find(s => s.productId === prod.id && s.unit === 'box')?.availableStock || 0) + (saleItems.find(s => s.productId === prod.id && s.unit === 'pcs')?.availableStock || 0) })).filter(item => item.avail > 0).map(x => x.prod)).map((product) => {
                       const boxItem = saleItems.find(s => s.productId === product.id && s.unit === 'box'); const pcsItem = saleItems.find(s => s.productId === product.id && s.unit === 'pcs'); const boxAvail = boxItem?.availableStock || 0; const pcsAvail = pcsItem?.availableStock || 0; const boxQty = boxItem?.quantity || 0; const pcsQty = pcsItem?.quantity || 0; const boxPrice = boxItem?.price ?? (product.box_price ?? product.price); const pcsPrice = pcsItem?.price ?? (product.pcs_price ?? ((product.box_price ?? product.price ?? 0) / 24)); const availableStock = boxAvail + pcsAvail; const lineTotal = (boxItem?.total || 0) + (pcsItem?.total || 0);
                       return (
@@ -763,12 +745,14 @@ const ShopBilling = () => {
                               </div>
                               <div className="space-y-2"> {/* Pcs */}
                                 <div className="flex items-center justify-between"><span className="text-xs font-medium text-muted-foreground">Unit: 1 pcs</span><span className="text-xs text-muted-foreground">Avail: {pcsAvail} pcs</span></div>
-                                {(() => { const ppb = getPcsPerBox(product.id); const maxPcsCapacity = pcsAvail + boxAvail * ppb; return (
-                                  <>
-                                    <div className="space-y-1"><Label className="text-xs font-medium text-muted-foreground">Price (₹)</Label><Input type="number" value={pcsPrice} onChange={(e) => { const v = e.target.value; const num = v === '' ? 0 : parseFloat(v); updatePrice(product.id, 'pcs', Number.isFinite(num) ? num : 0); }} className="h-9 text-sm" min="0" step="0.01" disabled={maxPcsCapacity === 0} placeholder={`${product.pcs_price ?? ((product.box_price ?? product.price) / 24)}`} /></div>
-                                    <div className="space-y-1"><Label className="text-xs font-medium text-muted-foreground">Quantity (pcs)</Label><div className="flex items-center gap-2"><Button type="button" variant="outline" size="icon" onClick={() => updateQuantity(product.id, 'pcs', -1)} disabled={pcsQty === 0} className="h-9 w-9"><Minus className="w-4 h-4" /></Button><Input type="text" value={String(pcsQty)} onChange={(e) => { const sanitized = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '') || '0'; const newQuantity = Math.max(0, parseInt(sanitized) || 0); setQuantityDirect(product.id, 'pcs', newQuantity); }} className="w-16 text-center text-sm h-9" inputMode="numeric" pattern="[0-9]*" disabled={maxPcsCapacity === 0} /><Button type="button" variant="outline" size="icon" onClick={() => updateQuantity(product.id, 'pcs', 1)} disabled={pcsQty >= maxPcsCapacity || maxPcsCapacity === 0} className="h-9 w-9"><Plus className="w-4 h-4" /></Button></div></div>
-                                  </>
-                                ); })()}
+                                {(() => {
+                                  const ppb = getPcsPerBox(product.id); const maxPcsCapacity = pcsAvail + boxAvail * ppb; return (
+                                    <>
+                                      <div className="space-y-1"><Label className="text-xs font-medium text-muted-foreground">Price (₹)</Label><Input type="number" value={pcsPrice} onChange={(e) => { const v = e.target.value; const num = v === '' ? 0 : parseFloat(v); updatePrice(product.id, 'pcs', Number.isFinite(num) ? num : 0); }} className="h-9 text-sm" min="0" step="0.01" disabled={maxPcsCapacity === 0} placeholder={`${product.pcs_price ?? ((product.box_price ?? product.price) / 24)}`} /></div>
+                                      <div className="space-y-1"><Label className="text-xs font-medium text-muted-foreground">Quantity (pcs)</Label><div className="flex items-center gap-2"><Button type="button" variant="outline" size="icon" onClick={() => updateQuantity(product.id, 'pcs', -1)} disabled={pcsQty === 0} className="h-9 w-9"><Minus className="w-4 h-4" /></Button><Input type="text" value={String(pcsQty)} onChange={(e) => { const sanitized = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '') || '0'; const newQuantity = Math.max(0, parseInt(sanitized) || 0); setQuantityDirect(product.id, 'pcs', newQuantity); }} className="w-16 text-center text-sm h-9" inputMode="numeric" pattern="[0-9]*" disabled={maxPcsCapacity === 0} /><Button type="button" variant="outline" size="icon" onClick={() => updateQuantity(product.id, 'pcs', 1)} disabled={pcsQty >= maxPcsCapacity || maxPcsCapacity === 0} className="h-9 w-9"><Plus className="w-4 h-4" /></Button></div></div>
+                                    </>
+                                  );
+                                })()}
                               </div>
                             </div>
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t"><div className="space-y-1"><p className="text-sm font-semibold text-warning">Available: {boxAvail} Box, {pcsAvail} pcs</p></div>{(boxQty + pcsQty) > 0 && (<div className="text-right"><p className="text-sm font-semibold text-success-green">Line Total: ₹{lineTotal.toFixed(2)}</p></div>)}</div>
@@ -776,19 +760,19 @@ const ShopBilling = () => {
                         </Card>
                       );
                     })}
-                   </div>
-                 </div>
+                  </div>
+                </div>
 
-                 {/* Total Amount - remains same */}
-                 <div className="bg-primary-light/20 border-2 border-primary rounded-lg p-4">
+                {/* Total Amount - remains same */}
+                <div className="bg-primary-light/20 border-2 border-primary rounded-lg p-4">
                   <div className="flex items-center justify-between"><span className="text-lg sm:text-xl font-bold text-foreground">Total Amount:</span><span className="text-2xl sm:text-3xl font-bold text-primary">₹{totalAmount.toFixed(2)}</span></div>
-                 </div>
-                 {/* Generate Bill Button - remains same */}
-                 <div className="sticky bottom-3 sm:static bg-background/95 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none p-1 sm:p-0 -mx-2 sm:mx-0 rounded-md sm:rounded-none">
+                </div>
+                {/* Generate Bill Button - remains same */}
+                <div className="sticky bottom-3 sm:static bg-background/95 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none p-1 sm:p-0 -mx-2 sm:mx-0 rounded-md sm:rounded-none">
                   <Button onClick={handleGenerateBill} variant="success" size="default" className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation shadow sm:shadow-none" disabled={!shopName.trim() || !isValidForBilling() || !isValidPhone(shopPhone)}><Check className="w-5 h-5 mr-2" /> Generate Bill</Button>
-                 </div>
+                </div>
               </div>
-             </CardContent>
+            </CardContent>
           </Card>
         ) : (
           // Bill Preview & Print UI - Remains the same structure
