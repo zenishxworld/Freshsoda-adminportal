@@ -1,0 +1,117 @@
+I'll help you understand how to delete old test data from your database. Let me first check what data you currently have and then provide you with multiple methods to delete it.
+
+Perfect! I can see you have test data from **September 30 to October 6, 2025**. Here are multiple ways to delete old test data:
+
+## **Method 1: SQL Editor (Recommended for bulk deletion)**
+
+Go to your Supabase SQL Editor and run these queries:
+
+### Delete all test data from specific dates:
+```sql
+-- Delete daily stock records before a specific date (e.g., before October 5)
+DELETE FROM daily_stock 
+WHERE date < '2025-10-05';
+
+-- Delete sales records before a specific date
+DELETE FROM sales 
+WHERE date < '2025-10-05';
+```
+
+### Delete ALL test data (use with caution):
+```sql
+-- Delete ALL daily stock records
+DELETE FROM daily_stock;
+
+-- Delete ALL sales records
+DELETE FROM sales;
+```
+
+### Delete data from a specific date range:
+```sql
+-- Delete data between September 30 and October 4
+DELETE FROM daily_stock 
+WHERE date BETWEEN '2025-09-30' AND '2025-10-04';
+
+DELETE FROM sales 
+WHERE date BETWEEN '2025-09-30' AND '2025-10-04';
+```
+
+### Delete data older than X days:
+```sql
+-- Delete data older than 7 days
+DELETE FROM daily_stock 
+WHERE date < CURRENT_DATE - INTERVAL '7 days';
+
+DELETE FROM sales 
+WHERE date < CURRENT_DATE - INTERVAL '7 days';
+```
+
+---
+
+## **Method 2: Manual Deletion via Supabase Dashboard**
+
+This is slower but safer for deleting specific records:
+
+1. **Go to Table Editor**:
+   - Navigate to: `https://supabase.com/dashboard/project/fstfqbjppzzlyxcjsieb/editor`
+
+2. **For Daily Stock table**:
+   - Click on the `daily_stock` table
+   - Find the rows you want to delete (sort by date)
+   - Click the checkbox next to each row
+   - Click the "Delete" button at the top
+   - Confirm the deletion
+
+3. **For Sales table**:
+   - Click on the `sales` table
+   - Same process: select rows → Delete button → Confirm
+
+---
+
+## **Method 3: Filter and Delete Multiple Rows**
+
+1. In the Table Editor, use the **filter** feature:
+   - Click the filter icon
+   - Add condition: `date` < `2025-10-05` (or your preferred date)
+   - Select all filtered rows
+   - Click Delete
+
+---
+
+## **Recommended Approach**
+
+Since you have test data from **September 30 to October 6**, I suggest:
+
+```sql
+-- Keep only today's data (October 6) and delete everything before
+DELETE FROM daily_stock WHERE date < '2025-10-06';
+DELETE FROM sales WHERE date < '2025-10-06';
+```
+
+Or if you want a completely fresh start:
+
+```sql
+-- Delete ALL test data and start fresh
+DELETE FROM daily_stock;
+DELETE FROM sales;
+```
+
+---
+
+## **Safety Tips**
+
+1. **Always backup before deleting**: Export data as CSV from Table Editor first
+2. **Test with SELECT first**: Run a SELECT query to see what will be deleted
+   ```sql
+   SELECT * FROM daily_stock WHERE date < '2025-10-06';
+   SELECT * FROM sales WHERE date < '2025-10-06';
+   ```
+3. **Use transactions** (for advanced users):
+   ```sql
+   BEGIN;
+   DELETE FROM daily_stock WHERE date < '2025-10-06';
+   DELETE FROM sales WHERE date < '2025-10-06';
+   COMMIT; -- Or ROLLBACK if you change your mind
+   ```
+
+Would you like me to help you set up an automated cleanup feature that deletes data older than 30/60/90 days automatically?
