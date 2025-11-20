@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import {
     LayoutDashboard,
     Package,
@@ -12,6 +13,8 @@ import {
     Settings,
     ChevronLeft,
     ChevronRight,
+    LogOut,
+    ArrowRightLeft,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -21,15 +24,16 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
-    { path: '/', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { path: '/warehouse', label: 'Warehouse Stock', icon: <Package className="w-5 h-5" /> },
-    { path: '/assign-stock', label: 'Assign Stock', icon: <TruckIcon className="w-5 h-5" /> },
-    { path: '/routes', label: 'Routes', icon: <Route className="w-5 h-5" /> },
-    { path: '/drivers', label: 'Drivers', icon: <Users className="w-5 h-5" /> },
-    { path: '/shops', label: 'Shops', icon: <Store className="w-5 h-5" /> },
-    { path: '/expenses', label: 'Expenses', icon: <Receipt className="w-5 h-5" /> },
-    { path: '/reports', label: 'Reports', icon: <FileText className="w-5 h-5" /> },
-    { path: '/settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
+    { path: '/admin', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+    { path: '/admin/warehouse', label: 'Warehouse Stock', icon: <Package className="w-5 h-5" /> },
+    { path: '/admin/manage-products', label: 'Manage Products', icon: <Package className="w-5 h-5" /> },
+    { path: '/admin/assign-stock', label: 'Assign Stock', icon: <TruckIcon className="w-5 h-5" /> },
+    { path: '/admin/routes', label: 'Routes', icon: <Route className="w-5 h-5" /> },
+    { path: '/admin/drivers', label: 'Drivers', icon: <Users className="w-5 h-5" /> },
+    { path: '/admin/shops', label: 'Shops', icon: <Store className="w-5 h-5" /> },
+    { path: '/admin/expenses', label: 'Expenses', icon: <Receipt className="w-5 h-5" /> },
+    { path: '/admin/reports', label: 'Reports', icon: <FileText className="w-5 h-5" /> },
+    { path: '/admin/settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
 ];
 
 interface SidebarProps {
@@ -39,6 +43,8 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     const location = useLocation();
+    const navigate = useNavigate();
+    const { user, logout } = useAuth();
 
     return (
         <>
@@ -82,8 +88,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                                         <Link
                                             to={item.path}
                                             className={`flex items-center gap-3 px-3 py-3 rounded-md transition-colors group ${isActive
-                                                    ? 'bg-primary text-white'
-                                                    : 'text-gray-300 hover:bg-sidebar-light hover:text-white'
+                                                ? 'bg-primary text-white'
+                                                : 'text-gray-300 hover:bg-sidebar-light hover:text-white'
                                                 }`}
                                             title={!isOpen ? item.label : ''}
                                         >
@@ -101,15 +107,40 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                     </nav>
 
                     {/* Footer */}
-                    <div className={`p-4 border-t border-sidebar-light ${!isOpen && 'lg:hidden'}`}>
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center">
-                                <span className="text-white text-sm font-medium">AD</span>
+                    <div className={`border-t border-sidebar-light ${!isOpen && 'lg:hidden'}`}>
+                        {/* Portal Switching Button */}
+                        <div className="p-4 border-b border-sidebar-light">
+                            <button
+                                onClick={() => navigate('/driver/dashboard')}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-300 hover:bg-sidebar-light hover:text-white transition-colors"
+                            >
+                                <ArrowRightLeft className="w-5 h-5" />
+                                <span className="text-sm font-medium">Go to Driver Portal</span>
+                            </button>
+                        </div>
+
+                        {/* User Info */}
+                        <div className="p-4">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
+                                    <span className="text-white text-sm font-medium">
+                                        {user?.email?.charAt(0).toUpperCase() || 'A'}
+                                    </span>
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-white text-sm font-medium">Admin User</p>
+                                    <p className="text-gray-400 text-xs truncate">
+                                        {user?.email || 'admin@freshsoda.com'}
+                                    </p>
+                                </div>
                             </div>
-                            <div className="flex-1">
-                                <p className="text-white text-sm font-medium">Admin User</p>
-                                <p className="text-gray-400 text-xs">admin@freshsoda.com</p>
-                            </div>
+                            <button
+                                onClick={logout}
+                                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-gray-300 hover:bg-sidebar-light hover:text-white transition-colors"
+                            >
+                                <LogOut className="w-4 h-4" />
+                                <span className="text-sm">Logout</span>
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -1,0 +1,613 @@
+import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
+import { Label } from "../../components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import { useToast } from "../../hooks/use-toast";
+import { getRoutes, getProducts, getDailyStock, getSalesFor, type Product, type DailyStock, type Sale } from "../../lib/supabase";
+import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
+import { ArrowLeft, BarChart3, Printer, Calendar, TrendingUp, Package, DollarSign } from "lucide-react";
+
+
+
+interface RouteOption {
+  id: string;
+  name: string;
+}
+
+interface SummaryItem {
+  productId: string;
+  productName: string;
+  startBox: number;
+  startPcs: number;
+  soldBox: number;
+  soldPcs: number;
+  remainingBox: number;
+  remainingPcs: number;
+  boxPrice: number;
+  pcsPrice: number;
+  totalRevenue: number;
+}
+
+type SoldItem = { productId: string; unit?: 'box' | 'pcs'; quantity?: number; price?: number; total?: number; productName?: string; name?: string };
+function normalizeSaleProducts(ps: unknown): SoldItem[] {
+  if (!ps) return [];
+  if (Array.isArray(ps)) return ps as SoldItem[];
+  if (typeof ps === 'object' && ps !== null) {
+    const obj = ps as { items?: unknown };
+    if (Array.isArray(obj.items)) return obj.items as SoldItem[];
+  }
+  if (typeof ps === 'string') {
+    const parsed = JSON.parse(ps);
+    if (Array.isArray(parsed)) return parsed as SoldItem[];
+    if (typeof parsed === 'object' && parsed !== null) {
+      const obj2 = parsed as { items?: unknown };
+      if (Array.isArray(obj2.items)) return obj2.items as SoldItem[];
+    }
+  }
+  return [];
+}
+
+// Determine pieces per box for a product, using configured value or
+// falling back to an inferred ratio from prices or a default of 24.
+function getPcsPerBoxFromProduct(product: any): number {
+  const configured = product?.pcs_per_box;
+  if (typeof configured === 'number' && configured > 0) return configured;
+  const boxPrice = product?.box_price ?? product?.price;
+  const pcsPrice = product?.pcs_price ?? (boxPrice / 24);
+  const ratio = Math.round(boxPrice / (pcsPrice || 1));
+  return Number.isFinite(ratio) && ratio > 0 ? ratio : 24;
+}
+
+const Summary = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedRoute, setSelectedRoute] = useState("");
+  const [routes, setRoutes] = useState<RouteOption[]>([]);
+  const [summaryData, setSummaryData] = useState<SummaryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+
+  // Memoize totals calculation to avoid re-calculating on every render
+  const { totals, grandTotal } = useMemo(() => {
+    const t = summaryData.reduce(
+      (acc, item) => {
+        acc.startBox += item.startBox;
+        acc.startPcs += item.startPcs;
+        acc.soldBox += item.soldBox;
+        acc.soldPcs += item.soldPcs;
+        acc.remainingBox += item.remainingBox;
+        acc.remainingPcs += item.remainingPcs;
+        return acc;
+      },
+      { startBox: 0, startPcs: 0, soldBox: 0, soldPcs: 0, remainingBox: 0, remainingPcs: 0 }
+    );
+    const gt = summaryData.reduce((sum, item) => sum + item.totalRevenue, 0);
+    return { totals: t, grandTotal: gt };
+  }, [summaryData]);
+
+
+  useEffect(() => {
+    fetchRoutes();
+  }, []);
+
+
+
+  const fetchRoutes = async () => {
+    try {
+      const data = await getRoutes();
+      const activeRoutes = data.filter((r) => r.is_active !== false);
+      const mappedAndFilteredRoutes = activeRoutes
+        .filter(route => shouldDisplayRoute(route.name))
+        .map(route => ({
+          ...route,
+          name: mapRouteName(route.name),
+        }));
+      setRoutes(mappedAndFilteredRoutes);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load routes",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const generateSummary = async () => {
+    if (!selectedRoute) {
+      toast({
+        title: "Error",
+        description: "Please select a route",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const products = await getProducts();
+      const activeProducts = products.filter((p) => (p.status || 'active') === 'active');
+      const dailyStock = await getDailyStock(selectedRoute, selectedDate);
+      const sales = await getSalesFor(selectedDate, selectedRoute);
+
+      // Calculate summary with separate box and pcs units
+      const summary: SummaryItem[] = [];
+
+      if (products) {
+        products.forEach(product => {
+          // Read initial stock per unit from daily_stock (treated as START)
+          let startBox = 0;
+          let startPcs = 0;
+          if (dailyStock && Array.isArray(dailyStock.stock)) {
+            const stockItems = dailyStock.stock;
+            const boxStock = stockItems.find((s) => s.productId === product.id && s.unit === 'box');
+            const pcsStock = stockItems.find((s) => s.productId === product.id && (s.unit === 'pcs' || !('unit' in s)));
+            startBox = boxStock?.quantity || 0;
+            startPcs = pcsStock?.quantity || 0;
+          }
+
+          // Sold per unit and revenue
+          let soldBox = 0;
+          let soldPcs = 0;
+          let totalRevenue = 0;
+          const ppb = getPcsPerBoxFromProduct(product);
+          const boxPrice = (product as any).box_price ?? product.price;
+          const pcsPrice = (product as any).pcs_price ?? (((product as any).box_price ?? product.price) / ppb);
+
+          if (sales) {
+            sales.forEach((sale) => {
+              const items = normalizeSaleProducts(sale.products_sold);
+              items.forEach((p) => {
+                if (p.productId === product.id) {
+                  const u = p.unit || 'pcs';
+                  const q = p.quantity || 0;
+                  if (u === 'box') soldBox += q; else soldPcs += q;
+                  // Sum revenue using saved total or fallback to price
+                  const lineTotal = typeof p.total === 'number'
+                    ? p.total
+                    : q * (typeof p.price === 'number' ? p.price : (u === 'box' ? boxPrice : pcsPrice));
+                  totalRevenue += lineTotal;
+                }
+              });
+            });
+          }
+          // Compute remaining using precise unit conversion (all to pcs)
+          const startTotalPcs = (startBox * ppb) + startPcs;
+          const soldTotalPcs = (soldBox * ppb) + soldPcs;
+          const remainingTotalPcs = startTotalPcs - soldTotalPcs;
+          const remainingBox = Math.max(0, Math.floor(remainingTotalPcs / ppb));
+          const remainingPcs = Math.max(0, remainingTotalPcs % ppb);
+
+          // Only include products that were loaded or sold
+          if ((startBox + startPcs) > 0 || (soldBox + soldPcs) > 0) {
+            summary.push({
+              productId: product.id,
+              productName: product.name,
+              startBox,
+              startPcs,
+              soldBox,
+              soldPcs,
+              remainingBox,
+              remainingPcs,
+              boxPrice,
+              pcsPrice,
+              totalRevenue,
+            });
+          }
+        });
+      }
+
+      setSummaryData(summary);
+      setShowSummary(true);
+
+      if (summary.length === 0) {
+        toast({
+          title: "No Data",
+          description: "No sales or stock data found for the selected date and route",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate summary",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const getRouteName = () => {
+    const route = routes.find(r => r.id === selectedRoute);
+    if (!route) return "Unknown Route";
+
+    // route names are already mapped in fetchRoutes
+    return route.name;
+  };
+
+  // Helper function to build the receipt content string
+  const getReceiptContent = () => {
+    const t = totals;
+    const grandTotalStr = grandTotal.toFixed(2);
+    const generatedDate = new Date().toLocaleString('en-IN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    }).replace(',', ''); // Remove comma for cleaner output
+
+    const routeName = getRouteName();
+    // Format date as DD-MM-YYYY to match image
+    const formattedDate = new Date(selectedDate).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).replace(/\//g, '-');
+
+    // 32-character width for 58mm printer
+    let content = "";
+    content += "================================\n";
+    content += "       FRESH SODA SALES       \n"; // Centered
+    content += "================================\n";
+    content += `Date  : ${formattedDate}\n`;
+    content += `Route : ${routeName}\n`;
+    content += "--------------------------------\n";
+    content += `Start : ${t.startBox}B | ${t.startPcs}p\n`;
+    content += `Sold  : ${t.soldBox}B | ${t.soldPcs}p\n`;
+    content += `Left  : ${t.remainingBox}B | ${t.remainingPcs}p\n`;
+    content += `Total Revenue: ₹${grandTotalStr}\n`;
+    content += "--------------------------------\n";
+    // Header fits exactly 32 characters with vertical separators: 15 + 1 + 8 + 1 + 7
+    content += `${'Item'.padEnd(15, ' ')}|${'S(B|p)'.padEnd(8, ' ')}|${'L(B|p)'.padEnd(7, ' ')}\n`;
+    content += "---------------+--------+-------\n";
+
+    summaryData.forEach(item => {
+      // Keep line width to 32 chars with separators: 15 + 1 + 8 + 1 + 7 = 32
+      const name = item.productName.substring(0, 15).padEnd(15, ' ');
+      const sold = `${item.soldBox}|${item.soldPcs}`.padEnd(8, ' ');
+      const left = `${item.remainingBox}|${item.remainingPcs}`.padEnd(7, ' ');
+      content += `${name}|${sold}|${left}\n`;
+    });
+
+    content += "--------------------------------\n";
+    content += `Totals Sold  : ${t.soldBox}B | ${t.soldPcs}p\n`;
+    content += `Totals Left  : ${t.remainingBox}B | ${t.remainingPcs}p\n`;
+    content += "--------------------------------\n";
+    content += `Grand Total: ₹${grandTotalStr}\n`;
+    content += "--------------------------------\n";
+    content += `Generated: ${generatedDate}\n`;
+    content += "Powered by apexdeploy.in\n";
+    content += "================================\n";
+
+    return content;
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-accent-light/10">
+      {/* Header - Hidden when printing */}
+      <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10 print:hidden">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/driver/dashboard")} className="h-9 w-9 p-0">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-r from-primary to-primary-dark rounded-lg sm:rounded-xl flex items-center justify-center">
+                <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-lg sm:text-xl font-bold text-foreground">Day Summary</h1>
+                <p className="text-xs sm:text-sm text-muted-foreground hidden xs:block">View daily sales report</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-safe">
+        {!showSummary ? (
+          // Filter Form
+          <Card className="border-0 shadow-strong">
+            <CardHeader className="text-center pb-4 sm:pb-6 px-4 sm:px-6">
+              <CardTitle className="text-xl sm:text-2xl font-bold">Generate Day Summary</CardTitle>
+              <CardDescription className="text-sm sm:text-base">
+                Select date and route to view sales report
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="px-4 sm:px-6">
+              <div className="space-y-6 sm:space-y-8">
+                {/* Date Selection */}
+                <div className="space-y-2">
+                  <Label className="text-sm sm:text-base font-semibold flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    Select Date
+                  </Label>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full h-11 sm:h-10 px-3 text-base rounded-md border border-input bg-background ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                </div>
+
+                {/* Route Selection */}
+                <div className="space-y-2">
+                  <Label className="text-sm sm:text-base font-semibold flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4" />
+                    Select Route
+                  </Label>
+                  <Select value={selectedRoute} onValueChange={setSelectedRoute}>
+                    <SelectTrigger className="h-11 sm:h-10 text-base">
+                      <SelectValue placeholder="Choose route" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {routes.map((route) => (
+                        <SelectItem key={route.id} value={route.id} className="text-base py-3">
+                          {route.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Generate Button */}
+                <Button
+                  onClick={generateSummary}
+                  variant="default"
+                  size="default"
+                  className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation"
+                  disabled={loading || !selectedRoute}
+                >
+                  <BarChart3 className="w-5 h-5 mr-2" />
+                  {loading ? "Generating..." : "Generate Summary"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          // Summary Report
+          <div className="space-y-4">
+            {/* Action Buttons - Hidden when printing */}
+            <Card className="border-0 shadow-strong print:hidden">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex gap-2 sm:gap-3">
+                  <Button
+                    onClick={handlePrint}
+                    variant="default"
+                    size="default"
+                    className="flex-1 h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation"
+                  >
+                    <Printer className="w-5 h-5 mr-2" />
+                    Print Summary
+                  </Button>
+                  <Button
+                    onClick={() => setShowSummary(false)}
+                    variant="outline"
+                    size="default"
+                    className="h-10 sm:h-11 px-4 sm:px-6 touch-manipulation"
+                  >
+                    Back
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Printable Summary Report */}
+            <Card className="border-0 shadow-strong print:shadow-none">
+              <CardContent className="p-4 sm:p-8 print:p-0">
+                {/* Report Header */}
+                <div className="text-center mb-6 print:hidden">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-foreground print:text-xl">Fresh Soda Sales</h1>
+                  <p className="text-base sm:text-lg font-semibold text-muted-foreground print:text-sm">Day Summary Report</p>
+                  <div className="mt-3 space-y-1 text-sm text-muted-foreground print:text-xs print:mt-2">
+                    <p><strong>Date:</strong> {new Date(selectedDate).toLocaleDateString('en-IN', {
+                      day: '2-digit',
+                      month: 'long',
+                      year: 'numeric'
+                    })}</p>
+                    <p><strong>Route:</strong> {getRouteName()}</p>
+                  </div>
+                </div>
+
+                {/* Stats Cards - Hidden on print */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-6 print:hidden">
+                  <Card className="border border-primary/20 bg-primary-light/10">
+                    <CardContent className="p-3 sm:p-4 text-center">
+                      <Package className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-primary" />
+                      <p className="text-xs sm:text-sm text-muted-foreground">Total Stock</p>
+                      <p className="text-lg sm:text-xl font-bold text-primary">{totals.startBox} Box | {totals.startPcs} pcs</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border border-primary/20 bg-primary-light/10">
+                    <CardContent className="p-3 sm:p-4 text-center">
+                      <Package className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-primary" />
+                      <p className="text-xs sm:text-sm text-muted-foreground">Sold</p>
+                      <p className="text-lg sm:text-xl font-bold text-primary">{totals.soldBox} Box | {totals.soldPcs} pcs</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border border-warning/20 bg-warning-light/10">
+                    <CardContent className="p-3 sm:p-4 text-center">
+                      <Package className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-warning" />
+                      <p className="text-xs sm:text-sm text-muted-foreground">Remaining</p>
+                      <p className="text-lg sm:text-xl font-bold text-warning">{totals.remainingBox} Box | {totals.remainingPcs} pcs</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border border-success-green/20 bg-success-green-light/10">
+                    <CardContent className="p-3 sm:p-4 text-center">
+                      <DollarSign className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-success-green" />
+                      <p className="text-xs sm:text-sm text-muted-foreground">Revenue</p>
+                      <p className="text-lg sm:text-xl font-bold text-success-green truncate max-w-full overflow-hidden">₹{grandTotal.toFixed(2)}</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Summary Table (Desktop) - hidden on print */}
+                <div className="mb-6 print:mb-4 overflow-x-auto hidden sm:block print:hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b-2 border-foreground">
+                        <th className="text-left py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">Product</th>
+                        <th className="text-center py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">Start (Box | pcs)</th>
+                        <th className="text-center py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">Sold (Box | pcs)</th>
+                        <th className="text-center py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">Left (Box | pcs)</th>
+                        <th className="text-right py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">Prices</th>
+                        <th className="text-right py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">Revenue</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summaryData.map((item) => (
+                        <tr key={item.productId} className="border-b border-border">
+                          <td className="py-3 text-foreground font-medium print:text-xs print:py-2">{item.productName}</td>
+                          <td className="py-3 text-center text-muted-foreground print:text-xs print:py-2">{item.startBox} Box | {item.startPcs} pcs</td>
+                          <td className="py-3 text-center text-primary font-semibold print:text-xs print:py-2">{item.soldBox} Box | {item.soldPcs} pcs</td>
+                          <td className="py-3 text-center text-warning font-semibold print:text-xs print:py-2">{item.remainingBox} Box | {item.remainingPcs} pcs</td>
+                          <td className="py-3 text-right text-muted-foreground print:text-xs print:py-2">Box ₹{item.boxPrice.toFixed(2)} | pcs ₹{item.pcsPrice.toFixed(2)}</td>
+                          <td className="py-3 text-right font-semibold text-success-green print:text-xs print:py-2">₹{item.totalRevenue.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Summary List (Mobile) */}
+                <div className="sm:hidden mb-6 space-y-2 print:hidden">
+                  {summaryData.map((item) => (
+                    <div key={item.productId} className="rounded-md border p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-foreground truncate max-w-[60%]">{item.productName}</span>
+                        <span className="text-sm font-bold text-success-green">₹{item.totalRevenue.toFixed(2)}</span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">Start:</span>
+                          <span className="ml-1 font-semibold">{item.startBox} Box | {item.startPcs} pcs</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Sold:</span>
+                          <span className="ml-1 font-semibold text-primary">{item.soldBox} Box | {item.soldPcs} pcs</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Left:</span>
+                          <span className="ml-1 font-semibold text-warning">{item.remainingBox} Box | {item.remainingPcs} pcs</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Price:</span>
+                          <span className="ml-1 font-medium text-muted-foreground">Box ₹{item.boxPrice.toFixed(2)} | pcs ₹{item.pcsPrice.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Totals Section */}
+                <div className="border-t-2 border-foreground pt-4 print:pt-3 space-y-2 print:hidden">
+                  <div className="flex justify-between items-center text-sm sm:text-base print:text-xs">
+                    <span className="font-semibold text-muted-foreground">Total Items Sold:</span>
+                    <span className="font-bold text-primary">{totals.soldBox} Box | {totals.soldPcs} pcs</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm sm:text-base print:text-xs">
+                    <span className="font-semibold text-muted-foreground">Total Remaining:</span>
+                    <span className="font-bold text-warning">{totals.remainingBox} Box | {totals.remainingPcs} pcs</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-dashed flex-wrap gap-2 sm:flex-nowrap min-w-0">
+                    <span className="text-lg sm:text-xl font-bold text-foreground print:text-base">GRAND TOTAL:</span>
+                    <span className="text-2xl sm:text-3xl font-bold text-success-green print:text-xl truncate max-w-[60%] sm:max-w-none overflow-hidden text-right">₹{grandTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="mt-8 pt-4 border-t border-dashed text-center print:hidden">
+                  <p className="text-sm font-semibold text-foreground print:text-xs">End of Day Report</p>
+                  <p className="text-xs text-muted-foreground mt-1 print:text-[10px]">
+                    Generated on {new Date().toLocaleString('en-IN')}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </main>
+
+      {/* Top-level print container (rendered into document.body via portal) */}
+      {showSummary && createPortal(
+        <div
+          id="print-summary-receipt"
+          // These inline styles are a fallback, the @media print CSS is primary
+          style={{
+            whiteSpace: 'pre',
+            fontFamily: '"Courier New", Courier, monospace',
+            fontSize: '11px',
+            lineHeight: '1.3',
+            color: '#000',
+            display: 'none' // Hidden by default, only shown by print CSS
+          }}
+        >
+          {getReceiptContent()}
+        </div>,
+        document.body
+      )}
+
+      {/* Print Styles for 58mm receipt */}
+      <style>{`
+        @media print {
+          /* Hide everything except the receipt container */
+          body > *:not(#print-summary-receipt) { display: none !important; }
+          #print-summary-receipt { display: block !important; }
+
+          @page {
+            size: 58mm auto;
+            margin: 2mm; /* Add a little margin */
+          }
+          
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background-color: #fff !important;
+            width: 58mm !important;
+          }
+          
+          * {
+            -webkit-print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color: #000 !important; /* Ensure all text is black */
+            background: #fff !important; /* Ensure background is white */
+            box-shadow: none !important;
+            border-radius: 0 !important;
+          }
+
+          #print-summary-receipt {
+            display: block !important;
+            width: 100% !important; /* Use 100% of the page width */
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important; /* Padding is on @page */
+            font-family: 'Courier New', Courier, monospace !important; /* Force monospace */
+            font-size: 12px !important; /* Readable size for 58mm */
+            font-weight: 700 !important; /* Bold for thermal print readability */
+            line-height: 1.3 !important;
+            white-space: pre !important; /* CRITICAL: Respect whitespace and newlines */
+            page-break-after: avoid !important;
+            page-break-inside: avoid !important;
+            box-sizing: border-box !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default Summary;

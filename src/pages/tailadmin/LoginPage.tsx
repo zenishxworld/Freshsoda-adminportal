@@ -1,17 +1,28 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { Input } from '../../components/tailadmin/Input';
 import { Button } from '../../components/tailadmin/Button';
 
 export const LoginPage: React.FC = () => {
-    const navigate = useNavigate();
+    const { login } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        // TODO: Implement actual authentication
-        navigate('/');
+        setError('');
+        setLoading(true);
+
+        try {
+            await login(email, password);
+            // Navigation is handled by AuthContext based on role
+        } catch (err: any) {
+            setError(err.message || 'Failed to login. Please check your credentials.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -22,13 +33,19 @@ export const LoginPage: React.FC = () => {
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-xl mb-4">
                         <span className="text-white font-bold text-2xl">FS</span>
                     </div>
-                    <h1 className="text-3xl font-bold text-gray-900">FreshSoda Admin</h1>
+                    <h1 className="text-3xl font-bold text-gray-900">FreshSoda Portal</h1>
                     <p className="text-gray-600 mt-2">Sign in to your account</p>
                 </div>
 
                 {/* Login Card */}
                 <div className="bg-white rounded-lg shadow-card p-8">
                     <form onSubmit={handleLogin} className="space-y-6">
+                        {error && (
+                            <div className="bg-danger-light border border-danger text-danger px-4 py-3 rounded-md text-sm">
+                                {error}
+                            </div>
+                        )}
+
                         <Input
                             label="Email Address"
                             type="email"
@@ -36,6 +53,7 @@ export const LoginPage: React.FC = () => {
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
+                            disabled={loading}
                         />
 
                         <Input
@@ -45,6 +63,7 @@ export const LoginPage: React.FC = () => {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required
+                            disabled={loading}
                         />
 
                         <div className="flex items-center justify-between">
@@ -52,6 +71,7 @@ export const LoginPage: React.FC = () => {
                                 <input
                                     type="checkbox"
                                     className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                                    disabled={loading}
                                 />
                                 <span className="ml-2 text-sm text-gray-600">Remember me</span>
                             </label>
@@ -60,8 +80,8 @@ export const LoginPage: React.FC = () => {
                             </a>
                         </div>
 
-                        <Button type="submit" variant="primary" className="w-full">
-                            Sign In
+                        <Button type="submit" variant="primary" className="w-full" disabled={loading}>
+                            {loading ? 'Signing in...' : 'Sign In'}
                         </Button>
                     </form>
                 </div>
