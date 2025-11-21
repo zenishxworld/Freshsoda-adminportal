@@ -27,6 +27,7 @@ export const WarehouseStockPage: React.FC = () => {
     const [formData, setFormData] = useState({
         boxes: '',
         pcs: '',
+        note: '',
     });
 
     // Load warehouse stock and all products
@@ -58,7 +59,7 @@ export const WarehouseStockPage: React.FC = () => {
 
     // Reset form
     const resetForm = () => {
-        setFormData({ boxes: '', pcs: '' });
+        setFormData({ boxes: '', pcs: '', note: '' });
         setSelectedStock(null);
         setSelectedProductId('');
     };
@@ -66,7 +67,7 @@ export const WarehouseStockPage: React.FC = () => {
     // Open add modal
     const openAddModal = (stockItem: WarehouseStock) => {
         setSelectedStock(stockItem);
-        setFormData({ boxes: '', pcs: '' });
+        setFormData({ boxes: '', pcs: '', note: '' });
         setShowAddModal(true);
     };
 
@@ -76,6 +77,7 @@ export const WarehouseStockPage: React.FC = () => {
         setFormData({
             boxes: String(stockItem.boxes),
             pcs: String(stockItem.pcs),
+            note: '',
         });
         setShowEditModal(true);
     };
@@ -98,10 +100,16 @@ export const WarehouseStockPage: React.FC = () => {
                 return;
             }
 
-            await addWarehouseStock(selectedStock.product_id, boxes, pcs);
+            await addWarehouseStock(
+                selectedStock.product_id,
+                boxes,
+                pcs,
+                formData.note || undefined
+            );
             setShowAddModal(false);
             resetForm();
             loadWarehouseStock();
+            alert('Stock added successfully!');
         } catch (error: any) {
             console.error('Error adding stock:', error);
             alert(error.message || 'Failed to add stock');
@@ -124,10 +132,16 @@ export const WarehouseStockPage: React.FC = () => {
                 return;
             }
 
-            await addWarehouseStock(selectedProductId, boxes, pcs);
+            await addWarehouseStock(
+                selectedProductId,
+                boxes,
+                pcs,
+                formData.note || undefined
+            );
             setShowNewProductModal(false);
             resetForm();
             loadWarehouseStock();
+            alert('Product added to warehouse successfully!');
         } catch (error: any) {
             console.error('Error adding new product to warehouse:', error);
             alert(error.message || 'Failed to add product to warehouse');
@@ -147,10 +161,16 @@ export const WarehouseStockPage: React.FC = () => {
                 return;
             }
 
-            await setWarehouseStock(selectedStock.product_id, boxes, pcs);
+            await setWarehouseStock(
+                selectedStock.product_id,
+                boxes,
+                pcs,
+                formData.note || undefined
+            );
             setShowEditModal(false);
             resetForm();
             loadWarehouseStock();
+            alert('Stock updated successfully!');
         } catch (error: any) {
             console.error('Error updating stock:', error);
             alert(error.message || 'Failed to update stock');
@@ -389,6 +409,18 @@ export const WarehouseStockPage: React.FC = () => {
                         placeholder="Enter PCS to add"
                         min="0"
                     />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Note (Optional)
+                        </label>
+                        <textarea
+                            value={formData.note}
+                            onChange={(e) => handleFormChange('note', e.target.value)}
+                            placeholder="Add a note about this stock addition..."
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                            rows={2}
+                        />
+                    </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-3">
                     <Button variant="outline" onClick={() => {
@@ -433,6 +465,18 @@ export const WarehouseStockPage: React.FC = () => {
                         placeholder="Enter total PCS"
                         min="0"
                     />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Note (Optional)
+                        </label>
+                        <textarea
+                            value={formData.note}
+                            onChange={(e) => handleFormChange('note', e.target.value)}
+                            placeholder="Add a note about this stock adjustment..."
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                            rows={2}
+                        />
+                    </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-3">
                     <Button variant="outline" onClick={() => {
@@ -498,6 +542,18 @@ export const WarehouseStockPage: React.FC = () => {
                         placeholder="Enter initial PCS (optional)"
                         min="0"
                     />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Note (Optional)
+                        </label>
+                        <textarea
+                            value={formData.note}
+                            onChange={(e) => handleFormChange('note', e.target.value)}
+                            placeholder="Add a note about this product addition..."
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                            rows={2}
+                        />
+                    </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-3">
                     <Button variant="outline" onClick={() => {
