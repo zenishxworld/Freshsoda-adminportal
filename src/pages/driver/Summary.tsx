@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useToast } from "../../hooks/use-toast";
-import { getRoutes, getProducts, getDailyStock, getSalesFor, type Product, type DailyStock, type Sale } from "../../lib/supabase";
+import { getActiveRoutes, getProducts, getDailyStock, getSalesFor, type Product, type DailyStock, type Sale } from "../../lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
 import { ArrowLeft, BarChart3, Printer, Calendar, TrendingUp, Package, DollarSign } from "lucide-react";
 
@@ -99,9 +99,8 @@ const Summary = () => {
 
   const fetchRoutes = async () => {
     try {
-      const data = await getRoutes();
-      const activeRoutes = data.filter((r) => r.is_active !== false);
-      const mappedAndFilteredRoutes = activeRoutes
+      const data = await getActiveRoutes();
+      const mappedAndFilteredRoutes = data
         .filter(route => shouldDisplayRoute(route.name))
         .map(route => ({
           ...route,

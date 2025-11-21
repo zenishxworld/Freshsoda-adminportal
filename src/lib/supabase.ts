@@ -17,10 +17,10 @@ export type Product = {
 export type Route = {
     id: string;
     name: string;
-    description?: string | null;
-    is_active?: boolean;
-    created_at?: string;
-    updated_at?: string;
+    description: string | null;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
 };
 
 export type StockItem = {
@@ -150,8 +150,14 @@ export const softDeleteProduct = async (id: string): Promise<void> => {
     }
 };
 
-// Routes
-export const getRoutes = async (): Promise<Route[]> => {
+// ============================================================================
+// Routes Management
+// ============================================================================
+
+/**
+ * Get all routes (for admin) - includes both active and inactive
+ */
+export const getAllRoutes = async (): Promise<Route[]> => {
     const { data, error } = await supabase
         .from('routes')
         .select('*')
@@ -159,20 +165,37 @@ export const getRoutes = async (): Promise<Route[]> => {
 
     if (error) {
         console.error('Error fetching routes:', error);
-        throw error;
+        throw new Error('Failed to load routes. Please try again.');
     }
 
     return data || [];
 };
 
-export const addRoute = async (
-    name: string,
-    description?: string
-): Promise<Route> => {
+/**
+ * Legacy function - kept for backward compatibility
+ * Use getAllRoutes() for admin or getActiveRoutes() for driver portal
+ */
+export const getRoutes = async (): Promise<Route[]> => {
+    return getAllRoutes();
+};
+
+/**
+ * Create a new route with validation
+ */
+export const createRoute = async (input: {
+    name: string;
+    description?: string;
+}): Promise<Route> => {
+    // Validate name
+    const trimmedName = input.name?.trim();
+    if (!trimmedName) {
+        throw new Error('Route name is required');
+    }
+
     const now = new Date().toISOString();
     const routeData = {
-        name,
-        description: description || null,
+        name: trimmedName,
+        description: input.description?.trim() || null,
         is_active: true,
         created_at: now,
         updated_at: now,
@@ -185,23 +208,109 @@ export const addRoute = async (
         .single();
 
     if (error) {
-        console.error('Error adding route:', error);
-        throw error;
+        console.error('Error creating route:', error);
+        // Check for unique constraint violation
+        if (error.code === '23505') {
+            throw new Error('A route with this name already exists. Please choose a different name.');
+        }
+        throw new Error('Failed to create route. Please try again.');
     }
 
     return data;
 };
 
-export const deactivateRoute = async (id: string): Promise<void> => {
-    const { error } = await supabase
+/**
+ * Update an existing route
+ */
+export const updateRoute = async (
+    id: string,
+    input: {
+        name?: string;
+        description?: string | null;
+        is_active?: boolean;
+    }
+): Promise<Route> => {
+    // Build update object with only provided fields
+    const updateData: any = {
+        updated_at: new Date().toISOString(),
+    };
+
+    if (input.name !== undefined) {
+        const trimmedName = input.name.trim();
+        if (!trimmedName) {
+            throw new Error('Route name cannot be empty');
+        }
+        updateData.name = trimmedName;
+    }
+
+    if (input.description !== undefined) {
+        updateData.description = input.description?.trim() || null;
+    }
+
+    if (input.is_active !== undefined) {
+        updateData.is_active = input.is_active;
+    }
+
+    const { data, error } = await supabase
         .from('routes')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq('id', id);
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
 
     if (error) {
-        console.error('Error deactivating route:', error);
-        throw error;
+        console.error('Error updating route:', error);
+        // Check for unique constraint violation
+        if (error.code === '23505') {
+            throw new Error('A route with this name already exists. Please choose a different name.');
+        }
+        throw new Error('Failed to update route. Please try again.');
     }
+
+    return data;
+};
+
+/**
+ * Legacy function - kept for backward compatibility
+ * Use createRoute() instead
+ */
+export const addRoute = async (
+    name: string,
+    description?: string
+): Promise<Route> => {
+    return createRoute({ name, description });
+};
+
+/**
+ * Legacy function - kept for backward compatibility
+ * Use updateRoute(id, { is_active: false }) instead
+ */
+export const deactivateRoute = async (id: string): Promise<void> => {
+    await updateRoute(id, { is_active: false });
+};
+
+/**
+ * Search routes by name (case-insensitive)
+ * Returns only active routes
+ */
+export const searchRoutesByName = async (query: string): Promise<RouteOption[]> => {
+    if (!query.trim()) {
+        return getActiveRoutes();
+    }
+
+    const { data, error } = await supabase
+        .from('routes')
+        .select('id, name')
+        .eq('is_active', true)
+        .ilike('name', `%${query.trim()}%`)
+        .order('name', { ascending: true });
+
+    if (error) {
+        console.error('Error searching routes:', error);
+        throw new Error('Failed to search routes. Please try again.');
+    }
+
+    return data || [];
 };
 
 // Daily Stock
@@ -724,20 +833,34 @@ export const getAssignableProducts = async (): Promise<AssignableProductRow[]> =
 
 /**
  * Get existing daily stock for a driver/route/truck/date combination
+ * At least one of driverId or routeId must be provided
  */
 export const getDailyStockForDriverRouteDate = async (
-    driverId: string,
-    routeId: string,
+    driverId: string | null,
+    routeId: string | null,
     truckId: string | null,
     date: string
 ): Promise<DailyStockPayload | null> => {
     let query = supabase
         .from('daily_stock')
         .select('stock')
-        .eq('auth_user_id', driverId)
-        .eq('route_id', routeId)
         .eq('date', date);
 
+    // Apply driver filter if provided
+    if (driverId) {
+        query = query.eq('auth_user_id', driverId);
+    } else {
+        query = query.is('auth_user_id', null);
+    }
+
+    // Apply route filter if provided
+    if (routeId) {
+        query = query.eq('route_id', routeId);
+    } else {
+        query = query.is('route_id', null);
+    }
+
+    // Apply truck filter
     if (truckId) {
         query = query.eq('truck_id', truckId);
     } else {
@@ -761,14 +884,20 @@ export const getDailyStockForDriverRouteDate = async (
 
 /**
  * Save assigned stock - creates/updates daily_stock and reduces warehouse stock
+ * At least one of driverId or routeId must be provided
  */
 export const saveAssignedStock = async (
-    driverId: string,
-    routeId: string,
+    driverId: string | null,
+    routeId: string | null,
     truckId: string | null,
     date: string,
     items: DailyStockPayload
 ): Promise<void> => {
+    // Validate that at least driver or route is provided
+    if (!driverId && !routeId) {
+        throw new Error('Please select at least a driver or route');
+    }
+
     // Step 1: Validate and filter items
     const validItems = items.filter(item => {
         if (item.boxQty < 0 || item.pcsQty < 0) {

@@ -6,7 +6,7 @@ import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { useToast } from "../../hooks/use-toast";
-import { getProducts, getDailyStock, getSalesFor, appendSale, getRoutes, type Product, type Route, type DailyStock, type Sale } from "../../lib/supabase";
+import { getProducts, getDailyStock, getSalesFor, appendSale, getActiveRoutes, type Product, type DailyStock, type Sale } from "../../lib/supabase";
 import { mapRouteName } from "../../lib/routeUtils";
 import { ArrowLeft, ShoppingCart, Plus, Minus, Printer, Store, Check, RefreshCw, X, MapPin, Phone } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../../components/ui/dialog";
@@ -211,7 +211,7 @@ const ShopBilling = () => {
   // --- fetchProductsAndStock remains largely the same ---
   const fetchProductsAndStock = useCallback(async (route: string, date: string) => {
     try {
-      const routes = await getRoutes();
+      const routes = await getActiveRoutes();
       const r = routes.find((rr) => String(rr.id) === String(route));
       if (r) setCurrentRouteName(mapRouteName(r.name));
 

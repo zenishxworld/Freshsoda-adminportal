@@ -8,7 +8,7 @@ import { Input } from "../../components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { useToast } from "../../hooks/use-toast";
-import { getRoutes, getSalesFor } from "../../lib/supabase";
+import { getActiveRoutes, getSalesFor } from "../../lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
 import { ArrowLeft, Calendar, Printer, Package, Store } from "lucide-react";
 
@@ -47,9 +47,8 @@ const BillHistory = () => {
   useEffect(() => {
     // Preload all active routes to map names and filter hidden ones
     const loadRoutes = async () => {
-      const data = await getRoutes();
-      const activeRoutes = data.filter((r) => r.is_active !== false);
-      const filtered = activeRoutes.filter((r) => shouldDisplayRoute(r.name));
+      const data = await getActiveRoutes();
+      const filtered = data.filter((r) => shouldDisplayRoute(r.name));
       const mapped = filtered.map((r) => ({ id: r.id, name: r.name, displayName: mapRouteName(r.name) }));
       setRoutes(mapped);
       const map: Record<string, string> = {};

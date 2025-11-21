@@ -33,7 +33,11 @@ export const AssignStockPage: React.FC = () => {
     const [selectedDriver, setSelectedDriver] = useState<string>('');
     const [selectedRoute, setSelectedRoute] = useState<string>('');
     const [selectedTruck, setSelectedTruck] = useState<string>('');
-    const [selectedDate, setSelectedDate] = useState<string>('');
+    // Default date to today (YYYY-MM-DD format)
+    const [selectedDate, setSelectedDate] = useState<string>(() => {
+        const today = new Date();
+        return today.toISOString().split('T')[0];
+    });
 
     // Assignments: Map<productId, {boxQty, pcsQty}>
     const [assignments, setAssignments] = useState<Map<string, AssignmentQuantity>>(new Map());
@@ -70,9 +74,10 @@ export const AssignStockPage: React.FC = () => {
         }
     };
 
-    // Load existing stock when all selections are made
+    // Load existing stock when driver/route and date are selected
     useEffect(() => {
-        if (selectedDriver && selectedRoute && selectedDate) {
+        // Need at least driver OR route, plus date
+        if ((selectedDriver || selectedRoute) && selectedDate) {
             loadExistingStock();
         }
     }, [selectedDriver, selectedRoute, selectedTruck, selectedDate]);
@@ -80,8 +85,8 @@ export const AssignStockPage: React.FC = () => {
     const loadExistingStock = async () => {
         try {
             const existingStock = await getDailyStockForDriverRouteDate(
-                selectedDriver,
-                selectedRoute,
+                selectedDriver || null,
+                selectedRoute || null,
                 selectedTruck || null,
                 selectedDate
             );
@@ -152,9 +157,9 @@ export const AssignStockPage: React.FC = () => {
     // Handle assign stock
     const handleAssignStock = async () => {
         try {
-            // Validate selections
-            if (!selectedDriver || !selectedRoute || !selectedDate) {
-                alert('Please select driver, route, and date');
+            // Validate selections - need at least driver OR route, plus date
+            if ((!selectedDriver && !selectedRoute) || !selectedDate) {
+                alert('Please select at least a driver or route, and a date');
                 return;
             }
 
@@ -180,8 +185,8 @@ export const AssignStockPage: React.FC = () => {
             setError('');
 
             await saveAssignedStock(
-                selectedDriver,
-                selectedRoute,
+                selectedDriver || null,
+                selectedRoute || null,
                 selectedTruck || null,
                 selectedDate,
                 payload
@@ -190,7 +195,8 @@ export const AssignStockPage: React.FC = () => {
             // Success
             const driver = drivers.find(d => d.id === selectedDriver);
             const route = routes.find(r => r.id === selectedRoute);
-            alert(`Stock successfully assigned to ${driver?.name} for ${route?.name} on ${selectedDate}`);
+            const assignmentTarget = driver?.name || route?.name || 'selected target';
+            alert(`Stock successfully assigned to ${assignmentTarget} on ${selectedDate}`);
 
             // Reload products to show updated warehouse stock
             const updatedProducts = await getAssignableProducts();
@@ -213,7 +219,7 @@ export const AssignStockPage: React.FC = () => {
             {/* Page Header */}
             <div>
                 <h1 className="text-3xl font-bold text-gray-900">Assign Stock</h1>
-                <p className="text-gray-600 mt-1">Assign warehouse stock to drivers for their routes</p>
+                <p className="text-gray-600 mt-1">Assign warehouse stock to drivers or routes (select at least one)</p>
             </div>
 
             {/* Error Alert */}
@@ -237,7 +243,7 @@ export const AssignStockPage: React.FC = () => {
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     <User className="w-4 h-4 inline mr-1" />
-                                    Select Driver *
+                                    Select Driver (Optional)
                                 </label>
                                 <select
                                     value={selectedDriver}
@@ -258,7 +264,7 @@ export const AssignStockPage: React.FC = () => {
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     <Package className="w-4 h-4 inline mr-1" />
-                                    Select Route *
+                                    Select Route (Optional)
                                 </label>
                                 <select
                                     value={selectedRoute}
@@ -317,7 +323,7 @@ export const AssignStockPage: React.FC = () => {
                         <div className="px-6 py-4 border-b border-gray-200">
                             <h3 className="text-lg font-semibold text-gray-900">Stock Assignment</h3>
                             <p className="text-sm text-gray-600 mt-1">
-                                Assign quantities from warehouse stock to the selected driver
+                                Assign quantities from warehouse stock (select at least driver or route)
                             </p>
                         </div>
                         <div className="overflow-x-auto">
@@ -429,7 +435,7 @@ export const AssignStockPage: React.FC = () => {
                             variant="primary"
                             size="lg"
                             onClick={handleAssignStock}
-                            disabled={saving || loading || !selectedDriver || !selectedRoute || !selectedDate}
+                            disabled={saving || loading || (!selectedDriver && !selectedRoute) || !selectedDate}
                         >
                             {saving ? 'Assigning...' : 'Assign Stock'}
                         </Button>

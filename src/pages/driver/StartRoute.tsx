@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../../components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../../components/ui/alert-dialog";
 import { useToast } from "../../hooks/use-toast";
-import { getProducts, getRoutes, setDailyStock, getDailyStock, addRoute, deactivateRoute, type Product, type Route, type DailyStock, type StockItem } from "../../lib/supabase";
+import { getProducts, getActiveRoutes, setDailyStock, getDailyStock, addRoute, deactivateRoute, type Product, type DailyStock, type StockItem } from "../../lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
 import { ArrowLeft, Route as RouteIcon, Package, Plus, Minus, Trash2, RefreshCw } from "lucide-react";
 import { isWithinAuthGracePeriod, nameMatchesQueryByWordPrefix } from "../../lib/utils";
@@ -69,10 +69,9 @@ const StartRoute = () => {
     try {
       // Fetch products and routes from Supabase
       const productsRes = await getProducts();
-      const routesRes = await getRoutes();
+      const routesRes = await getActiveRoutes();
 
       const activeProducts = productsRes.filter((p) => (p.status || 'active') === 'active');
-      const activeRoutes = routesRes.filter((r) => r.is_active !== false);
 
       if (activeProducts) {
         setProducts(activeProducts);
@@ -80,9 +79,9 @@ const StartRoute = () => {
         setStock([]);
       }
 
-      if (activeRoutes) {
-        // Map old route names to new Route 1, 2, 3 format and filter out hidden routes
-        const mappedRoutes = activeRoutes
+      if (routesRes) {
+        // Map route names for display
+        const mappedRoutes = routesRes
           .filter(route => shouldDisplayRoute(route.name))
           .map(route => ({
             ...route,
@@ -150,7 +149,7 @@ const StartRoute = () => {
     try {
       // Prevent duplicate route names (case-insensitive)
       const nameToCheck = newRouteName.trim();
-      const allRoutes = await getRoutes();
+      const allRoutes = await getActiveRoutes();
       const existing = allRoutes.find((r) => String(r.name).toLowerCase() === String(nameToCheck).toLowerCase());
       if (existing) {
         toast({
