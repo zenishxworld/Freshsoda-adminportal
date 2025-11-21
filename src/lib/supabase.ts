@@ -47,6 +47,20 @@ export type Sale = {
     created_at?: string;
 };
 
+export type WarehouseStock = {
+    id: string;
+    product_id: string;
+    product_name: string;
+    box_price: number;
+    pcs_price: number;
+    pcs_per_box: number;
+    boxes: number;
+    pcs: number;
+    created_at?: string;
+    updated_at?: string;
+};
+
+
 // Products
 export const getProducts = async (): Promise<Product[]> => {
     const { data, error } = await supabase
@@ -255,3 +269,241 @@ export const appendSale = async (
 
     return data;
 };
+
+// Warehouse Stock Management
+
+/**
+ * Get all warehouse stock with product details
+ */
+export const getWarehouseStock = async (): Promise<WarehouseStock[]> => {
+    const { data, error } = await supabase
+        .from('warehouse_stock')
+        .select(`
+            id,
+            product_id,
+            boxes,
+            pcs,
+            created_at,
+            updated_at,
+            products (
+                name,
+                box_price,
+                pcs_price,
+                pcs_per_box,
+                price
+            )
+        `)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching warehouse stock:', error);
+        throw error;
+    }
+
+    // Transform the data to match WarehouseStock type
+    return (data || []).map((item: any) => ({
+        id: item.id,
+        product_id: item.product_id,
+        product_name: item.products?.name || 'Unknown Product',
+        box_price: item.products?.box_price || item.products?.price || 0,
+        pcs_price: item.products?.pcs_price || 0,
+        pcs_per_box: item.products?.pcs_per_box || 24,
+        boxes: item.boxes || 0,
+        pcs: item.pcs || 0,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+    }));
+};
+
+/**
+ * Add stock to warehouse (increment)
+ */
+export const addWarehouseStock = async (
+    productId: string,
+    boxes: number,
+    pcs: number
+): Promise<void> => {
+    if (boxes < 0 || pcs < 0) {
+        throw new Error('Cannot add negative stock');
+    }
+
+    // Check if warehouse stock entry exists
+    const { data: existing, error: fetchError } = await supabase
+        .from('warehouse_stock')
+        .select('*')
+        .eq('product_id', productId)
+        .maybeSingle();
+
+    if (fetchError) {
+        console.error('Error checking warehouse stock:', fetchError);
+        throw fetchError;
+    }
+
+    if (existing) {
+        // Update existing entry
+        const { error } = await supabase
+            .from('warehouse_stock')
+            .update({
+                boxes: existing.boxes + boxes,
+                pcs: existing.pcs + pcs,
+            })
+            .eq('product_id', productId);
+
+        if (error) {
+            console.error('Error adding warehouse stock:', error);
+            throw error;
+        }
+    } else {
+        // Create new entry
+        const { error } = await supabase
+            .from('warehouse_stock')
+            .insert({
+                product_id: productId,
+                boxes,
+                pcs,
+            });
+
+        if (error) {
+            console.error('Error creating warehouse stock:', error);
+            throw error;
+        }
+    }
+};
+
+/**
+ * Remove stock from warehouse (decrement) - used when assigning to drivers
+ */
+export const removeWarehouseStock = async (
+    productId: string,
+    boxes: number,
+    pcs: number
+): Promise<void> => {
+    if (boxes < 0 || pcs < 0) {
+        throw new Error('Cannot remove negative stock');
+    }
+
+    // Get current warehouse stock
+    const { data: existing, error: fetchError } = await supabase
+        .from('warehouse_stock')
+        .select('*')
+        .eq('product_id', productId)
+        .single();
+
+    if (fetchError || !existing) {
+        throw new Error('Product not found in warehouse stock');
+    }
+
+    const newBoxes = existing.boxes - boxes;
+    const newPcs = existing.pcs - pcs;
+
+    // Check for negative stock
+    if (newBoxes < 0 || newPcs < 0) {
+        throw new Error('Insufficient warehouse stock');
+    }
+
+    // Update warehouse stock
+    const { error } = await supabase
+        .from('warehouse_stock')
+        .update({
+            boxes: newBoxes,
+            pcs: newPcs,
+        })
+        .eq('product_id', productId);
+
+    if (error) {
+        console.error('Error removing warehouse stock:', error);
+        throw error;
+    }
+};
+
+/**
+ * Set exact warehouse stock amount (override)
+ */
+export const setWarehouseStock = async (
+    productId: string,
+    boxes: number,
+    pcs: number
+): Promise<void> => {
+    if (boxes < 0 || pcs < 0) {
+        throw new Error('Stock cannot be negative');
+    }
+
+    // Check if warehouse stock entry exists
+    const { data: existing, error: fetchError } = await supabase
+        .from('warehouse_stock')
+        .select('*')
+        .eq('product_id', productId)
+        .maybeSingle();
+
+    if (fetchError) {
+        console.error('Error checking warehouse stock:', fetchError);
+        throw fetchError;
+    }
+
+    if (existing) {
+        // Update existing entry
+        const { error } = await supabase
+            .from('warehouse_stock')
+            .update({
+                boxes,
+                pcs,
+            })
+            .eq('product_id', productId);
+
+        if (error) {
+            console.error('Error setting warehouse stock:', error);
+            throw error;
+        }
+    } else {
+        // Create new entry
+        const { error } = await supabase
+            .from('warehouse_stock')
+            .insert({
+                product_id: productId,
+                boxes,
+                pcs,
+            });
+
+        if (error) {
+            console.error('Error creating warehouse stock:', error);
+            throw error;
+        }
+    }
+};
+
+/**
+ * Get products that are not yet in warehouse stock
+ */
+export const getProductsNotInWarehouse = async (): Promise<Product[]> => {
+    // Get all products
+    const { data: allProducts, error: productsError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('status', 'active')
+        .order('name', { ascending: true });
+
+    if (productsError) {
+        console.error('Error fetching products:', productsError);
+        throw productsError;
+    }
+
+    // Get all product IDs that are in warehouse stock
+    const { data: warehouseStock, error: warehouseError } = await supabase
+        .from('warehouse_stock')
+        .select('product_id');
+
+    if (warehouseError) {
+        console.error('Error fetching warehouse stock:', warehouseError);
+        throw warehouseError;
+    }
+
+    const warehouseProductIds = new Set(
+        (warehouseStock || []).map((item: any) => item.product_id)
+    );
+
+    // Filter out products that are already in warehouse
+    return (allProducts || []).filter(
+        (product) => !warehouseProductIds.has(product.id)
+    );
+};
+
