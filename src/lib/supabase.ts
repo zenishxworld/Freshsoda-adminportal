@@ -104,6 +104,7 @@ export const getProducts = async (): Promise<Product[]> => {
     const { data, error } = await supabase
         .from('products')
         .select('*')
+        .eq('status', 'active')
         .order('created_at', { ascending: false });
 
     if (error) {
@@ -120,6 +121,7 @@ export const upsertProduct = async (
     const now = new Date().toISOString();
     const productData = {
         ...p,
+        status: 'active',
         updated_at: now,
         ...(p.id ? {} : { created_at: now }),
     };

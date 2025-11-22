@@ -3,9 +3,8 @@ import { Card } from '@/components/tailadmin/Card';
 import { Button } from '@/components/tailadmin/Button';
 import { Input } from '@/components/tailadmin/Input';
 import { Modal } from '@/components/tailadmin/Modal';
-import { Badge } from '@/components/tailadmin/Badge';
 import { getProducts, upsertProduct, softDeleteProduct, type Product } from '@/lib/supabase';
-import { Package, Plus, Edit, Trash2, RefreshCw, Search } from 'lucide-react';
+import { Package, Plus, Edit, RefreshCw, Search, Trash2 } from 'lucide-react';
 
 export const ManageProductsPage: React.FC = () => {
     const [products, setProducts] = useState<Product[]>([]);
@@ -108,7 +107,6 @@ export const ManageProductsPage: React.FC = () => {
                 pcs_price: pcsPrice,
                 pcs_per_box: pcsPerBox,
                 description: formData.description,
-                status: 'active',
             });
 
             setShowAddModal(false);
@@ -143,7 +141,6 @@ export const ManageProductsPage: React.FC = () => {
                 pcs_price: pcsPrice,
                 pcs_per_box: pcsPerBox,
                 description: formData.description,
-                status: selectedProduct.status,
             });
 
             setShowEditModal(false);
@@ -152,6 +149,21 @@ export const ManageProductsPage: React.FC = () => {
         } catch (error) {
             console.error('Error updating product:', error);
             alert('Failed to update product');
+        }
+    };
+
+    // Delete product
+    const handleDeleteProduct = async (product: Product) => {
+        if (!window.confirm(`Are you sure you want to delete "${product.name}"?`)) {
+            return;
+        }
+
+        try {
+            await softDeleteProduct(product.id);
+            fetchProducts();
+        } catch (error) {
+            console.error('Error deleting product:', error);
+            alert('Failed to delete product');
         }
     };
 
@@ -167,25 +179,7 @@ export const ManageProductsPage: React.FC = () => {
         setShowEditModal(true);
     };
 
-    // Toggle product status
-    const toggleProductStatus = async (product: Product) => {
-        try {
-            if (product.status === 'active') {
-                await softDeleteProduct(product.id);
-            } else {
-                await upsertProduct({
-                    id: product.id,
-                    status: 'active',
-                    name: '',
-                    price: 0
-                });
-            }
-            fetchProducts();
-        } catch (error) {
-            console.error('Error toggling product status:', error);
-            alert('Failed to update product status');
-        }
-    };
+
 
     const pcsPrice = calculatePcsPrice(formData.box_price, formData.pcs_per_box);
 
@@ -233,7 +227,7 @@ export const ManageProductsPage: React.FC = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Box Price</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PCS Price</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PCS per Box</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+
                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
@@ -264,11 +258,7 @@ export const ManageProductsPage: React.FC = () => {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                             {product.pcs_per_box || 24}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <Badge variant={product.status === 'active' ? 'success' : 'danger'}>
-                                                {product.status || 'active'}
-                                            </Badge>
-                                        </td>
+
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <div className="flex items-center justify-end gap-2">
                                                 <button
@@ -277,15 +267,12 @@ export const ManageProductsPage: React.FC = () => {
                                                 >
                                                     <Edit className="w-4 h-4" />
                                                 </button>
+
                                                 <button
-                                                    onClick={() => toggleProductStatus(product)}
-                                                    className={product.status === 'active' ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'}
+                                                    onClick={() => handleDeleteProduct(product)}
+                                                    className="text-red-600 hover:text-red-800"
                                                 >
-                                                    {product.status === 'active' ? (
-                                                        <Trash2 className="w-4 h-4" />
-                                                    ) : (
-                                                        <RefreshCw className="w-4 h-4" />
-                                                    )}
+                                                    <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
                                         </td>
