@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
@@ -6,7 +6,7 @@ import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { useToast } from "../../hooks/use-toast";
-import { getProducts, getDailyStock, getSalesFor, appendSale, getActiveRoutes, type Product, type DailyStock, type Sale } from "../../lib/supabase";
+import { getProducts, getDailyStock, getSalesFor, appendSale, getActiveRoutes, getShopSuggestions, getShopSuggestionsByVillage, createShop, type Product, type DailyStock, type Sale, type Shop } from "../../lib/supabase";
 import { mapRouteName } from "../../lib/routeUtils";
 import { ArrowLeft, ShoppingCart, Plus, Minus, Printer, Store, Check, RefreshCw, X, MapPin, Phone } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../../components/ui/dialog";
@@ -45,8 +45,14 @@ const ShopBilling = () => {
   const [authUserId, setAuthUserId] = useState<string>("anon");
   // Shop name suggestions state
   const [shopSuggestions, setShopSuggestions] = useState<string[]>([]);
-  const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
+  const [serverShopSuggestions, setServerShopSuggestions] = useState<Shop[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [serverVillageSuggestions, setServerVillageSuggestions] = useState<Shop[]>([]);
+  const localNameMatches = useMemo(() => {
+    const q = shopName.trim().toLowerCase();
+    if (!q) return [] as string[];
+    return shopSuggestions.filter(n => n.toLowerCase().startsWith(q)).slice(0, 8);
+  }, [shopName, shopSuggestions]);
 
   // Add-product dialog state
   const [showAddProductDialog, setShowAddProductDialog] = useState(false);
@@ -174,7 +180,6 @@ const ShopBilling = () => {
     }
 
     setShopSuggestions(prev => prev.filter(n => n !== name));
-    setFilteredSuggestions(prev => prev.filter(n => n !== name));
   };
 
   useEffect(() => {
@@ -194,6 +199,42 @@ const ShopBilling = () => {
     setCurrentDate(date);
     fetchProductsAndStock(route, date);
   }, [navigate, toast, loadShopSuggestions]);
+
+  useEffect(() => {
+    const q = shopName.trim();
+    let cancelled = false;
+    (async () => {
+      if (q.length >= 2) {
+        try {
+          const results = await getShopSuggestions(q);
+          if (!cancelled) setServerShopSuggestions(results.slice(0, 10));
+        } catch {
+          if (!cancelled) setServerShopSuggestions([]);
+        }
+      } else {
+        setServerShopSuggestions([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [shopName]);
+
+  useEffect(() => {
+    const q = shopAddress.trim();
+    let cancelled = false;
+    (async () => {
+      if (q.length >= 2) {
+        try {
+          const results = await getShopSuggestionsByVillage(q);
+          if (!cancelled) setServerVillageSuggestions(results.slice(0, 10));
+        } catch {
+          if (!cancelled) setServerVillageSuggestions([]);
+        }
+      } else {
+        setServerVillageSuggestions([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [shopAddress]);
 
 
 
@@ -470,8 +511,11 @@ const ShopBilling = () => {
     // 1) Trigger print immediately (synchronously) to preserve mobile gesture context
     window.print();
 
-    // 2) After print dialog opens, persist the sale
+    // 2) After print dialog opens, ensure shop exists and persist the sale
     try {
+      try {
+        await createShop({ name: shopName.trim(), phone: shopPhone.trim(), village: shopAddress.trim(), address: shopAddress.trim(), route_id: currentRoute || undefined });
+      } catch {}
       const saleForAppend: Omit<Sale, 'id' | 'created_at'> = {
         route_id: currentRoute,
         date: currentDate,
@@ -581,7 +625,7 @@ const ShopBilling = () => {
 
             <CardContent className="px-4 sm:px-6">
               <div className="space-y-6 sm:space-y-8">
-                {/* Shop Name Input with suggestions - remains same */}
+                {/* Shop Name Input with suggestions */}
                 <div className="space-y-2">
                   <Label className="text-sm sm:text-base font-semibold flex items-center gap-2">
                     <Store className="w-4 h-4" />
@@ -592,33 +636,29 @@ const ShopBilling = () => {
                       type="text" placeholder="Enter shop name" value={shopName}
                       onChange={(e) => {
                         const value = e.target.value; setShopName(value);
-                        if (value.trim().length >= 1) {
-                          const match = shopSuggestions.filter(n => n.toLowerCase().startsWith(value.toLowerCase())).slice(0, 8);
-                          setFilteredSuggestions(match); setShowSuggestions(match.length > 0);
-                          const exact = shopSuggestions.find(n => n.toLowerCase() === value.trim().toLowerCase());
-                          if (exact && currentRoute) {
-                            const details = getShopDetailsFromLocal(currentRoute, exact);
-                            if (details) { if (typeof details.address === 'string') setShopAddress(details.address); if (typeof details.phone === 'string') setShopPhone(details.phone); }
-                          }
-                        } else { setShowSuggestions(false); }
-                      }}
-                      onFocus={() => {
-                        if (shopName.trim().length >= 1) {
-                          const match = shopSuggestions.filter(n => n.toLowerCase().startsWith(shopName.toLowerCase())).slice(0, 8);
-                          setFilteredSuggestions(match); setShowSuggestions(match.length > 0);
+                        setShowSuggestions(value.trim().length >= 1);
+                        if (value.trim().length >= 1 && currentRoute) {
+                          const details = getShopDetailsFromLocal(currentRoute, value.trim());
+                          if (details) { if (typeof details.address === 'string') setShopAddress(details.address); if (typeof details.phone === 'string') setShopPhone(details.phone); }
                         }
                       }}
+                      onFocus={() => { if (shopName.trim().length >= 1) setShowSuggestions(true); }}
                       onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                       className="h-11 sm:h-10 text-base" required
                     />
-                    {showSuggestions && filteredSuggestions.length > 0 && (
+                    {showSuggestions && (serverShopSuggestions.length > 0 || localNameMatches.length > 0) && (
                       <div className="absolute z-20 left-0 right-0 mt-2 bg-background border border-border rounded-md shadow-soft max-h-48 overflow-auto">
-                        {filteredSuggestions.map((name) => (
+                        {(serverShopSuggestions.length > 0 ? serverShopSuggestions.map(s => s.name) : localNameMatches).map((name) => (
                           <div key={name} className="flex items-center justify-between w-full px-3 py-2 hover:bg-muted text-sm"
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => {
                               setShopName(name); setShowSuggestions(false);
-                              if (currentRoute) {
+                              const s = serverShopSuggestions.find(ss => ss.name === name);
+                              if (s) {
+                                if (s.village) setShopAddress(s.village);
+                                if (s.address) setShopAddress(s.address);
+                                if (s.phone) setShopPhone(s.phone);
+                              } else if (currentRoute) {
                                 const details = getShopDetailsFromLocal(currentRoute, name);
                                 if (details) { if (typeof details.address === 'string') setShopAddress(details.address); if (typeof details.phone === 'string') setShopPhone(details.phone); }
                               }
@@ -632,10 +672,7 @@ const ShopBilling = () => {
                                 if (currentRoute) {
                                   removeShopName(currentRoute, name);
                                   const value = shopName.trim();
-                                  if (value.length >= 1) {
-                                    const match = shopSuggestions.filter(n => n.toLowerCase().startsWith(value.toLowerCase())).slice(0, 8);
-                                    setFilteredSuggestions(match); setShowSuggestions(match.length > 0);
-                                  } else { setShowSuggestions(false); }
+                                  if (!(value.length >= 1)) { setShowSuggestions(false); }
                                 }
                               }}
                             > <X className="w-4 h-4" /> </button>
@@ -645,10 +682,30 @@ const ShopBilling = () => {
                     )}
                   </div>
                 </div>
-                {/* Address Input - remains same */}
+                {/* Address Input with suggestions */}
                 <div className="space-y-2">
                   <Label className="text-sm sm:text-base font-semibold flex items-center gap-2"><MapPin className="w-4 h-4" /> Address / Village</Label>
-                  <Input type="text" placeholder="Enter address or village name" value={shopAddress} onChange={(e) => setShopAddress(e.target.value)} className="h-11 sm:h-10 text-base" />
+                  <div className="relative">
+                    <Input type="text" placeholder="Enter address or village name" value={shopAddress} onChange={(e) => setShopAddress(e.target.value)} className="h-11 sm:h-10 text-base" />
+                    {serverVillageSuggestions.length > 0 && (
+                      <div className="absolute z-20 left-0 right-0 mt-2 bg-background border border-border rounded-md shadow-soft max-h-48 overflow-auto">
+                        {serverVillageSuggestions.map((s) => (
+                          <div key={s.id} className="flex items-center justify-between w-full px-3 py-2 hover:bg-muted text-sm"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setShopAddress(s.village || s.address || '');
+                              if (s.name) setShopName(s.name);
+                              if (s.phone) setShopPhone(s.phone);
+                              setShowSuggestions(false);
+                            }}
+                          >
+                            <span className="truncate">{s.village || s.address || ''}</span>
+                            {s.name && (<span className="ml-2 text-xs text-muted-foreground truncate">{s.name}</span>)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 {/* Phone Input - remains same */}
                 <div className="space-y-2">

@@ -1264,3 +1264,150 @@ export const saveAssignedStock = async (
 };
 
 
+// Shops
+export interface Shop {
+    id: string;
+    name: string;
+    phone: string | null;
+    village: string | null;
+    address: string | null;
+    route_id: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export const getAllShops = async (
+    search?: string,
+    village?: string,
+    routeId?: string
+): Promise<Shop[]> => {
+    let query = supabase
+        .from('shops')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (search && search.trim()) {
+        const s = search.trim();
+        query = query.or(
+            `name.ilike.%${s}%,phone.ilike.%${s}%,village.ilike.%${s}%`
+        );
+    }
+    if (village && village.trim()) {
+        query = query.ilike('village', `%${village.trim()}%`);
+    }
+    if (routeId && routeId.trim()) {
+        query = query.eq('route_id', routeId.trim());
+    }
+
+    const { data, error } = await query;
+    if (error) {
+        console.error('Error fetching shops:', error);
+        throw new Error('Failed to fetch shops. Please try again.');
+    }
+    return data || [];
+};
+
+export const createShop = async (shopData: {
+    name: string;
+    phone?: string;
+    village?: string;
+    address?: string;
+    route_id?: string;
+}): Promise<Shop> => {
+    const name = shopData.name?.trim();
+    if (!name) throw new Error('Shop name is required');
+
+    const { data: existing, error: existingErr } = await supabase
+        .from('shops')
+        .select('*')
+        .ilike('name', name)
+        .limit(1);
+    if (!existingErr && existing && existing.length > 0) {
+        return existing[0] as Shop;
+    }
+
+    const now = new Date().toISOString();
+    const payload = {
+        name,
+        phone: shopData.phone?.trim() || null,
+        village: shopData.village?.trim() || null,
+        address: shopData.address?.trim() || null,
+        route_id: shopData.route_id?.trim() || null,
+        created_at: now,
+        updated_at: now,
+    };
+
+    const { data, error } = await supabase
+        .from('shops')
+        .insert(payload)
+        .select()
+        .single();
+    if (error) {
+        console.error('Error creating shop:', error);
+        throw new Error('Failed to create shop. Please try again.');
+    }
+    return data as Shop;
+};
+
+export const updateShop = async (
+    id: string,
+    updateData: {
+        name?: string;
+        phone?: string | null;
+        village?: string | null;
+        address?: string | null;
+        route_id?: string | null;
+    }
+): Promise<Shop> => {
+    const now = new Date().toISOString();
+    const payload: any = { updated_at: now };
+    if (typeof updateData.name === 'string') payload.name = updateData.name.trim();
+    if (typeof updateData.phone !== 'undefined') payload.phone = updateData.phone ? String(updateData.phone).trim() : null;
+    if (typeof updateData.village !== 'undefined') payload.village = updateData.village ? String(updateData.village).trim() : null;
+    if (typeof updateData.address !== 'undefined') payload.address = updateData.address ? String(updateData.address).trim() : null;
+    if (typeof updateData.route_id !== 'undefined') payload.route_id = updateData.route_id ? String(updateData.route_id).trim() : null;
+
+    const { data, error } = await supabase
+        .from('shops')
+        .update(payload)
+        .eq('id', id)
+        .select()
+        .single();
+    if (error) {
+        console.error('Error updating shop:', error);
+        throw new Error('Failed to update shop. Please try again.');
+    }
+    return data as Shop;
+};
+
+export const getShopSuggestions = async (query: string): Promise<Shop[]> => {
+    const q = query?.trim();
+    if (!q) return [];
+    const { data, error } = await supabase
+        .from('shops')
+        .select('*')
+        .ilike('name', `%${q}%`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+    if (error) {
+        console.error('Error fetching shop suggestions:', error);
+        return [];
+    }
+    return data || [];
+};
+
+export const getShopSuggestionsByVillage = async (query: string): Promise<Shop[]> => {
+    const q = query?.trim();
+    if (!q) return [];
+    const { data, error } = await supabase
+        .from('shops')
+        .select('*')
+        .ilike('village', `%${q}%`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+    if (error) {
+        console.error('Error fetching village suggestions:', error);
+        return [];
+    }
+    return data || [];
+};
