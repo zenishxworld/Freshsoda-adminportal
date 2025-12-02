@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { Card } from '@/components/tailadmin/Card';
 import { Button } from '@/components/tailadmin/Button';
 import { Input } from '@/components/tailadmin/Input';
@@ -16,6 +17,7 @@ import {
     type AssignableProductRow,
     type DailyStockPayload,
 } from '@/lib/supabase';
+import { getAssignmentsForDate, subscribeAssignmentsForDate, type AssignmentLogEntry } from '@/lib/supabase';
 
 interface AssignmentQuantity {
     boxQty: number;
@@ -46,6 +48,9 @@ export const AssignStockPage: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string>('');
+    const [logLoading, setLogLoading] = useState(false);
+    const [assignmentLog, setAssignmentLog] = useState<AssignmentLogEntry[]>([]);
+    const subscriptionRef = useRef<RealtimeChannel | null>(null);
 
     // Load initial data
     useEffect(() => {
@@ -81,6 +86,29 @@ export const AssignStockPage: React.FC = () => {
             loadExistingStock();
         }
     }, [selectedDriver, selectedRoute, selectedTruck, selectedDate]);
+
+    useEffect(() => {
+        const loadLog = async () => {
+            try {
+                setLogLoading(true);
+                const entries = await getAssignmentsForDate(selectedDate);
+                setAssignmentLog(entries);
+            } catch (err) {
+                console.error('Error loading assignment log:', err);
+            } finally {
+                setLogLoading(false);
+            }
+        };
+
+        loadLog();
+
+        subscriptionRef.current?.unsubscribe?.();
+        subscriptionRef.current = subscribeAssignmentsForDate(selectedDate, loadLog);
+
+        return () => {
+            subscriptionRef.current?.unsubscribe?.();
+        };
+    }, [selectedDate]);
 
     const loadExistingStock = async () => {
         try {
@@ -197,6 +225,15 @@ export const AssignStockPage: React.FC = () => {
             const route = routes.find(r => r.id === selectedRoute);
             const assignmentTarget = driver?.name || route?.name || 'selected target';
             alert(`Stock successfully assigned to ${assignmentTarget} on ${selectedDate}`);
+
+            // Refresh assignment log immediately
+            try {
+                setLogLoading(true);
+                const entries = await getAssignmentsForDate(selectedDate);
+                setAssignmentLog(entries);
+            } finally {
+                setLogLoading(false);
+            }
 
             // Reload products to show updated warehouse stock
             const updatedProducts = await getAssignableProducts();
@@ -315,6 +352,49 @@ export const AssignStockPage: React.FC = () => {
                                     disabled={loading}
                                 />
                             </div>
+                        </div>
+                    </Card>
+                    <Card>
+                        <div className="px-6 py-4 border-b border-gray-200">
+                            <h3 className="text-lg font-semibold text-gray-900">Assignment Log</h3>
+                            <p className="text-sm text-gray-600 mt-1">Live updates for {selectedDate}</p>
+                        </div>
+                        <div className="p-6">
+                            {logLoading ? (
+                                <div className="text-gray-500">Loading log...</div>
+                            ) : assignmentLog.length === 0 ? (
+                                <div className="text-gray-500">No assignments recorded for this date.</div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-gray-50 border-b border-gray-200">
+                                            <tr>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Driver / Route</th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Truck</th>
+                                                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Boxes</th>
+                                                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">PCS</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {assignmentLog.map((entry) => (
+                                                <tr key={entry.id} className="hover:bg-gray-50">
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">
+                                                        {entry.created_at ? new Date(entry.created_at).toLocaleTimeString() : '-'}
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-nowrap">
+                                                        <div className="text-sm font-medium text-gray-900">{entry.driver_name || '-'}</div>
+                                                        <div className="text-xs text-gray-500">{entry.route_name || '-'}</div>
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">{entry.truck_name || '-'}</td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-semibold text-gray-900">{entry.total_boxes}</td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-semibold text-gray-900">{entry.total_pcs}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     </Card>
 

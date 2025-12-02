@@ -98,6 +98,23 @@ export type DailyStockPayload = DailyStockItem[];
 
 export type AssignableProductRow = WarehouseStock;
 
+// Assignment log types
+export interface AssignmentLogEntry {
+    id: string;
+    date: string;
+    auth_user_id: string | null;
+    route_id: string | null;
+    truck_id: string | null;
+    driver_name?: string | null;
+    route_name?: string | null;
+    truck_name?: string | null;
+    stock: DailyStockPayload;
+    created_at?: string;
+    updated_at?: string;
+    total_boxes: number;
+    total_pcs: number;
+}
+
 
 // Products
 export const getProducts = async (): Promise<Product[]> => {
@@ -418,6 +435,150 @@ export const getSalesFor = async (
     }
 
     return data || [];
+};
+
+// Assignments Log
+export const getAssignmentsForDate = async (date: string): Promise<AssignmentLogEntry[]> => {
+    let { data, error } = await supabase
+        .from('daily_stock')
+        .select(`
+            id,
+            date,
+            stock,
+            created_at,
+            updated_at,
+            auth_user_id,
+            route_id,
+            truck_id,
+            users(name),
+            routes(name),
+            trucks(name)
+        `)
+        .eq('date', date)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        const fallback = await supabase
+            .from('daily_stock')
+            .select('id, date, stock, created_at, updated_at, auth_user_id, route_id, truck_id')
+            .eq('date', date)
+            .order('created_at', { ascending: false });
+        if (fallback.error) {
+            throw new Error('Failed to fetch assignment log. Please try again.');
+        }
+        data = fallback.data?.map((row: any) => ({
+            ...row,
+            users: row.users ? [row.users] : [],
+            routes: row.routes ? [row.routes] : [],
+            trucks: row.trucks ? [row.trucks] : [],
+        })) ?? [];
+
+        const routeIds = Array.from(new Set((data || []).map((r: any) => r.route_id).filter(Boolean)));
+        const userIds = Array.from(new Set((data || []).map((r: any) => r.auth_user_id).filter(Boolean)));
+        const truckIds = Array.from(new Set((data || []).map((r: any) => r.truck_id).filter(Boolean)));
+
+        let routeMap: Record<string, string> = {};
+        let userMap: Record<string, string> = {};
+        let truckMap: Record<string, string> = {};
+
+        if (routeIds.length > 0) {
+            const rr = await supabase.from('routes').select('id, name').in('id', routeIds);
+            if (!rr.error && rr.data) {
+                rr.data.forEach((x: any) => { routeMap[x.id] = x.name; });
+            }
+        }
+        if (userIds.length > 0) {
+            const ur = await supabase.from('users').select('id, name').in('id', userIds);
+            if (!ur.error && ur.data) {
+                ur.data.forEach((x: any) => { userMap[x.id] = x.name; });
+            }
+        }
+        if (truckIds.length > 0) {
+            const tr = await supabase.from('trucks').select('id, name').in('id', truckIds);
+            if (!tr.error && tr.data) {
+                tr.data.forEach((x: any) => { truckMap[x.id] = x.name; });
+            }
+        }
+
+        const entries = (data || []).map((row: any) => {
+            const stock: DailyStockPayload = Array.isArray(row.stock) ? row.stock : [];
+            const totals = stock.reduce(
+                (acc: { boxes: number; pcs: number }, item: DailyStockItem) => {
+                    acc.boxes += item.boxQty || 0;
+                    acc.pcs += item.pcsQty || 0;
+                    return acc;
+                },
+                { boxes: 0, pcs: 0 }
+            );
+
+            return {
+                id: row.id,
+                date: row.date,
+                auth_user_id: row.auth_user_id ?? null,
+                route_id: row.route_id ?? null,
+                truck_id: row.truck_id ?? null,
+                driver_name: row.auth_user_id ? userMap[row.auth_user_id] || null : null,
+                route_name: row.route_id ? routeMap[row.route_id] || null : null,
+                truck_name: row.truck_id ? truckMap[row.truck_id] || null : null,
+                stock,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                total_boxes: totals.boxes,
+                total_pcs: totals.pcs,
+            } as AssignmentLogEntry;
+        });
+
+        return entries;
+    }
+
+    const entries = (data || []).map((row: any) => {
+        const stock: DailyStockPayload = Array.isArray(row.stock) ? row.stock : [];
+        const totals = stock.reduce(
+            (acc: { boxes: number; pcs: number }, item: DailyStockItem) => {
+                acc.boxes += item.boxQty || 0;
+                acc.pcs += item.pcsQty || 0;
+                return acc;
+            },
+            { boxes: 0, pcs: 0 }
+        );
+
+        return {
+            id: row.id,
+            date: row.date,
+            auth_user_id: row.auth_user_id ?? null,
+            route_id: row.route_id ?? null,
+            truck_id: row.truck_id ?? null,
+            driver_name: row.users?.name ?? null,
+            route_name: row.routes?.name ?? null,
+            truck_name: row.trucks?.name ?? null,
+            stock,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            total_boxes: totals.boxes,
+            total_pcs: totals.pcs,
+        } as AssignmentLogEntry;
+    });
+
+    return entries;
+};
+
+export const subscribeAssignmentsForDate = (
+    date: string,
+    onChange: () => void
+) => {
+    const channel = supabase
+        .channel(`daily_stock_changes_${date}`)
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'daily_stock',
+            filter: `date=eq.${date}`,
+        }, () => {
+            try { onChange(); } catch {}
+        })
+        .subscribe();
+
+    return channel;
 };
 
 export const appendSale = async (

@@ -93,17 +93,15 @@ function AppRoutes() {
         path="/driver/*"
         element={
           <ProtectedRouteDriver>
-            <DriverLayout>
-              <Routes>
-                <Route path="/" element={<Navigate to="/driver/dashboard" replace />} />
-                <Route path="/dashboard" element={<DriverDashboard />} />
-                <Route path="/start-route" element={<StartRoute />} />
-                <Route path="/shop-billing" element={<ShopBilling />} />
-                <Route path="/summary" element={<Summary />} />
-                <Route path="/add-product" element={<AddProduct />} />
-                <Route path="/bill-history" element={<BillHistory />} />
-              </Routes>
-            </DriverLayout>
+            <Routes>
+              <Route path="/" element={<Navigate to="/driver/dashboard" replace />} />
+              <Route path="/dashboard" element={<DriverDashboard />} />
+              <Route path="/start-route" element={<StartRoute />} />
+              <Route path="/shop-billing" element={<ShopBilling />} />
+              <Route path="/summary" element={<Summary />} />
+              <Route path="/add-product" element={<AddProduct />} />
+              <Route path="/bill-history" element={<BillHistory />} />
+            </Routes>
           </ProtectedRouteDriver>
         }
       />

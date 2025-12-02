@@ -78,7 +78,7 @@ const DriverDashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-accent-light/10">
       {/* Header */}
       <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
