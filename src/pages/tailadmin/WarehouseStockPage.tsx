@@ -179,7 +179,27 @@ export const WarehouseStockPage: React.FC = () => {
 
     // Separate stock into available and out of stock
     const availableStock = stock.filter(item => item.boxes > 0 || item.pcs > 0);
-    const outOfStock = stock.filter(item => item.boxes === 0 && item.pcs === 0);
+    const activeProductIds = new Set(allProducts.map(p => p.id));
+    const outOfStockWarehouse = stock.filter(item => (item.boxes === 0 && item.pcs === 0) && activeProductIds.has(item.product_id));
+
+    // Include products that exist in Manage Products but have no warehouse entry yet as out-of-stock
+    const stockProductIds = new Set(stock.map(s => s.product_id));
+    const missingProducts = allProducts
+        .filter(p => !stockProductIds.has(p.id))
+        .map(p => ({
+            id: p.id,
+            product_id: p.id,
+            product_name: p.name,
+            box_price: (p.box_price || p.price || 0),
+            pcs_price: (p.pcs_price || 0),
+            pcs_per_box: (p.pcs_per_box || 24),
+            boxes: 0,
+            pcs: 0,
+            created_at: undefined,
+            updated_at: undefined,
+        } as WarehouseStock));
+
+    const outOfStock = [...outOfStockWarehouse, ...missingProducts];
 
     return (
         <div className="space-y-6">

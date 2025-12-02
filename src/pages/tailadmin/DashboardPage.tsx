@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card } from '../../components/tailadmin/Card';
 import { Package, TruckIcon, DollarSign, Archive } from 'lucide-react';
+import { getAssignmentsForDate, subscribeAssignmentsForDate, type AssignmentLogEntry } from '@/lib/supabase';
 
 interface StatCardProps {
     title: string;
@@ -32,6 +33,32 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color, change }
 };
 
 export const DashboardPage: React.FC = () => {
+    const [today, setToday] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [recentAssignments, setRecentAssignments] = useState<AssignmentLogEntry[]>([]);
+    const [loadingAssignments, setLoadingAssignments] = useState<boolean>(false);
+
+    useEffect(() => {
+        const load = async () => {
+            setLoadingAssignments(true);
+            try {
+                const rows = await getAssignmentsForDate(today);
+                setRecentAssignments(rows);
+            } finally {
+                setLoadingAssignments(false);
+            }
+        };
+        load();
+
+        const channel = subscribeAssignmentsForDate(today, () => {
+            load();
+        });
+        return () => {
+            channel.unsubscribe();
+        };
+    }, [today]);
+
+    const recent = useMemo(() => recentAssignments.slice(0, 8), [recentAssignments]);
+
     return (
         <div className="space-y-6">
             {/* Page Header */}
@@ -75,18 +102,29 @@ export const DashboardPage: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card header={<h3 className="text-lg font-semibold text-gray-900">Recent Stock Assignments</h3>}>
                     <div className="space-y-4">
-                        {[1, 2, 3, 4].map((item) => (
-                            <div key={item} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
-                                <div>
-                                    <p className="font-medium text-gray-900">Route {item}</p>
-                                    <p className="text-sm text-gray-600">Driver: John Doe</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="font-medium text-gray-900">250 units</p>
-                                    <p className="text-sm text-gray-600">2 hours ago</p>
-                                </div>
-                            </div>
-                        ))}
+                        {loadingAssignments && recent.length === 0 ? (
+                            <div className="py-3 text-center text-gray-600">Loading...</div>
+                        ) : recent.length === 0 ? (
+                            <div className="py-3 text-center text-gray-600">No assignments yet today</div>
+                        ) : (
+                            recent.map((row) => {
+                                const target = row.route_name || row.driver_name || row.truck_name || 'Unknown';
+                                const units = `${row.total_boxes} boxes${row.total_pcs ? `, ${row.total_pcs} pcs` : ''}`;
+                                const time = (() => { try { return new Date(row.created_at || '').toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } })();
+                                return (
+                                    <div key={row.id} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
+                                        <div>
+                                            <p className="font-medium text-gray-900">{target}</p>
+                                            <p className="text-sm text-gray-600">Date: {row.date}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-medium text-gray-900">{units}</p>
+                                            <p className="text-sm text-gray-600">{time}</p>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
                     </div>
                 </Card>
 
