@@ -1411,3 +1411,208 @@ export const getShopSuggestionsByVillage = async (query: string): Promise<Shop[]
     }
     return data || [];
 };
+
+// Expenses
+export interface Expense {
+    id: string;
+    category: string;
+    amount: number;
+    date: string;
+    note?: string | null;
+    created_at: string;
+    updated_at: string;
+    auth_user_id: string;
+}
+
+export interface ExpenseMovement {
+    id: string;
+    expense_id: string;
+    action: 'create' | 'update' | 'delete';
+    changes: any;
+    created_at: string;
+    auth_user_id: string | null;
+}
+
+export const getExpenses = async (
+    dateFrom?: string,
+    dateTo?: string,
+    search?: string,
+    category?: string
+): Promise<Expense[]> => {
+    let query = supabase
+        .from('expenses')
+        .select('*')
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+    if (dateFrom && dateFrom.trim()) {
+        query = query.gte('date', dateFrom.trim());
+    }
+    if (dateTo && dateTo.trim()) {
+        query = query.lte('date', dateTo.trim());
+    }
+    if (category && category.trim()) {
+        query = query.eq('category', category.trim());
+    }
+    if (search && search.trim()) {
+        const s = search.trim();
+        query = query.or(`note.ilike.%${s}%,category.ilike.%${s}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+        console.error('Error fetching expenses:', error);
+        throw new Error('Failed to fetch expenses. Please try again.');
+    }
+    return data || [];
+};
+
+export const addExpense = async (input: {
+    category: string;
+    amount: number;
+    date?: string;
+    note?: string;
+}): Promise<Expense> => {
+    const category = (input.category || '').trim();
+    const amount = Number(input.amount);
+    if (!category) throw new Error('Please select a valid category');
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error('Amount cannot be negative');
+    const date = (input.date || new Date().toISOString().split('T')[0]).trim();
+    const now = new Date().toISOString();
+    const payload = {
+        category,
+        amount,
+        date,
+        note: input.note?.trim() || null,
+        created_at: now,
+        updated_at: now,
+    } as any;
+
+    const { data, error } = await supabase
+        .from('expenses')
+        .insert(payload)
+        .select('*')
+        .single();
+    if (error) {
+        console.error('Error adding expense:', error);
+        throw new Error('Failed to save expense, try again');
+    }
+    const exp = data as Expense;
+    try {
+        const { data: session } = await supabase.auth.getSession();
+        const uid = session?.session?.user?.id || null;
+        await supabase.from('expense_movements').insert({ expense_id: exp.id, action: 'create', changes: payload, auth_user_id: uid });
+    } catch (e) {
+        console.error('Error logging expense movement:', e);
+    }
+    return exp;
+};
+
+export const updateExpense = async (
+    id: string,
+    update: {
+        category?: string;
+        amount?: number;
+        date?: string;
+        note?: string | null;
+    }
+): Promise<Expense> => {
+    const payload: any = { updated_at: new Date().toISOString() };
+    if (typeof update.category === 'string') payload.category = update.category.trim();
+    if (typeof update.amount !== 'undefined') payload.amount = Number(update.amount);
+    if (typeof update.date === 'string') payload.date = update.date.trim();
+    if (typeof update.note !== 'undefined') payload.note = update.note ? String(update.note).trim() : null;
+
+    if (typeof payload.amount !== 'undefined') {
+        const amt = Number(payload.amount);
+        if (!Number.isFinite(amt) || amt <= 0) throw new Error('Amount cannot be negative');
+    }
+    if (typeof payload.category !== 'undefined') {
+        if (!payload.category) throw new Error('Please select a valid category');
+    }
+
+    const { data, error } = await supabase
+        .from('expenses')
+        .update(payload)
+        .eq('id', id)
+        .select('*')
+        .single();
+    if (error) {
+        console.error('Error updating expense:', error);
+        throw new Error('Failed to save expense, try again');
+    }
+    const exp = data as Expense;
+    try {
+        const { data: session } = await supabase.auth.getSession();
+        const uid = session?.session?.user?.id || null;
+        await supabase.from('expense_movements').insert({ expense_id: id, action: 'update', changes: payload, auth_user_id: uid });
+    } catch (e) {
+        console.error('Error logging expense movement:', e);
+    }
+    return exp;
+};
+
+export const deleteExpense = async (id: string): Promise<void> => {
+    const { error } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('id', id);
+    if (error) {
+        console.error('Error deleting expense:', error);
+        throw new Error('Failed to delete expense. Please try again.');
+    }
+    try {
+        const { data: session } = await supabase.auth.getSession();
+        const uid = session?.session?.user?.id || null;
+        await supabase.from('expense_movements').insert({ expense_id: id, action: 'delete', changes: {}, auth_user_id: uid });
+    } catch (e) {
+        console.error('Error logging expense movement:', e);
+    }
+};
+
+export const getExpenseSummary = async (): Promise<{
+    today_total: number;
+    month_total: number;
+    month_by_category: Array<{ category: string; total: number }>;
+}> => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+    const firstDayStr = `${yyyy}-${mm}-01`;
+
+    const monthly = await getExpenses(firstDayStr, todayStr);
+    const todayTotal = monthly.filter(e => e.date === todayStr).reduce((sum, e) => sum + (e.amount || 0), 0);
+    const monthTotal = monthly.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const byCatMap = new Map<string, number>();
+    monthly.forEach(e => {
+        const key = e.category || 'Misc';
+        byCatMap.set(key, (byCatMap.get(key) || 0) + (e.amount || 0));
+    });
+    const breakdown = Array.from(byCatMap.entries()).map(([category, total]) => ({ category, total }));
+    breakdown.sort((a, b) => b.total - a.total);
+    return { today_total: todayTotal, month_total: monthTotal, month_by_category: breakdown };
+};
+
+export const getExpenseMovements = async (
+    expenseId?: string,
+    limit: number = 50
+): Promise<ExpenseMovement[]> => {
+    let query = supabase
+        .from('expense_movements')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+    if (expenseId) {
+        query = query.eq('expense_id', expenseId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+        console.error('Error fetching expense movements:', error);
+        throw new Error('Failed to fetch expense movements. Please try again.');
+    }
+    return data || [];
+};
