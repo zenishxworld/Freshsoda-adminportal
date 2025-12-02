@@ -284,11 +284,26 @@ export const addRoute = async (
 };
 
 /**
+ * Delete a route (hard delete)
+ */
+export const deleteRoute = async (id: string): Promise<void> => {
+    const { error } = await supabase
+        .from('routes')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error deleting route:', error);
+        throw new Error('Failed to delete route. Please try again.');
+    }
+};
+
+/**
  * Legacy function - kept for backward compatibility
- * Use updateRoute(id, { is_active: false }) instead
+ * Use deleteRoute instead
  */
 export const deactivateRoute = async (id: string): Promise<void> => {
-    await updateRoute(id, { is_active: false });
+    await deleteRoute(id);
 };
 
 /**
@@ -719,6 +734,54 @@ export const getWarehouseMovements = async (
     }
 
     return data || [];
+};
+
+/**
+ * Get stock for a specific product
+ */
+export const getProductStock = async (productId: string): Promise<WarehouseStock | null> => {
+    const { data, error } = await supabase
+        .from('warehouse_stock')
+        .select(`
+            id,
+            product_id,
+            boxes,
+            pcs,
+            created_at,
+            updated_at,
+            products (
+                name,
+                box_price,
+                pcs_price,
+                pcs_per_box,
+                price
+            )
+        `)
+        .eq('product_id', productId)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Error fetching product stock:', error);
+        throw error;
+    }
+
+    if (!data) return null;
+
+    // Access products property correctly
+    const product = data.products as any;
+
+    return {
+        id: data.id,
+        product_id: data.product_id,
+        product_name: product?.name || 'Unknown Product',
+        box_price: product?.box_price || product?.price || 0,
+        pcs_price: product?.pcs_price || 0,
+        pcs_per_box: product?.pcs_per_box || 24,
+        boxes: data.boxes || 0,
+        pcs: data.pcs || 0,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+    };
 };
 
 // ============================================================================

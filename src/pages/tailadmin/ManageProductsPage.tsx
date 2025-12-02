@@ -3,7 +3,7 @@ import { Card } from '@/components/tailadmin/Card';
 import { Button } from '@/components/tailadmin/Button';
 import { Input } from '@/components/tailadmin/Input';
 import { Modal } from '@/components/tailadmin/Modal';
-import { getProducts, upsertProduct, softDeleteProduct, type Product } from '@/lib/supabase';
+import { getProducts, upsertProduct, softDeleteProduct, getProductStock, type Product } from '@/lib/supabase';
 import { Package, Plus, Edit, RefreshCw, Search, Trash2 } from 'lucide-react';
 
 export const ManageProductsPage: React.FC = () => {
@@ -154,11 +154,18 @@ export const ManageProductsPage: React.FC = () => {
 
     // Delete product
     const handleDeleteProduct = async (product: Product) => {
-        if (!window.confirm(`Are you sure you want to delete "${product.name}"?`)) {
-            return;
-        }
-
         try {
+            // Check for warehouse stock
+            const stock = await getProductStock(product.id);
+            if (stock && (stock.boxes > 0 || stock.pcs > 0)) {
+                alert(`Cannot delete "${product.name}" because it has existing stock in the warehouse (${stock.boxes} boxes, ${stock.pcs} pcs). Please clear the stock first.`);
+                return;
+            }
+
+            if (!window.confirm(`Are you sure you want to delete "${product.name}"?`)) {
+                return;
+            }
+
             await softDeleteProduct(product.id);
             fetchProducts();
         } catch (error) {

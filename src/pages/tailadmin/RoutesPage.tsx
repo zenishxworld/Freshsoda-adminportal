@@ -5,34 +5,25 @@ import { Button } from '../../components/tailadmin/Button';
 import { Modal } from '../../components/tailadmin/Modal';
 import { Input } from '../../components/tailadmin/Input';
 import { Badge } from '../../components/tailadmin/Badge';
-import { Plus, Edit, Loader2 } from 'lucide-react';
-import { getAllRoutes, createRoute, updateRoute, type Route } from '../../lib/supabase';
+import { Plus, Edit, Loader2, Trash2 } from 'lucide-react';
+import { getAllRoutes, createRoute, updateRoute, deactivateRoute, type Route } from '../../lib/supabase';
 import { useToast } from '../../hooks/use-toast';
-
-type FilterType = 'all' | 'active' | 'inactive';
 
 export const RoutesPage: React.FC = () => {
     const { toast } = useToast();
     const [routes, setRoutes] = useState<Route[]>([]);
-    const [filteredRoutes, setFilteredRoutes] = useState<Route[]>([]);
-    const [filter, setFilter] = useState<FilterType>('all');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingRoute, setEditingRoute] = useState<Route | null>(null);
     const [formData, setFormData] = useState({ name: '', description: '' });
     const [saving, setSaving] = useState(false);
-    const [togglingId, setTogglingId] = useState<string | null>(null);
+
 
     // Load routes on mount
     useEffect(() => {
         loadRoutes();
     }, []);
-
-    // Apply filter when routes or filter changes
-    useEffect(() => {
-        applyFilter();
-    }, [routes, filter]);
 
     const loadRoutes = async () => {
         try {
@@ -50,16 +41,6 @@ export const RoutesPage: React.FC = () => {
             });
         } finally {
             setLoading(false);
-        }
-    };
-
-    const applyFilter = () => {
-        if (filter === 'all') {
-            setFilteredRoutes(routes);
-        } else if (filter === 'active') {
-            setFilteredRoutes(routes.filter(r => r.is_active));
-        } else {
-            setFilteredRoutes(routes.filter(r => !r.is_active));
         }
     };
 
@@ -130,29 +111,29 @@ export const RoutesPage: React.FC = () => {
         }
     };
 
-    const handleToggleActive = async (route: Route) => {
-        setTogglingId(route.id);
-        try {
-            const newStatus = !route.is_active;
-            await updateRoute(route.id, { is_active: newStatus });
 
-            // Update local state optimistically
-            setRoutes(prev =>
-                prev.map(r => (r.id === route.id ? { ...r, is_active: newStatus } : r))
-            );
+
+    const handleDeleteRoute = async (route: Route) => {
+        if (!window.confirm(`Are you sure you want to delete "${route.name}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            await deactivateRoute(route.id);
+
+            // Reload routes to reflect the change
+            await loadRoutes();
 
             toast({
                 title: 'Success',
-                description: newStatus ? 'Route activated' : 'Route deactivated',
+                description: 'Route deleted successfully',
             });
         } catch (err: any) {
             toast({
                 title: 'Error',
-                description: err.message || 'Failed to update route status',
+                description: err.message || 'Failed to delete route',
                 variant: 'destructive',
             });
-        } finally {
-            setTogglingId(null);
         }
     };
 
@@ -181,27 +162,7 @@ export const RoutesPage: React.FC = () => {
                 </span>
             ),
         },
-        {
-            key: 'is_active',
-            header: 'Status',
-            render: (value: boolean, row: Route) => (
-                <div className="flex items-center gap-2">
-                    <Badge variant={value ? 'success' : 'secondary'}>
-                        {value ? 'Active' : 'Inactive'}
-                    </Badge>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={value}
-                            onChange={() => handleToggleActive(row)}
-                            disabled={togglingId === row.id}
-                            className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
-                    </label>
-                </div>
-            ),
-        },
+
         {
             key: 'created_at',
             header: 'Created',
@@ -220,6 +181,13 @@ export const RoutesPage: React.FC = () => {
                         title="Edit route"
                     >
                         <Edit className="w-4 h-4 text-primary" />
+                    </button>
+                    <button
+                        onClick={() => handleDeleteRoute(row)}
+                        className="p-1.5 hover:bg-red-50 rounded transition-colors"
+                        title="Delete route"
+                    >
+                        <Trash2 className="w-4 h-4 text-red-600" />
                     </button>
                 </div>
             ),
@@ -240,30 +208,7 @@ export const RoutesPage: React.FC = () => {
                 </Button>
             </div>
 
-            {/* Filter Buttons */}
-            <div className="flex gap-2">
-                <Button
-                    variant={filter === 'all' ? 'primary' : 'secondary'}
-                    onClick={() => setFilter('all')}
-                    size="sm"
-                >
-                    All ({routes.length})
-                </Button>
-                <Button
-                    variant={filter === 'active' ? 'primary' : 'secondary'}
-                    onClick={() => setFilter('active')}
-                    size="sm"
-                >
-                    Active ({routes.filter(r => r.is_active).length})
-                </Button>
-                <Button
-                    variant={filter === 'inactive' ? 'primary' : 'secondary'}
-                    onClick={() => setFilter('inactive')}
-                    size="sm"
-                >
-                    Inactive ({routes.filter(r => !r.is_active).length})
-                </Button>
-            </div>
+
 
             {/* Error Banner */}
             {error && (
@@ -283,17 +228,15 @@ export const RoutesPage: React.FC = () => {
                         <Loader2 className="w-8 h-8 animate-spin text-primary" />
                         <span className="ml-3 text-gray-600">Loading routes...</span>
                     </div>
-                ) : filteredRoutes.length === 0 ? (
+                ) : routes.length === 0 ? (
                     <div className="text-center py-12">
                         <p className="text-gray-500 text-lg">No routes found</p>
                         <p className="text-gray-400 text-sm mt-1">
-                            {filter !== 'all'
-                                ? `No ${filter} routes available`
-                                : 'Click "Add Route" to create your first route'}
+                            Click "Add Route" to create your first route
                         </p>
                     </div>
                 ) : (
-                    <Table columns={columns} data={filteredRoutes} />
+                    <Table columns={columns} data={routes} />
                 )}
             </Card>
 
