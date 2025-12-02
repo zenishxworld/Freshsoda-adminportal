@@ -30,7 +30,7 @@ export const RoutesPage: React.FC = () => {
             setLoading(true);
             setError(null);
             const data = await getAllRoutes();
-            setRoutes(data);
+            setRoutes(data.filter((r) => r.is_active));
         } catch (err: any) {
             const errorMessage = err.message || 'Failed to load routes. Please try again.';
             setError(errorMessage);

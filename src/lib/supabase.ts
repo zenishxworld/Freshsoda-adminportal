@@ -303,7 +303,15 @@ export const deleteRoute = async (id: string): Promise<void> => {
  * Use deleteRoute instead
  */
 export const deactivateRoute = async (id: string): Promise<void> => {
-    await deleteRoute(id);
+    const { error } = await supabase
+        .from('routes')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error deactivating route:', error);
+        throw new Error('Failed to deactivate route. Please try again.');
+    }
 };
 
 /**
