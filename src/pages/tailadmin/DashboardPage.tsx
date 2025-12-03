@@ -7,7 +7,6 @@ import { Badge } from '@/components/tailadmin/Badge';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/tailadmin/Button';
-import useEmblaCarousel from 'embla-carousel-react';
 
 interface StatCardProps {
     title: string;
@@ -46,7 +45,7 @@ export const DashboardPage: React.FC = () => {
     const [loadingLowStock, setLoadingLowStock] = useState<boolean>(false);
     const { toast } = useToast();
     const navigate = useNavigate();
-    const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false });
+    const [lowPage, setLowPage] = useState<number>(0);
 
     useEffect(() => {
         const load = async () => {
@@ -175,32 +174,33 @@ export const DashboardPage: React.FC = () => {
                         <div className="py-3 text-center text-gray-600">All products sufficiently stocked ✔️</div>
                     ) : (
                         <div className="space-y-3">
-                            <div className="embla" ref={emblaRef}>
-                                <div className="embla__container flex">
-                                    {Array.from({ length: Math.ceil(lowStock.length / 4) }).map((_, pageIdx) => {
-                                        const start = pageIdx * 4;
-                                        const slice = lowStock.slice(start, start + 4).map((r) => ({
-                                            name: r.name,
-                                            boxes: r.boxes,
-                                            pcs: r.pcs,
-                                            threshold: r.threshold,
-                                        }));
-                                        return (
-                                            <div key={pageIdx} className="embla__slide min-w-0 w-full">
-                                                <div onClick={() => navigate('/admin/warehouse')} className="cursor-pointer">
-                                                    <Table columns={lowStockColumns} data={slice} />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                            <div onClick={() => navigate('/admin/warehouse')} className="cursor-pointer">
+                                <Table
+                                    columns={lowStockColumns}
+                                    data={lowStock.slice(lowPage * 4, lowPage * 4 + 4).map((r) => ({
+                                        name: r.name,
+                                        boxes: r.boxes,
+                                        pcs: r.pcs,
+                                        threshold: r.threshold,
+                                    }))}
+                                />
                             </div>
                             {lowStock.length > 4 && (
                                 <div className="flex items-center justify-center gap-3">
-                                    <Button variant="outline" onClick={() => emblaApi?.scrollPrev()} className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setLowPage((p) => Math.max(0, p - 1))}
+                                        className="flex items-center gap-2"
+                                        disabled={lowPage <= 0}
+                                    >
                                         <ChevronLeft className="w-4 h-4" /> Prev
                                     </Button>
-                                    <Button variant="outline" onClick={() => emblaApi?.scrollNext()} className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setLowPage((p) => (p + 1 < Math.ceil(lowStock.length / 4) ? p + 1 : p))}
+                                        className="flex items-center gap-2"
+                                        disabled={lowPage + 1 >= Math.ceil(lowStock.length / 4)}
+                                    >
                                         Next <ChevronRight className="w-4 h-4" />
                                     </Button>
                                 </div>
