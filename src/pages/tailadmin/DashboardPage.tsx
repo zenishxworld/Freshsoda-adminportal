@@ -1,7 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card } from '../../components/tailadmin/Card';
-import { Package, TruckIcon, DollarSign, Archive } from 'lucide-react';
-import { getAssignmentsForDate, subscribeAssignmentsForDate, type AssignmentLogEntry } from '@/lib/supabase';
+import { Package, TruckIcon, DollarSign, Archive, ChevronLeft, ChevronRight } from 'lucide-react';
+import { getAssignmentsForDate, subscribeAssignmentsForDate, getLowStockProducts, type AssignmentLogEntry, type LowStockItem } from '@/lib/supabase';
+import { Table } from '@/components/tailadmin/Table';
+import { Badge } from '@/components/tailadmin/Badge';
+import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/tailadmin/Button';
+import useEmblaCarousel from 'embla-carousel-react';
 
 interface StatCardProps {
     title: string;
@@ -36,6 +42,11 @@ export const DashboardPage: React.FC = () => {
     const [today, setToday] = useState<string>(new Date().toISOString().split('T')[0]);
     const [recentAssignments, setRecentAssignments] = useState<AssignmentLogEntry[]>([]);
     const [loadingAssignments, setLoadingAssignments] = useState<boolean>(false);
+    const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
+    const [loadingLowStock, setLoadingLowStock] = useState<boolean>(false);
+    const { toast } = useToast();
+    const navigate = useNavigate();
+    const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false });
 
     useEffect(() => {
         const load = async () => {
@@ -58,6 +69,35 @@ export const DashboardPage: React.FC = () => {
     }, [today]);
 
     const recent = useMemo(() => recentAssignments.slice(0, 8), [recentAssignments]);
+    type LowRow = { name: string; boxes: number; pcs: number; threshold: number };
+    const lowStockColumns = [
+        { key: 'name', header: 'Product Name' },
+        { key: 'available', header: 'Available (boxes/pcs)', render: (_: unknown, row: LowRow) => (
+            <span>{row.boxes} boxes / {row.pcs} pcs</span>
+        ) },
+        { key: 'threshold', header: 'Threshold', render: (_: unknown, row: LowRow) => (
+            <span>{row.threshold} pcs</span>
+        ) },
+        { key: 'status', header: 'Status', render: () => (
+            <Badge variant="danger">Low Stock</Badge>
+        ) },
+    ];
+
+    useEffect(() => {
+        const loadLow = async () => {
+            setLoadingLowStock(true);
+            try {
+                const rows = await getLowStockProducts();
+                setLowStock(rows);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : 'Failed to load low stock';
+                toast({ title: 'Error', description: msg, variant: 'destructive' });
+            } finally {
+                setLoadingLowStock(false);
+            }
+        };
+        loadLow();
+    }, [toast]);
 
     return (
         <div className="space-y-6">
@@ -128,25 +168,45 @@ export const DashboardPage: React.FC = () => {
                     </div>
                 </Card>
 
-                <Card header={<h3 className="text-lg font-semibold text-gray-900">Low Stock Alert</h3>}>
-                    <div className="space-y-4">
-                        {[
-                            { name: 'Coca Cola 500ml', stock: 45 },
-                            { name: 'Pepsi 1L', stock: 32 },
-                            { name: 'Sprite 500ml', stock: 28 },
-                            { name: 'Fanta 500ml', stock: 15 },
-                        ].map((product, index) => (
-                            <div key={index} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
-                                <div>
-                                    <p className="font-medium text-gray-900">{product.name}</p>
-                                    <p className="text-sm text-danger">Low stock warning</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="font-medium text-danger">{product.stock} units</p>
+                <Card header={<h3 className="text-lg font-semibold text-gray-900">Low Stock Alerts</h3>}>
+                    {loadingLowStock ? (
+                        <div className="py-3 text-center text-gray-600">Loading...</div>
+                    ) : lowStock.length === 0 ? (
+                        <div className="py-3 text-center text-gray-600">All products sufficiently stocked ✔️</div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="embla" ref={emblaRef}>
+                                <div className="embla__container flex">
+                                    {Array.from({ length: Math.ceil(lowStock.length / 4) }).map((_, pageIdx) => {
+                                        const start = pageIdx * 4;
+                                        const slice = lowStock.slice(start, start + 4).map((r) => ({
+                                            name: r.name,
+                                            boxes: r.boxes,
+                                            pcs: r.pcs,
+                                            threshold: r.threshold,
+                                        }));
+                                        return (
+                                            <div key={pageIdx} className="embla__slide min-w-0 w-full">
+                                                <div onClick={() => navigate('/admin/warehouse')} className="cursor-pointer">
+                                                    <Table columns={lowStockColumns} data={slice} />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
-                        ))}
-                    </div>
+                            {lowStock.length > 4 && (
+                                <div className="flex items-center justify-center gap-3">
+                                    <Button variant="outline" onClick={() => emblaApi?.scrollPrev()} className="flex items-center gap-2">
+                                        <ChevronLeft className="w-4 h-4" /> Prev
+                                    </Button>
+                                    <Button variant="outline" onClick={() => emblaApi?.scrollNext()} className="flex items-center gap-2">
+                                        Next <ChevronRight className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </Card>
             </div>
         </div>

@@ -70,6 +70,16 @@ export type WarehouseMovement = {
     created_at: string;
 };
 
+export type LowStockItem = {
+    product_id: string;
+    name: string;
+    boxes: number;
+    pcs: number;
+    pcs_per_box: number;
+    total_pcs: number;
+    threshold: number;
+};
+
 // Assign Stock types
 export interface DriverOption {
     id: string;
@@ -751,6 +761,52 @@ export const getWarehouseStock = async (): Promise<WarehouseStock[]> => {
         created_at: item.created_at,
         updated_at: item.updated_at,
     }));
+};
+
+export const getLowStockProducts = async (): Promise<LowStockItem[]> => {
+    const { data: products, error: productsError } = await supabase
+        .from('products')
+        .select('id, name, pcs_per_box, status')
+        .eq('status', 'active')
+        .order('name', { ascending: true });
+
+    if (productsError) {
+        console.error('Error fetching products:', productsError);
+        throw new Error(productsError.message || 'Failed to fetch products');
+    }
+
+    const { data: stockRows, error: stockError } = await supabase
+        .from('warehouse_stock')
+        .select('product_id, boxes, pcs');
+
+    if (stockError) {
+        console.error('Error fetching warehouse stock:', stockError);
+        throw new Error(stockError.message || 'Failed to fetch warehouse stock');
+    }
+
+    const stockMap = new Map<string, { boxes: number; pcs: number }>();
+    (stockRows || []).forEach((r: any) => {
+        stockMap.set(String(r.product_id), { boxes: Number(r.boxes) || 0, pcs: Number(r.pcs) || 0 });
+    });
+
+    const low: LowStockItem[] = (products || []).map((p: any) => {
+        const pcsPerBox = Number(p.pcs_per_box) || 24;
+        const s = stockMap.get(String(p.id)) || { boxes: 0, pcs: 0 };
+        const total_pcs = s.boxes * pcsPerBox + s.pcs;
+        const threshold = pcsPerBox * 2;
+        return {
+            product_id: String(p.id),
+            name: String(p.name || 'Unknown Product'),
+            boxes: s.boxes,
+            pcs: s.pcs,
+            pcs_per_box: pcsPerBox,
+            total_pcs,
+            threshold,
+        };
+    }).filter((it) => it.total_pcs < it.threshold)
+      .sort((a, b) => a.total_pcs - b.total_pcs);
+
+    return low;
 };
 
 /**
