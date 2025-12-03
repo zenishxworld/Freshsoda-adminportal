@@ -794,17 +794,20 @@ export const addWarehouseStock = async (
         }
     } else {
         // Create new entry
+        const now = new Date().toISOString();
         const { error } = await supabase
             .from('warehouse_stock')
             .insert({
                 product_id: productId,
                 boxes,
                 pcs,
+                created_at: now,
+                updated_at: now,
             });
 
         if (error) {
             console.error('Error creating warehouse stock:', error);
-            throw new Error('Failed to create warehouse stock entry. Please try again.');
+            throw new Error(error.message || 'Failed to create warehouse stock entry. Please try again.');
         }
     }
 
@@ -916,17 +919,20 @@ export const setWarehouseStock = async (
         }
     } else {
         // Create new entry
+        const now = new Date().toISOString();
         const { error } = await supabase
             .from('warehouse_stock')
             .insert({
                 product_id: productId,
                 boxes,
                 pcs,
+                created_at: now,
+                updated_at: now,
             });
 
         if (error) {
             console.error('Error creating warehouse stock:', error);
-            throw new Error('Failed to create warehouse stock entry. Please try again.');
+            throw new Error(error.message || 'Failed to create warehouse stock entry. Please try again.');
         }
     }
 

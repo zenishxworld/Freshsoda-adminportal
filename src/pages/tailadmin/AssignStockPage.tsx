@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { Card } from '@/components/tailadmin/Card';
 import { Button } from '@/components/tailadmin/Button';
@@ -71,21 +71,50 @@ export const AssignStockPage: React.FC = () => {
             setRoutes(routesData);
             setTrucks(trucksData);
             setProducts(productsData);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error loading data:', err);
-            setError(err.message || 'Failed to load data');
+            const msg = err instanceof Error ? err.message : 'Failed to load data';
+            setError(msg);
         } finally {
             setLoading(false);
         }
     };
 
-    // Load existing stock when driver/route and date are selected
-    useEffect(() => {
-        // Need at least driver OR route, plus date
-        if ((selectedDriver || selectedRoute) && selectedDate) {
-            loadExistingStock();
+    // Load existing stock when selections change
+    const loadExistingStock = useCallback(async () => {
+        try {
+            if (!((selectedDriver || selectedRoute) && selectedDate)) {
+                setAssignments(new Map());
+                return;
+            }
+            const existingStock = await getDailyStockForDriverRouteDate(
+                selectedDriver || null,
+                selectedRoute || null,
+                selectedTruck || null,
+                selectedDate
+            );
+
+            if (existingStock) {
+                const newAssignments = new Map<string, AssignmentQuantity>();
+                existingStock.forEach(item => {
+                    newAssignments.set(item.productId, {
+                        boxQty: item.boxQty,
+                        pcsQty: item.pcsQty,
+                    });
+                });
+                setAssignments(newAssignments);
+            } else {
+                setAssignments(new Map());
+            }
+        } catch (err: unknown) {
+            console.error('Error loading existing stock:', err);
+            setAssignments(new Map());
         }
     }, [selectedDriver, selectedRoute, selectedTruck, selectedDate]);
+
+    useEffect(() => {
+        loadExistingStock();
+    }, [loadExistingStock]);
 
     useEffect(() => {
         const loadLog = async () => {
@@ -110,35 +139,7 @@ export const AssignStockPage: React.FC = () => {
         };
     }, [selectedDate]);
 
-    const loadExistingStock = async () => {
-        try {
-            const existingStock = await getDailyStockForDriverRouteDate(
-                selectedDriver || null,
-                selectedRoute || null,
-                selectedTruck || null,
-                selectedDate
-            );
-
-            if (existingStock) {
-                // Prefill assignments from existing stock
-                const newAssignments = new Map<string, AssignmentQuantity>();
-                existingStock.forEach(item => {
-                    newAssignments.set(item.productId, {
-                        boxQty: item.boxQty,
-                        pcsQty: item.pcsQty,
-                    });
-                });
-                setAssignments(newAssignments);
-            } else {
-                // Clear assignments if no existing stock
-                setAssignments(new Map());
-            }
-        } catch (err: any) {
-            console.error('Error loading existing stock:', err);
-            // Don't show error - just start fresh
-            setAssignments(new Map());
-        }
-    };
+    
 
     // Update assignment quantity
     const updateAssignment = (productId: string, field: 'boxQty' | 'pcsQty', value: number) => {
@@ -238,10 +239,11 @@ export const AssignStockPage: React.FC = () => {
             // Reload products to show updated warehouse stock
             const updatedProducts = await getAssignableProducts();
             setProducts(updatedProducts);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error assigning stock:', err);
-            setError(err.message || 'Failed to assign stock');
-            alert(err.message || 'Failed to assign stock');
+            const msg = err instanceof Error ? err.message : 'Failed to assign stock';
+            setError(msg);
+            alert(msg);
         } finally {
             setSaving(false);
         }

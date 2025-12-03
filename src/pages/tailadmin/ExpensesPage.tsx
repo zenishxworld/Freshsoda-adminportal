@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card } from '../../components/tailadmin/Card';
 import { Table } from '../../components/tailadmin/Table';
 import { Button } from '../../components/tailadmin/Button';
@@ -65,30 +65,32 @@ export const ExpensesPage: React.FC = () => {
         },
     ];
 
-    const loadSummary = async () => {
+    const loadSummary = useCallback(async () => {
         try {
             const s = await getExpenseSummary();
             setSummary(s);
-        } catch (e: any) {
-            toast({ title: 'Error', description: e.message || 'Failed to load summary', variant: 'destructive' });
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to load summary';
+            toast({ title: 'Error', description: msg, variant: 'destructive' });
         }
-    };
+    }, [toast]);
 
-    const loadExpenses = async () => {
+    const loadExpenses = useCallback(async () => {
         setLoading(true);
         try {
             const list = await getExpenses(dateFrom, dateTo, searchDebounced, category);
             setExpenses(list);
-        } catch (e: any) {
-            toast({ title: 'Error', description: e.message || 'Failed to load expenses', variant: 'destructive' });
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to load expenses';
+            toast({ title: 'Error', description: msg, variant: 'destructive' });
         } finally {
             setLoading(false);
         }
-    };
+    }, [dateFrom, dateTo, searchDebounced, category, toast]);
 
-    useEffect(() => { loadSummary(); }, []);
+    useEffect(() => { loadSummary(); }, [loadSummary]);
     useEffect(() => { const t = setTimeout(() => setSearchDebounced(search), 300); return () => clearTimeout(t); }, [search]);
-    useEffect(() => { loadExpenses(); setPage(1); }, [dateFrom, dateTo, category, searchDebounced]);
+    useEffect(() => { loadExpenses(); setPage(1); }, [loadExpenses]);
 
     const resetFilters = () => { setDateFrom(''); setDateTo(''); setCategory(''); setSearch(''); };
 
@@ -104,8 +106,9 @@ export const ExpensesPage: React.FC = () => {
             setForm({ category: '', amount: '', date: '', note: '' });
             loadExpenses();
             loadSummary();
-        } catch (e: any) {
-            toast({ title: 'Error', description: e.message || 'Failed to save expense, try again', variant: 'destructive' });
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to save expense, try again';
+            toast({ title: 'Error', description: msg, variant: 'destructive' });
         }
     };
 
@@ -122,8 +125,9 @@ export const ExpensesPage: React.FC = () => {
             setEditing(null);
             loadExpenses();
             loadSummary();
-        } catch (e: any) {
-            toast({ title: 'Error', description: e.message || 'Failed to save expense, try again', variant: 'destructive' });
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to save expense, try again';
+            toast({ title: 'Error', description: msg, variant: 'destructive' });
         }
     };
 
@@ -136,15 +140,16 @@ export const ExpensesPage: React.FC = () => {
             setEditing(null);
             loadExpenses();
             loadSummary();
-        } catch (e: any) {
-            toast({ title: 'Error', description: e.message || 'Failed to delete expense', variant: 'destructive' });
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to delete expense';
+            toast({ title: 'Error', description: msg, variant: 'destructive' });
         }
     };
 
     const exportCsv = () => {
-        const rows = expenses.map(e => ({ Date: e.date, Category: e.category, Amount: e.amount, Note: e.note || '' }));
+        const rows: Array<Record<string, string | number>> = expenses.map(e => ({ Date: e.date, Category: e.category, Amount: e.amount, Note: e.note || '' }));
         const header = Object.keys(rows[0] || { Date: '', Category: '', Amount: '', Note: '' });
-        const csv = [header.join(','), ...rows.map(r => header.map(h => String((r as any)[h]).replace(/"/g, '"')).join(','))].join('\n');
+        const csv = [header.join(','), ...rows.map(r => header.map(h => String(r[h] ?? '').replace(/"/g, '"')).join(','))].join('\n');
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -214,7 +219,7 @@ export const ExpensesPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <Input label="Date From" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
                     <Input label="Date To" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-                    <Select label="Category" value={category} onChange={(e: any) => setCategory(e.target.value)} options={[{ value: '', label: 'All Categories' }, ...categories.map(c => ({ value: c, label: c }))]} />
+                    <Select label="Category" value={category} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCategory(e.target.value)} options={[{ value: '', label: 'All Categories' }, ...categories.map(c => ({ value: c, label: c }))]} />
                     <Input label="Search" placeholder="Search note/category" value={search} onChange={(e) => setSearch(e.target.value)} />
                     <div className="flex items-end gap-2">
                         <Button variant="outline" onClick={resetFilters}>Reset Filters</Button>
@@ -244,7 +249,7 @@ export const ExpensesPage: React.FC = () => {
                 footer={<><Button variant="secondary" onClick={() => setIsAddOpen(false)}>Cancel</Button><Button variant="primary" onClick={handleAdd}>Save</Button></>}
             >
                 <div className="space-y-4">
-                    <Select label="Category" value={form.category} onChange={(e: any) => setForm(f => ({ ...f, category: e.target.value }))} options={[{ value: '', label: 'Select category' }, ...categories.map(c => ({ value: c, label: c }))]} />
+                    <Select label="Category" value={form.category} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm(f => ({ ...f, category: e.target.value }))} options={[{ value: '', label: 'Select category' }, ...categories.map(c => ({ value: c, label: c }))]} />
                     <Input label="Amount" type="number" value={form.amount} onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))} />
                     <Input label="Date" type="date" value={form.date} onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
                     <Input label="Note" placeholder="Enter note" value={form.note} onChange={(e) => setForm(f => ({ ...f, note: e.target.value }))} />
@@ -258,7 +263,7 @@ export const ExpensesPage: React.FC = () => {
                 footer={<><Button variant="secondary" onClick={() => setIsEditOpen(false)}>Cancel</Button><Button variant="primary" onClick={handleEdit}>Save</Button></>}
             >
                 <div className="space-y-4">
-                    <Select label="Category" value={form.category} onChange={(e: any) => setForm(f => ({ ...f, category: e.target.value }))} options={[{ value: '', label: 'Select category' }, ...categories.map(c => ({ value: c, label: c }))]} />
+                    <Select label="Category" value={form.category} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm(f => ({ ...f, category: e.target.value }))} options={[{ value: '', label: 'Select category' }, ...categories.map(c => ({ value: c, label: c }))]} />
                     <Input label="Amount" type="number" value={form.amount} onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))} />
                     <Input label="Date" type="date" value={form.date} onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
                     <Input label="Note" placeholder="Enter note" value={form.note} onChange={(e) => setForm(f => ({ ...f, note: e.target.value }))} />
