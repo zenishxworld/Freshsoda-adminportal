@@ -437,6 +437,111 @@ export const getSalesFor = async (
     return data || [];
 };
 
+export interface ProductMinimal {
+    id: string;
+    name: string;
+    pcs_per_box: number;
+    box_price?: number | null;
+    pcs_price?: number | null;
+    price?: number | null;
+}
+
+export const getProductsMap = async (): Promise<Record<string, ProductMinimal>> => {
+    const { data, error } = await supabase
+        .from('products')
+        .select('id, name, pcs_per_box, box_price, pcs_price, price');
+    if (error) {
+        console.error('Error fetching products map:', error);
+        throw new Error('Failed to fetch products.');
+    }
+    const map: Record<string, ProductMinimal> = {};
+    (data || []).forEach((p: any) => {
+        map[p.id] = {
+            id: p.id,
+            name: p.name,
+            pcs_per_box: p.pcs_per_box ?? 24,
+            box_price: p.box_price ?? p.price ?? null,
+            pcs_price: p.pcs_price ?? null,
+            price: p.price ?? null,
+        };
+    });
+    return map;
+};
+
+export const getRoutesMap = async (): Promise<Record<string, string>> => {
+    const { data, error } = await supabase.from('routes').select('id, name');
+    if (error) {
+        console.error('Error fetching routes:', error);
+        throw new Error('Failed to fetch routes.');
+    }
+    const map: Record<string, string> = {};
+    (data || []).forEach((r: any) => { map[r.id] = r.name; });
+    return map;
+};
+
+export const getDriversMap = async (): Promise<Record<string, string>> => {
+    const { data, error } = await supabase
+        .from('users')
+        .select('id, name, role')
+        .eq('role', 'driver');
+    if (error) {
+        console.error('Error fetching drivers:', error);
+        throw new Error('Failed to fetch drivers.');
+    }
+    const map: Record<string, string> = {};
+    (data || []).forEach((u: any) => { map[u.id] = u.name || ''; });
+    return map;
+};
+
+export const getDailyStockBetween = async (
+    dateFrom: string,
+    dateTo: string
+): Promise<Array<{
+    id: string;
+    date: string;
+    route_id: string | null;
+    auth_user_id: string | null;
+    stock: DailyStockPayload;
+    created_at?: string;
+}>> => {
+    const { data, error } = await supabase
+        .from('daily_stock')
+        .select('id, date, stock, route_id, auth_user_id, created_at')
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .order('date', { ascending: true })
+        .order('created_at', { ascending: false });
+    if (error) {
+        console.error('Error fetching daily stock:', error);
+        throw new Error('Failed to fetch assigned stock.');
+    }
+    return (data || []).map((row: any) => ({
+        id: row.id,
+        date: row.date,
+        route_id: row.route_id ?? null,
+        auth_user_id: row.auth_user_id ?? null,
+        stock: Array.isArray(row.stock) ? row.stock : [],
+        created_at: row.created_at,
+    }));
+};
+
+export const getSalesBetween = async (
+    dateFrom: string,
+    dateTo: string
+): Promise<Sale[]> => {
+    const { data, error } = await supabase
+        .from('sales')
+        .select('*')
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .order('created_at', { ascending: false });
+    if (error) {
+        console.error('Error fetching sales:', error);
+        throw new Error('Failed to fetch sales.');
+    }
+    return data || [];
+};
+
 // Assignments Log
 export const getAssignmentsForDate = async (date: string): Promise<AssignmentLogEntry[]> => {
     let { data, error } = await supabase
