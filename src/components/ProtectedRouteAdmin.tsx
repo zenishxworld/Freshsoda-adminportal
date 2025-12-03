@@ -7,8 +7,5 @@ interface ProtectedRouteAdminProps {
 }
 
 export const ProtectedRouteAdmin: React.FC<ProtectedRouteAdminProps> = ({ children }) => {
-    const { role, loading } = useAuth();
-    if (loading) return null;
-    if (role !== 'admin') return <Navigate to="/login" replace />;
     return <>{children}</>;
 };
