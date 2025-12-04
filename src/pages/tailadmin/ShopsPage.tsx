@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card } from '../../components/tailadmin/Card';
 import { Button } from '../../components/tailadmin/Button';
 import { Modal } from '../../components/tailadmin/Modal';
@@ -9,6 +10,7 @@ import { getAllShops, createShop, updateShop, getActiveRoutes, type Shop, type R
 
 export const ShopsPage: React.FC = () => {
     const { toast } = useToast();
+    const [searchParams] = useSearchParams();
     const [shops, setShops] = useState<Shop[]>([]);
     const [routes, setRoutes] = useState<RouteOption[]>([]);
     const [loading, setLoading] = useState(false);
@@ -52,6 +54,10 @@ export const ShopsPage: React.FC = () => {
     };
 
     useEffect(() => { load(); }, [search, villageFilter, routeFilter]);
+    useEffect(() => {
+        const q = searchParams.get('q') || '';
+        if (q && q !== search) setSearch(q);
+    }, [searchParams]);
 
     return (
         <div className="space-y-6">

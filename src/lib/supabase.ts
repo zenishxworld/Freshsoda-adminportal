@@ -785,18 +785,19 @@ export const getLowStockProducts = async (): Promise<LowStockItem[]> => {
     }
 
     const stockMap = new Map<string, { boxes: number; pcs: number }>();
-    (stockRows || []).forEach((r: any) => {
+    (stockRows || []).forEach((r: { product_id: string; boxes: number; pcs: number }) => {
         stockMap.set(String(r.product_id), { boxes: Number(r.boxes) || 0, pcs: Number(r.pcs) || 0 });
     });
 
-    const low: LowStockItem[] = (products || []).map((p: any) => {
-        const pcsPerBox = Number(p.pcs_per_box) || 24;
-        const s = stockMap.get(String(p.id)) || { boxes: 0, pcs: 0 };
+    const low: LowStockItem[] = (products || []).map((p) => {
+        const prod = p as Product;
+        const pcsPerBox = Number(prod.pcs_per_box ?? 24);
+        const s = stockMap.get(String(prod.id)) || { boxes: 0, pcs: 0 };
         const total_pcs = s.boxes * pcsPerBox + s.pcs;
         const threshold = pcsPerBox * 2;
         return {
-            product_id: String(p.id),
-            name: String(p.name || 'Unknown Product'),
+            product_id: String(prod.id),
+            name: String(prod.name || 'Unknown Product'),
             boxes: s.boxes,
             pcs: s.pcs,
             pcs_per_box: pcsPerBox,
@@ -1448,25 +1449,40 @@ export const getAllShops = async (
     village?: string,
     routeId?: string
 ): Promise<Shop[]> => {
-    let query = supabase
-        .from('shops')
-        .select('*')
-        .order('created_at', { ascending: false });
+    const buildQuery = (includeVillage: boolean) => {
+        let q = supabase
+            .from('shops')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (search && search.trim()) {
+            const s = search.trim();
+            q = q.or(
+                includeVillage
+                    ? `name.ilike.%${s}%,phone.ilike.%${s}%,village.ilike.%${s}%`
+                    : `name.ilike.%${s}%,phone.ilike.%${s}%`
+            );
+        }
+        if (includeVillage && village && village.trim()) {
+            q = q.ilike('village', `%${village.trim()}%`);
+        }
+        if (routeId && routeId.trim()) {
+            q = q.eq('route_id', routeId.trim());
+        }
+        return q;
+    };
 
-    if (search && search.trim()) {
-        const s = search.trim();
-        query = query.or(
-            `name.ilike.%${s}%,phone.ilike.%${s}%,village.ilike.%${s}%`
-        );
+    // First attempt including 'village' column
+    let { data, error } = await buildQuery(true);
+    // Fallback if column doesn't exist
+    if (error && (error.code === '42703' || /column\s+shops\.village\s+does\s+not\s+exist/i.test(error.message || ''))) {
+        const res = await buildQuery(false);
+        const { data: data2, error: err2 } = await res;
+        if (err2) {
+            console.error('Error fetching shops (fallback):', err2);
+            throw new Error('Failed to fetch shops. Please try again.');
+        }
+        return data2 || [];
     }
-    if (village && village.trim()) {
-        query = query.ilike('village', `%${village.trim()}%`);
-    }
-    if (routeId && routeId.trim()) {
-        query = query.eq('route_id', routeId.trim());
-    }
-
-    const { data, error } = await query;
     if (error) {
         console.error('Error fetching shops:', error);
         throw new Error('Failed to fetch shops. Please try again.');
@@ -1509,6 +1525,19 @@ export const createShop = async (shopData: {
         .insert(payload)
         .select()
         .single();
+    if (error && (error.code === '42703' || /column\s+shops\.village\s+does\s+not\s+exist/i.test(error.message || ''))) {
+        const { village, ...withoutVillage } = payload as Record<string, unknown>;
+        const { data: data2, error: err2 } = await supabase
+            .from('shops')
+            .insert(withoutVillage)
+            .select()
+            .single();
+        if (err2) {
+            console.error('Error creating shop (fallback):', err2);
+            throw new Error('Failed to create shop. Please try again.');
+        }
+        return data2 as Shop;
+    }
     if (error) {
         console.error('Error creating shop:', error);
         throw new Error('Failed to create shop. Please try again.');
@@ -1540,6 +1569,21 @@ export const updateShop = async (
         .eq('id', id)
         .select()
         .single();
+    if (error && (error.code === '42703' || /column\s+shops\.village\s+does\s+not\s+exist/i.test(error.message || ''))) {
+        // Retry without village field
+        const { village, ...withoutVillage } = payload as Record<string, unknown>;
+        const { data: data2, error: err2 } = await supabase
+            .from('shops')
+            .update(withoutVillage)
+            .eq('id', id)
+            .select()
+            .single();
+        if (err2) {
+            console.error('Error updating shop (fallback):', err2);
+            throw new Error('Failed to update shop. Please try again.');
+        }
+        return data2 as Shop;
+    }
     if (error) {
         console.error('Error updating shop:', error);
         throw new Error('Failed to update shop. Please try again.');
