@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
 
 // Type definitions matching the database schema
 export type Product = {
@@ -1721,6 +1722,378 @@ export const getShopSuggestionsByVillage = async (query: string): Promise<Shop[]
         return [];
     }
     return data || [];
+};
+
+/**
+ * Search shops from both sales table (shop_name) and shops table
+ * Returns combined suggestions with shop info
+ */
+export const searchShops = async (query: string, village?: string): Promise<Array<{ name: string; phone?: string; village?: string }>> => {
+    const q = query?.trim();
+    if (!q || q.length < 2) return [];
+
+    const results: Array<{ name: string; phone?: string; village?: string }> = [];
+    const seenNames = new Set<string>();
+
+    try {
+        // Get shop names from sales table
+        const { data: salesData, error: salesError } = await supabase
+            .from('sales')
+            .select('shop_name')
+            .ilike('shop_name', `%${q}%`)
+            .limit(20);
+
+        if (!salesError && salesData) {
+            salesData.forEach((sale: any) => {
+                const name = sale.shop_name?.trim();
+                if (name && !seenNames.has(name.toLowerCase())) {
+                    seenNames.add(name.toLowerCase());
+                    results.push({ name });
+                }
+            });
+        }
+
+        // Get shops from shops table
+        let shopsQuery = supabase
+            .from('shops')
+            .select('name, phone, village')
+            .ilike('name', `%${q}%`)
+            .limit(20);
+
+        if (village && village.trim()) {
+            shopsQuery = shopsQuery.ilike('village', `%${village.trim()}%`);
+        }
+
+        const { data: shopsData, error: shopsError } = await shopsQuery;
+
+        if (!shopsError && shopsData) {
+            shopsData.forEach((shop: any) => {
+                const name = shop.name?.trim();
+                if (name && !seenNames.has(name.toLowerCase())) {
+                    seenNames.add(name.toLowerCase());
+                    results.push({
+                        name,
+                        phone: shop.phone || undefined,
+                        village: shop.village || undefined,
+                    });
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error searching shops:', error);
+    }
+
+    return results.slice(0, 20);
+};
+
+/**
+ * Insert shop if it doesn't exist, or return existing shop
+ */
+export const insertShopIfNotExists = async (name: string, phone?: string, village?: string): Promise<Shop | null> => {
+    try {
+        return await createShop({ name, phone, village });
+    } catch (error) {
+        console.error('Error inserting shop:', error);
+        return null;
+    }
+};
+
+/**
+ * Save sale with products_sold format: [{ productId, boxQty, pcsQty, totalAmount }]
+ */
+export const saveSale = async (salePayload: {
+    route_id: string;
+    truck_id: string;
+    shop_name: string;
+    date: string;
+    products_sold: Array<{
+        productId: string;
+        boxQty: number;
+        pcsQty: number;
+        totalAmount: number;
+    }>;
+    total_amount: number;
+}): Promise<Sale> => {
+    const { data, error } = await supabase
+        .from('sales')
+        .insert({
+            route_id: salePayload.route_id,
+            truck_id: salePayload.truck_id,
+            shop_name: salePayload.shop_name,
+            date: salePayload.date,
+            products_sold: salePayload.products_sold,
+            total_amount: salePayload.total_amount,
+            auth_user_id: null, // No authentication
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error saving sale:', error);
+        throw new Error('Failed to save sale. Please try again.');
+    }
+
+    return data;
+};
+
+/**
+ * Update daily stock after sale by deducting sold quantities
+ */
+export const updateDailyStockAfterSale = async (
+    routeId: string,
+    truckId: string,
+    date: string,
+    soldItems: Array<{ productId: string; boxQty: number; pcsQty: number }>,
+    products: Product[]
+): Promise<void> => {
+    // Get current stock
+    const currentStock = await getDailyStockForRouteTruckDate(routeId, truckId, date);
+    
+    if (!currentStock || currentStock.length === 0) {
+        throw new Error('No stock found for this route/truck/date');
+    }
+
+    // Create product map for pcs_per_box lookup
+    const productMap = new Map<string, number>();
+    products.forEach(p => {
+        productMap.set(p.id, p.pcs_per_box || 24);
+    });
+
+    // Create a map of current stock
+    const stockMap = new Map<string, DailyStockItem>();
+    currentStock.forEach(item => {
+        stockMap.set(item.productId, { ...item });
+    });
+
+    // Deduct sold items
+    soldItems.forEach(sold => {
+        const current = stockMap.get(sold.productId);
+        if (current) {
+            // Get pcs_per_box for this product
+            const pcsPerBox = productMap.get(sold.productId) || 24;
+            
+            // Convert to total PCS, deduct, then convert back
+            const currentTotalPcs = (current.boxQty * pcsPerBox) + current.pcsQty;
+            const soldTotalPcs = (sold.boxQty * pcsPerBox) + sold.pcsQty;
+            const remainingTotalPcs = Math.max(0, currentTotalPcs - soldTotalPcs);
+            
+            stockMap.set(sold.productId, {
+                productId: sold.productId,
+                boxQty: Math.floor(remainingTotalPcs / pcsPerBox),
+                pcsQty: remainingTotalPcs % pcsPerBox,
+            });
+        }
+    });
+
+    // Convert map back to array
+    const updatedStock: DailyStockPayload = Array.from(stockMap.values());
+
+    // Save updated stock
+    await saveDailyStock(routeId, truckId, date, updatedStock);
+};
+
+/**
+ * Get driver's active route for today (from localStorage or default)
+ */
+export const getDriverRoute = async (): Promise<{ routeId: string; truckId: string; date: string } | null> => {
+    const routeId = localStorage.getItem('currentRoute') || localStorage.getItem('fs_last_route');
+    const truckId = localStorage.getItem('currentTruck') || localStorage.getItem('fs_last_truck');
+    const date = localStorage.getItem('currentDate') || localStorage.getItem('fs_last_date') || format(new Date(), "yyyy-MM-dd");
+    
+    if (!routeId || !truckId) {
+        return null;
+    }
+    
+    return { routeId, truckId, date };
+};
+
+/**
+ * Get daily stock for route and date (simplified version)
+ */
+export const getDailyStockForBilling = async (
+    routeId: string,
+    truckId: string,
+    date: string
+): Promise<Array<{ product: Product; stock: DailyStockItem }>> => {
+    const stockData = await getDailyStockForRouteTruckDate(routeId, truckId, date);
+    if (!stockData || stockData.length === 0) {
+        return [];
+    }
+
+    // Get all products
+    const products = await getProducts();
+    const productMap = new Map(products.map(p => [p.id, p]));
+
+    // Combine products with stock
+    return stockData
+        .filter(item => (item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0)
+        .map(item => {
+            const product = productMap.get(item.productId);
+            if (!product) return null;
+            return { product, stock: item };
+        })
+        .filter((item): item is { product: Product; stock: DailyStockItem } => item !== null);
+};
+
+/**
+ * Search products from today's assigned stock
+ */
+export const searchProductsInStock = async (
+    routeId: string,
+    truckId: string,
+    date: string,
+    query: string
+): Promise<Array<{ product: Product; stock: DailyStockItem }>> => {
+    const allStock = await getDailyStockForBilling(routeId, truckId, date);
+    if (!query.trim()) {
+        return allStock;
+    }
+
+    const q = query.toLowerCase();
+    return allStock.filter(({ product }) => 
+        product.name.toLowerCase().includes(q)
+    );
+};
+
+/**
+ * Create or get shop
+ */
+export const createOrGetShop = async (
+    name: string,
+    address?: string,
+    phone?: string,
+    routeId?: string
+): Promise<Shop> => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+        throw new Error('Shop name is required');
+    }
+
+    // Check if shop exists
+    const { data: existing, error: searchError } = await supabase
+        .from('shops')
+        .select('*')
+        .ilike('name', trimmedName)
+        .limit(1);
+
+    if (!searchError && existing && existing.length > 0) {
+        return existing[0] as Shop;
+    }
+
+    // Create new shop
+    return await createShop({
+        name: trimmedName,
+        address: address?.trim(),
+        phone: phone?.trim(),
+        village: address?.trim(), // Use address as village if needed
+        route_id: routeId,
+    });
+};
+
+/**
+ * Save bill to bills table
+ */
+export interface BillItem {
+    productId: string;
+    productName: string;
+    boxQty: number;
+    pcsQty: number;
+    rate: number;
+    amount: number;
+}
+
+export interface Bill {
+    id: string;
+    auth_user_id: string | null;
+    shop_id: string;
+    route_id: string;
+    date: string;
+    items: BillItem[];
+    total_amount: number;
+    created_at: string;
+}
+
+export const saveBill = async (
+    shopId: string,
+    routeId: string,
+    items: BillItem[],
+    totalAmount: number,
+    date: string
+): Promise<Bill> => {
+    // Check if bills table exists, if not use sales table as fallback
+    try {
+        const { data, error } = await supabase
+            .from('bills')
+            .insert({
+                auth_user_id: null, // No authentication
+                shop_id: shopId,
+                route_id: routeId,
+                date,
+                items,
+                total_amount: totalAmount,
+            })
+            .select()
+            .single();
+
+        if (error) {
+            // If bills table doesn't exist, fallback to sales table
+            if (error.code === '42P01') {
+                // Table doesn't exist, use sales table
+                const shop = await supabase
+                    .from('shops')
+                    .select('name')
+                    .eq('id', shopId)
+                    .single();
+
+                const shopName = shop.data?.name || 'Unknown Shop';
+
+                await saveSale({
+                    route_id: routeId,
+                    truck_id: '', // Will be set from localStorage
+                    shop_name: shopName,
+                    date,
+                    products_sold: items.map(item => ({
+                        productId: item.productId,
+                        boxQty: item.boxQty,
+                        pcsQty: item.pcsQty,
+                        totalAmount: item.amount,
+                    })),
+                    total_amount: totalAmount,
+                });
+
+                // Return a mock bill object
+                return {
+                    id: '',
+                    auth_user_id: null,
+                    shop_id: shopId,
+                    route_id: routeId,
+                    date,
+                    items,
+                    total_amount: totalAmount,
+                    created_at: new Date().toISOString(),
+                };
+            }
+            throw error;
+        }
+
+        return data as Bill;
+    } catch (error: any) {
+        console.error('Error saving bill:', error);
+        throw new Error('Failed to save bill. Please try again.');
+    }
+};
+
+/**
+ * Reduce daily stock after sale
+ */
+export const reduceDailyStock = async (
+    routeId: string,
+    truckId: string,
+    date: string,
+    items: Array<{ productId: string; boxQty: number; pcsQty: number }>,
+    products: Product[]
+): Promise<void> => {
+    await updateDailyStockAfterSale(routeId, truckId, date, items, products);
 };
 
 // Expenses
