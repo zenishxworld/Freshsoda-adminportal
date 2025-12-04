@@ -44,35 +44,35 @@ const DriverDashboard = () => {
       title: "Start Route",
       description: "Begin today's delivery route",
       icon: Route,
-      color: "bg-blue-500",
+      gradient: "from-blue-500 to-blue-600",
       action: () => navigate("/driver/start-route"),
     },
     {
       title: "Shop Billing",
       description: "Create bills for shop sales",
       icon: ShoppingCart,
-      color: "bg-emerald-400",
+      gradient: "from-emerald-500 to-emerald-600",
       action: () => navigate("/driver/shop-billing"),
     },
     {
       title: "Add Product",
       description: "Add new products to inventory",
       icon: Plus,
-      color: "bg-amber-400",
+      gradient: "from-orange-500 to-orange-600",
       action: () => navigate("/driver/add-product"),
     },
     {
       title: "Day Summary",
       description: "View today's sales summary",
       icon: BarChart3,
-      color: "bg-blue-500",
+      gradient: "from-purple-500 to-purple-600",
       action: () => navigate("/driver/summary"),
     },
     {
       title: "Bill History",
       description: "See all bills created for a day",
       icon: Package,
-      color: "bg-emerald-400",
+      gradient: "from-teal-500 to-teal-600",
       action: () => navigate("/driver/bill-history"),
     },
   ];
@@ -119,24 +119,25 @@ const DriverDashboard = () => {
           <h3 className="text-xl sm:text-2xl font-bold text-foreground mb-3 sm:mb-4">Quick Actions</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             {quickActions.map((action, index) => (
-              <Card
+              <div
                 key={index}
-                className="border-0 shadow-medium active:shadow-strong transition-all duration-200 cursor-pointer group active:scale-[0.98] sm:hover:scale-[1.02] touch-manipulation"
+                className={`bg-gradient-to-br ${action.gradient} rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group hover:scale-[1.02] active:scale-[0.98] p-6 sm:p-8 touch-manipulation`}
                 onClick={action.action}
               >
-                <CardHeader className="pb-3 sm:pb-4 p-4 sm:p-6">
-                  <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl ${action.color} flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform duration-300`}>
-                    <action.icon className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                <div className="flex flex-col items-center text-center text-white">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                    <action.icon className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
                   </div>
-                  <CardTitle className="text-lg sm:text-xl font-bold">{action.title}</CardTitle>
-                  <CardDescription className="text-sm sm:text-base">{action.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="p-4 sm:p-6 pt-0">
-                  <Button variant="card" className="w-full h-10 sm:h-9 text-sm sm:text-base touch-manipulation">
+                  <h3 className="text-xl sm:text-2xl font-bold mb-2">{action.title}</h3>
+                  <p className="text-white/90 text-sm sm:text-base mb-4">{action.description}</p>
+                  <Button
+                    variant="secondary"
+                    className="w-full bg-white text-gray-900 hover:bg-white/90 font-semibold"
+                  >
                     Get Started
                   </Button>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ))}
           </div>
         </div>
