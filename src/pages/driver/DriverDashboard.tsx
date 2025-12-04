@@ -6,7 +6,6 @@ import { useToast } from "../../hooks/use-toast";
 import {
   Route,
   ShoppingCart,
-  Plus,
   BarChart3,
   LogOut,
   User,
@@ -53,13 +52,6 @@ const DriverDashboard = () => {
       icon: ShoppingCart,
       gradient: "from-emerald-500 to-emerald-600",
       action: () => navigate("/driver/shop-billing"),
-    },
-    {
-      title: "Add Product",
-      description: "Add new products to inventory",
-      icon: Plus,
-      gradient: "from-orange-500 to-orange-600",
-      action: () => navigate("/driver/add-product"),
     },
     {
       title: "Day Summary",

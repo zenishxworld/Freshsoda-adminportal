@@ -24,7 +24,6 @@ import DriverDashboard from './pages/driver/DriverDashboard';
 import StartRoute from './pages/driver/StartRoute';
 import ShopBilling from './pages/driver/ShopBilling';
 import Summary from './pages/driver/Summary';
-import AddProduct from './pages/driver/AddProduct';
 import BillHistory from './pages/driver/BillHistory';
 
 // Root redirect component - TEMPORARY: Direct to admin for testing
@@ -99,7 +98,6 @@ function AppRoutes() {
               <Route path="/start-route" element={<StartRoute />} />
               <Route path="/shop-billing" element={<ShopBilling />} />
               <Route path="/summary" element={<Summary />} />
-              <Route path="/add-product" element={<AddProduct />} />
               <Route path="/bill-history" element={<BillHistory />} />
             </Routes>
           </ProtectedRouteDriver>

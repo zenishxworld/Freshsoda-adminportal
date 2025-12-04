@@ -54,13 +54,6 @@ const ShopBilling = () => {
     return shopSuggestions.filter(n => n.toLowerCase().startsWith(q)).slice(0, 8);
   }, [shopName, shopSuggestions]);
 
-  // Add-product dialog state
-  const [showAddProductDialog, setShowAddProductDialog] = useState(false);
-  const [productQuery, setProductQuery] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [unitMode, setUnitMode] = useState<'pcs' | 'box'>('box');
-  const [tempQuantity, setTempQuantity] = useState<number>(0);
-  const [itemUnitModes, setItemUnitModes] = useState<Record<string, 'pcs' | 'box'>>({});
   // Snapshot to ensure printed data is consistent and not affected by state resets
   const [printSnapshot, setPrintSnapshot] = useState<null | {
     shopName: string;
@@ -384,66 +377,6 @@ const ShopBilling = () => {
     );
   };
 
-  // --- Quick-add dialog helpers remain the same ---
-  const resetAddProductState = () => {
-    setProductQuery("");
-    setSelectedProduct(null);
-    setUnitMode('box');
-    setTempQuantity(0);
-  };
-  const toggleUnitMode = () => {
-    setUnitMode((prev) => {
-      const next = prev === 'box' ? 'pcs' : 'box';
-      if (next === 'pcs' && tempQuantity === 0) setTempQuantity(1);
-      return next;
-    });
-  };
-  const adjustTempQuantity = (delta: number) => {
-    setTempQuantity((q) => {
-      const step = 1;
-      let next = q + delta * step;
-      if (selectedProduct) {
-        const boxItem = saleItems.find((i) => i.productId === selectedProduct.id && i.unit === 'box');
-        const pcsItem = saleItems.find((i) => i.productId === selectedProduct.id && i.unit === 'pcs');
-        const boxAvail = boxItem?.availableStock ?? 0;
-        const pcsAvail = pcsItem?.availableStock ?? 0;
-        const max = unitMode === 'pcs'
-          ? (pcsAvail + boxAvail * getPcsPerBox(selectedProduct.id))
-          : boxAvail;
-        next = Math.max(0, Math.min(max, next));
-      } else {
-        next = Math.max(0, next);
-      }
-      return next;
-    });
-  };
-  const handleAddProductToSale = () => {
-    if (!selectedProduct) return;
-    const pid = selectedProduct.id;
-    const boxItem = saleItems.find((i) => i.productId === pid && i.unit === 'box');
-    const pcsItem = saleItems.find((i) => i.productId === pid && i.unit === 'pcs');
-    const boxAvail = boxItem?.availableStock ?? 0;
-    const pcsAvail = pcsItem?.availableStock ?? 0;
-    const maxAvail = unitMode === 'pcs' ? (pcsAvail + boxAvail * getPcsPerBox(pid)) : boxAvail;
-    const desired = Math.max(0, tempQuantity);
-    const finalQty = Math.min(desired, maxAvail);
-
-    setSaleItems((prev) =>
-      prev.map((item) => {
-        if (item.productId === pid && item.unit === unitMode) {
-          const newQty = finalQty;
-          return {
-            ...item,
-            quantity: newQty,
-            total: newQty * item.price,
-          };
-        }
-        return item;
-      })
-    );
-    setShowAddProductDialog(false);
-    resetAddProductState();
-  };
 
 
   // --- calculateTotal, getSoldItems, isValidPhone, isValidForBilling remain the same ---
@@ -723,46 +656,8 @@ const ShopBilling = () => {
                     <Label className="text-base sm:text-lg font-semibold flex items-center gap-2"><ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" /> Select Products</Label>
                     <div className="flex items-center gap-2">
                       <div className="text-xs sm:text-sm text-muted-foreground">Items: <span className="font-semibold text-primary">{soldItemsCount}</span></div>
-                      <Button variant="default" size="sm" onClick={() => setShowAddProductDialog(true)} className="h-9" title="Quick add product">Add Product</Button>
                     </div>
                   </div>
-                  {/* Quick Add Product Dialog - remains same */}
-                  <Dialog open={showAddProductDialog} onOpenChange={setShowAddProductDialog}>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader><DialogTitle>Add Product</DialogTitle><DialogDescription>Search and quickly add a product with unit mode.</DialogDescription></DialogHeader>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label className="text-sm">Search Product</Label>
-                          <Input autoFocus placeholder="Type word start to search" value={productQuery}
-                            onChange={(e) => {
-                              const q = e.target.value; setProductQuery(q);
-                              const matchList = products.filter(p => nameMatchesQueryByWordPrefix(p.name, q)).filter(p => { const boxItem = saleItems.find(s => s.productId === p.id && s.unit === 'box'); const pcsItem = saleItems.find(s => s.productId === p.id && s.unit === 'pcs'); const totalAvail = (boxItem?.availableStock || 0) + (pcsItem?.availableStock || 0); return totalAvail > 0; });
-                              const firstMatch = matchList[0]; setSelectedProduct(firstMatch || null); if (!firstMatch) { setTempQuantity(0); }
-                            }} className="h-10"
-                          />
-                          <div className="max-h-40 overflow-y-auto border rounded-md">
-                            {products.filter(p => nameMatchesQueryByWordPrefix(p.name, productQuery)).filter(p => { const boxItem = saleItems.find(s => s.productId === p.id && s.unit === 'box'); const pcsItem = saleItems.find(s => s.productId === p.id && s.unit === 'pcs'); const totalAvail = (boxItem?.availableStock || 0) + (pcsItem?.availableStock || 0); return totalAvail > 0; }).slice(0, 20).map(p => { const boxItem = saleItems.find(s => s.productId === p.id && s.unit === 'box'); const pcsItem = saleItems.find(s => s.productId === p.id && s.unit === 'pcs'); const boxAvail = boxItem?.availableStock || 0; const pcsAvail = pcsItem?.availableStock || 0; return (<button key={p.id} type="button" onClick={() => setSelectedProduct(p)} className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-muted ${selectedProduct?.id === p.id ? 'bg-muted/60' : ''}`}><span className="text-sm">{p.name}</span><span className="text-xs text-muted-foreground">Avail: {boxAvail} Box, {pcsAvail} pcs</span></button>); })}
-                            {productQuery && products.filter(p => nameMatchesQueryByWordPrefix(p.name, productQuery)).filter(p => { const boxItem = saleItems.find(s => s.productId === p.id && s.unit === 'box'); const pcsItem = saleItems.find(s => s.productId === p.id && s.unit === 'pcs'); const totalAvail = (boxItem?.availableStock || 0) + (pcsItem?.availableStock || 0); return totalAvail > 0; }).length === 0 && (<div className="px-3 py-2 text-xs text-muted-foreground">No matches</div>)}
-                          </div>
-                        </div>
-                        {selectedProduct && (
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between"><div className="text-sm font-semibold">{selectedProduct.name}</div><div className="text-xs text-muted-foreground">{(() => { const boxItem = saleItems.find(i => i.productId === selectedProduct.id && i.unit === 'box'); const pcsItem = saleItems.find(i => i.productId === selectedProduct.id && i.unit === 'pcs'); const boxAvail = boxItem?.availableStock ?? 0; const pcsAvail = pcsItem?.availableStock ?? 0; return <>Avail: {boxAvail} Box, {pcsAvail} pcs</>; })()}</div></div>
-                            <div className="flex items-center gap-2"><Button type="button" variant="outline" size="sm" onClick={toggleUnitMode}>{unitMode === 'pcs' ? 'pcs' : 'Box'}</Button><span className="text-xs text-muted-foreground">Step: 1</span></div>
-                            <div className="flex items-center gap-2">
-                              <Button type="button" variant="outline" size="icon" onClick={() => adjustTempQuantity(-1)} className="h-9 w-9"><Minus className="w-4 h-4" /></Button>
-                              <Input type="text" value={String(tempQuantity)}
-                                onChange={(e) => { const sanitized = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '') || '0'; const raw = parseInt(sanitized) || 0; const boxItem = saleItems.find(i => i.productId === selectedProduct.id && i.unit === 'box'); const pcsItem = saleItems.find(i => i.productId === selectedProduct.id && i.unit === 'pcs'); const boxAvail = boxItem?.availableStock ?? 0; const pcsAvail = pcsItem?.availableStock ?? 0; const max = unitMode === 'pcs' ? (pcsAvail + boxAvail * getPcsPerBox(selectedProduct.id)) : boxAvail; setTempQuantity(Math.max(0, Math.min(max, raw))); }}
-                                className="w-20 text-center h-9" inputMode="numeric" pattern="[0-9]*"
-                              />
-                              <Button type="button" variant="outline" size="icon" onClick={() => adjustTempQuantity(1)} className="h-9 w-9"><Plus className="w-4 h-4" /></Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <DialogFooter className="sm:justify-end"><Button variant="ghost" onClick={() => { setShowAddProductDialog(false); resetAddProductState(); }}>Cancel</Button><Button onClick={handleAddProductToSale} disabled={!selectedProduct || tempQuantity <= 0}>Add</Button></DialogFooter>
-                    </DialogContent>
-                  </Dialog>
                   {/* Quick Edit Added Items - remains same */}
                   <div className="space-y-2">
                     {saleItems.filter(i => i.quantity > 0).length > 0 && (
