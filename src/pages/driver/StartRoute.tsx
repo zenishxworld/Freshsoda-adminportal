@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { format } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
@@ -10,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "../../hooks/use-toast";
 import { getProducts, getActiveRoutes, getTrucks, saveDailyStock, getDailyStockForRouteTruckDate, addRoute, deactivateRoute, type Product, type DailyStockItem, type RouteOption, type TruckOption } from "../../lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
-import { ArrowLeft, Route as RouteIcon, Package, Plus, Minus, Trash2, RefreshCw, Truck } from "lucide-react";
+import { ArrowLeft, Route as RouteIcon, Package, Plus, Minus, Trash2, RefreshCw, Truck, RotateCcw } from "lucide-react";
 
 
 
@@ -28,11 +29,17 @@ const StartRoute = () => {
   const [user, setUser] = useState<{ id?: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [selectedRoute, setSelectedRoute] = useState("");
-  const [selectedTruck, setSelectedTruck] = useState("");
+  // Load last selections from localStorage
+  const [selectedRoute, setSelectedRoute] = useState(() => {
+    return localStorage.getItem('fs_last_route') || "";
+  });
+  const [selectedTruck, setSelectedTruck] = useState(() => {
+    return localStorage.getItem('fs_last_truck') || "";
+  });
   const [selectedDate, setSelectedDate] = useState(() => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+    const lastDate = localStorage.getItem('fs_last_date');
+    if (lastDate) return lastDate;
+    return format(new Date(), "yyyy-MM-dd");
   });
   const [products, setProducts] = useState<Product[]>([]);
   const [routes, setRoutes] = useState<RouteOptionWithDisplay[]>([]);
@@ -44,6 +51,14 @@ const StartRoute = () => {
   const [newRouteName, setNewRouteName] = useState("");
   const [creatingRoute, setCreatingRoute] = useState(false);
   const [deletingRoute, setDeletingRoute] = useState(false);
+  const [savingDisabled, setSavingDisabled] = useState(false);
+  
+  // Track highlighted rows for animation
+  const [highlightedRows, setHighlightedRows] = useState<Set<string>>(new Set());
+  const [prefilledRows, setPrefilledRows] = useState<Set<string>>(new Set());
+  
+  // Refs for hold-to-increase functionality
+  const holdIntervalRef = useRef<Record<string, NodeJS.Timeout | null>>({});
 
   useEffect(() => {
     setUser(null);
@@ -53,6 +68,19 @@ const StartRoute = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Save selections to localStorage
+  useEffect(() => {
+    if (selectedRoute) localStorage.setItem('fs_last_route', selectedRoute);
+  }, [selectedRoute]);
+
+  useEffect(() => {
+    if (selectedTruck) localStorage.setItem('fs_last_truck', selectedTruck);
+  }, [selectedTruck]);
+
+  useEffect(() => {
+    if (selectedDate) localStorage.setItem('fs_last_date', selectedDate);
+  }, [selectedDate]);
 
   useEffect(() => {
     if (selectedRoute && selectedTruck && selectedDate) {
@@ -123,18 +151,27 @@ const StartRoute = () => {
 
     try {
       setLoadingStock(true);
-      const existingStock = await getDailyStockForRouteTruckDate(selectedRoute, selectedTruck, selectedDate);
+      // Normalize date format (ensure YYYY-MM-DD)
+      const normalizedDate = selectedDate.includes('T') 
+        ? format(new Date(selectedDate), "yyyy-MM-dd")
+        : selectedDate;
+      const existingStock = await getDailyStockForRouteTruckDate(selectedRoute, selectedTruck, normalizedDate);
       
       // existingStock can be: null (no record), [] (record exists but empty), or [{...}] (with items)
       if (existingStock !== null && existingStock.length > 0) {
         // Convert array to map
         const stockMap: Record<string, DailyStockItem> = {};
+        const prefilledProductIds = new Set<string>();
         existingStock.forEach(item => {
           stockMap[item.productId] = {
             productId: item.productId,
             boxQty: item.boxQty || 0,
             pcsQty: item.pcsQty || 0,
           };
+          // Track which products were prefilled
+          if ((item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0) {
+            prefilledProductIds.add(item.productId);
+          }
         });
 
         // Merge with existing stock map (to include all products)
@@ -147,6 +184,12 @@ const StartRoute = () => {
           };
         });
         setStock(mergedStock);
+
+        // Highlight prefilled rows
+        setPrefilledRows(prefilledProductIds);
+        setTimeout(() => {
+          setPrefilledRows(new Set());
+        }, 1500);
 
         toast({
           title: "Stock Loaded",
@@ -179,13 +222,102 @@ const StartRoute = () => {
   const updateStockQuantity = (productId: string, type: 'box' | 'pcs', value: number) => {
     setStock(prev => {
       const current = prev[productId] || { productId, boxQty: 0, pcsQty: 0 };
+      const newValue = Math.max(0, value);
+      
+      // Highlight the row when value changes
+      setHighlightedRows(prev => new Set(prev).add(productId));
+      setTimeout(() => {
+        setHighlightedRows(prev => {
+          const next = new Set(prev);
+          next.delete(productId);
+          return next;
+        });
+      }, 1000);
+      
       return {
         ...prev,
         [productId]: {
           ...current,
-          [type === 'box' ? 'boxQty' : 'pcsQty']: Math.max(0, value),
+          [type === 'box' ? 'boxQty' : 'pcsQty']: newValue,
         },
       };
+    });
+  };
+
+  // Hold-to-increase functionality
+  const startHoldIncrease = useCallback((productId: string, type: 'box' | 'pcs', increment: number) => {
+    const key = `${productId}-${type}`;
+    
+    // Clear any existing interval
+    if (holdIntervalRef.current[key]) {
+      clearInterval(holdIntervalRef.current[key]!);
+    }
+    
+    // Immediate increment with highlight
+    setStock(prev => {
+      const current = prev[productId] || { productId, boxQty: 0, pcsQty: 0 };
+      const currentValue = type === 'box' ? current.boxQty : current.pcsQty;
+      const newValue = Math.max(0, currentValue + increment);
+      
+      // Highlight the row
+      setHighlightedRows(prev => new Set(prev).add(productId));
+      setTimeout(() => {
+        setHighlightedRows(prev => {
+          const next = new Set(prev);
+          next.delete(productId);
+          return next;
+        });
+      }, 1000);
+      
+      return {
+        ...prev,
+        [productId]: {
+          ...current,
+          [type === 'box' ? 'boxQty' : 'pcsQty']: newValue,
+        },
+      };
+    });
+    
+    // Set up interval for continuous increment using functional updates
+    holdIntervalRef.current[key] = setInterval(() => {
+      setStock(prev => {
+        const current = prev[productId] || { productId, boxQty: 0, pcsQty: 0 };
+        const currentValue = type === 'box' ? current.boxQty : current.pcsQty;
+        const newValue = Math.max(0, currentValue + increment);
+        
+        return {
+          ...prev,
+          [productId]: {
+            ...current,
+            [type === 'box' ? 'boxQty' : 'pcsQty']: newValue,
+          },
+        };
+      });
+    }, 150);
+  }, []);
+
+  const stopHoldIncrease = useCallback((productId: string, type: 'box' | 'pcs') => {
+    const key = `${productId}-${type}`;
+    if (holdIntervalRef.current[key]) {
+      clearInterval(holdIntervalRef.current[key]!);
+      holdIntervalRef.current[key] = null;
+    }
+  }, []);
+
+  // Reset all quantities
+  const resetAllQuantities = () => {
+    const resetStock: Record<string, DailyStockItem> = {};
+    products.forEach(product => {
+      resetStock[product.id] = {
+        productId: product.id,
+        boxQty: 0,
+        pcsQty: 0,
+      };
+    });
+    setStock(resetStock);
+    toast({
+      title: "All quantities reset.",
+      description: "",
     });
   };
 
@@ -274,10 +406,10 @@ const StartRoute = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
+    // Validation with specific warnings
     if (!selectedRoute) {
       toast({
-        title: "Error",
+        title: "Validation Error",
         description: "Please select a route",
         variant: "destructive",
       });
@@ -286,7 +418,7 @@ const StartRoute = () => {
 
     if (!selectedTruck) {
       toast({
-        title: "Error",
+        title: "Validation Error",
         description: "Please select a truck",
         variant: "destructive",
       });
@@ -295,57 +427,157 @@ const StartRoute = () => {
 
     if (!selectedDate) {
       toast({
-        title: "Error",
-        description: "Please select a date",
+        title: "Validation Error",
+        description: "Please choose a valid date",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate and normalize date format
+    let normalizedDate: string;
+    try {
+      normalizedDate = selectedDate.includes('T') 
+        ? format(new Date(selectedDate), "yyyy-MM-dd")
+        : selectedDate;
+      // Validate the date is valid
+      const dateObj = new Date(normalizedDate);
+      if (isNaN(dateObj.getTime())) {
+        throw new Error("Invalid date");
+      }
+    } catch (error) {
+      toast({
+        title: "Validation Error",
+        description: "Please choose a valid date",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if at least one product has quantity > 0
+    const hasQuantities = Object.values(stock).some(item => 
+      (item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0
+    );
+
+    if (!hasQuantities) {
+      toast({
+        title: "Validation Error",
+        description: "Please add stock quantities",
         variant: "destructive",
       });
       return;
     }
 
     setLoading(true);
+    setSavingDisabled(true);
 
     try {
-      // Convert stock map to array
-      const stockArray: DailyStockItem[] = Object.values(stock).filter(item => 
-        item.boxQty > 0 || item.pcsQty > 0
-      );
+      // Convert stock map to array and filter out zero values
+      const stockArray: DailyStockItem[] = Object.values(stock)
+        .filter(item => (item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0)
+        .map(item => ({
+          productId: item.productId,
+          boxQty: item.boxQty || 0,
+          pcsQty: item.pcsQty || 0,
+        }));
 
-      if (stockArray.length === 0) {
-        toast({
-          title: "Error",
-          description: "Please add at least one product with quantity",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
-
-      await saveDailyStock(selectedRoute, selectedTruck, selectedDate, stockArray);
+      await saveDailyStock(selectedRoute, selectedTruck, normalizedDate, stockArray);
 
       // Store route in localStorage for use in other pages
       localStorage.setItem('currentRoute', selectedRoute);
       localStorage.setItem('currentTruck', selectedTruck);
-      localStorage.setItem('currentDate', selectedDate);
+      localStorage.setItem('currentDate', normalizedDate);
 
       toast({
-        title: "Route Started!",
-        description: "Your daily stock has been saved successfully",
+        title: "Success!",
+        description: "Starting stock saved successfully!",
       });
 
-      navigate("/driver/dashboard");
+      // Refresh stock from database
+      setTimeout(async () => {
+        try {
+          const refreshedStock = await getDailyStockForRouteTruckDate(selectedRoute, selectedTruck, normalizedDate);
+          if (refreshedStock !== null && refreshedStock.length > 0) {
+            const stockMap: Record<string, DailyStockItem> = {};
+            refreshedStock.forEach(item => {
+              stockMap[item.productId] = {
+                productId: item.productId,
+                boxQty: item.boxQty || 0,
+                pcsQty: item.pcsQty || 0,
+              };
+            });
+            
+            const mergedStock: Record<string, DailyStockItem> = {};
+            products.forEach(product => {
+              mergedStock[product.id] = stockMap[product.id] || {
+                productId: product.id,
+                boxQty: 0,
+                pcsQty: 0,
+              };
+            });
+            setStock(mergedStock);
+            
+            // Highlight all saved rows with green (same as prefilled)
+            const savedProductIds = new Set<string>();
+            refreshedStock.forEach(item => {
+              if ((item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0) {
+                savedProductIds.add(item.productId);
+              }
+            });
+            setPrefilledRows(savedProductIds);
+            setTimeout(() => {
+              setPrefilledRows(new Set());
+            }, 1500);
+          }
+        } catch (error) {
+          console.error("Error refreshing stock:", error);
+        }
+      }, 500);
+
+      // Disable save button for 1 second to prevent double-submit
+      setTimeout(() => {
+        setSavingDisabled(false);
+      }, 1000);
+
+      // Navigate after a short delay to allow user to see success message
+      setTimeout(() => {
+        navigate("/driver/dashboard");
+      }, 1500);
     } catch (error: unknown) {
       toast({
         title: "Error",
         description: (error as { message?: string }).message || "Failed to save stock",
         variant: "destructive",
       });
+      setSavingDisabled(false);
     } finally {
       setLoading(false);
     }
   };
 
-  const totalBoxes = Object.values(stock).reduce((sum, item) => sum + (item.boxQty || 0), 0);
-  const totalPcs = Object.values(stock).reduce((sum, item) => sum + (item.pcsQty || 0), 0);
+  // Calculate totals (sum all non-zero rows from current state)
+  const totalBoxes = Object.values(stock)
+    .filter(item => (item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0)
+    .reduce((sum, item) => sum + (item.boxQty || 0), 0);
+  const totalPcs = Object.values(stock)
+    .filter(item => (item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0)
+    .reduce((sum, item) => sum + (item.pcsQty || 0), 0);
+  
+  // Form validation
+  const assignmentsHaveAtLeastOneValue = Object.values(stock).some(item => 
+    (item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0
+  );
+  
+  const isFormValid = selectedRoute && selectedTruck && selectedDate && assignmentsHaveAtLeastOneValue;
+  
+  // Cleanup intervals on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(holdIntervalRef.current).forEach(interval => {
+        if (interval) clearInterval(interval);
+      });
+    };
+  }, []);
 
   if (authLoading) {
     return (
@@ -557,10 +789,23 @@ const StartRoute = () => {
                     <Package className="w-4 h-4 sm:w-5 sm:h-5" />
                     Stock Quantities
                   </Label>
-                  <div className="text-xs sm:text-sm text-muted-foreground">
-                    Boxes: <span className="font-semibold text-primary">{totalBoxes}</span>
-                    <span className="mx-1">|</span>
-                    Pcs: <span className="font-semibold text-primary">{totalPcs}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="text-xs sm:text-sm text-muted-foreground">
+                      Boxes: <span className="font-semibold text-primary">{totalBoxes}</span>
+                      <span className="mx-1">|</span>
+                      Pcs: <span className="font-semibold text-primary">{totalPcs}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={resetAllQuantities}
+                      className="h-8 text-xs"
+                      title="Reset all quantities to zero"
+                    >
+                      <RotateCcw className="w-3 h-3 mr-1" />
+                      Reset Quantities
+                    </Button>
                   </div>
                 </div>
 
@@ -585,8 +830,17 @@ const StartRoute = () => {
                         <tbody>
                           {products.map((product) => {
                             const stockItem = stock[product.id] || { productId: product.id, boxQty: 0, pcsQty: 0 };
+                            const isHighlighted = highlightedRows.has(product.id);
+                            const isPrefilled = prefilledRows.has(product.id);
+                            
                             return (
-                              <tr key={product.id} className="border-t hover:bg-muted/30">
+                              <tr 
+                                key={product.id} 
+                                className={`border-t hover:bg-muted/30 transition-colors duration-300 ${
+                                  isHighlighted ? 'bg-blue-50 animate-pulse' : 
+                                  isPrefilled ? 'bg-green-50' : ''
+                                }`}
+                              >
                                 <td className="px-4 py-3">
                                   <div className="font-medium">{product.name}</div>
                                 </td>
@@ -598,6 +852,11 @@ const StartRoute = () => {
                                       size="icon"
                                       className="h-8 w-8"
                                       onClick={() => updateStockQuantity(product.id, 'box', stockItem.boxQty - 1)}
+                                      onMouseDown={() => startHoldIncrease(product.id, 'box', -1)}
+                                      onMouseUp={() => stopHoldIncrease(product.id, 'box')}
+                                      onMouseLeave={() => stopHoldIncrease(product.id, 'box')}
+                                      onTouchStart={() => startHoldIncrease(product.id, 'box', -1)}
+                                      onTouchEnd={() => stopHoldIncrease(product.id, 'box')}
                                       disabled={stockItem.boxQty <= 0}
                                     >
                                       <Minus className="w-3 h-3" />
@@ -611,6 +870,15 @@ const StartRoute = () => {
                                         const value = Math.max(0, parseInt(e.target.value || "0", 10));
                                         updateStockQuantity(product.id, 'box', value);
                                       }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'ArrowUp') {
+                                          e.preventDefault();
+                                          updateStockQuantity(product.id, 'box', stockItem.boxQty + 1);
+                                        } else if (e.key === 'ArrowDown') {
+                                          e.preventDefault();
+                                          updateStockQuantity(product.id, 'box', Math.max(0, stockItem.boxQty - 1));
+                                        }
+                                      }}
                                     />
                                     <Button
                                       type="button"
@@ -618,6 +886,11 @@ const StartRoute = () => {
                                       size="icon"
                                       className="h-8 w-8"
                                       onClick={() => updateStockQuantity(product.id, 'box', stockItem.boxQty + 1)}
+                                      onMouseDown={() => startHoldIncrease(product.id, 'box', 1)}
+                                      onMouseUp={() => stopHoldIncrease(product.id, 'box')}
+                                      onMouseLeave={() => stopHoldIncrease(product.id, 'box')}
+                                      onTouchStart={() => startHoldIncrease(product.id, 'box', 1)}
+                                      onTouchEnd={() => stopHoldIncrease(product.id, 'box')}
                                     >
                                       <Plus className="w-3 h-3" />
                                     </Button>
@@ -631,6 +904,11 @@ const StartRoute = () => {
                                       size="icon"
                                       className="h-8 w-8"
                                       onClick={() => updateStockQuantity(product.id, 'pcs', stockItem.pcsQty - 1)}
+                                      onMouseDown={() => startHoldIncrease(product.id, 'pcs', -1)}
+                                      onMouseUp={() => stopHoldIncrease(product.id, 'pcs')}
+                                      onMouseLeave={() => stopHoldIncrease(product.id, 'pcs')}
+                                      onTouchStart={() => startHoldIncrease(product.id, 'pcs', -1)}
+                                      onTouchEnd={() => stopHoldIncrease(product.id, 'pcs')}
                                       disabled={stockItem.pcsQty <= 0}
                                     >
                                       <Minus className="w-3 h-3" />
@@ -644,6 +922,15 @@ const StartRoute = () => {
                                         const value = Math.max(0, parseInt(e.target.value || "0", 10));
                                         updateStockQuantity(product.id, 'pcs', value);
                                       }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'ArrowUp') {
+                                          e.preventDefault();
+                                          updateStockQuantity(product.id, 'pcs', stockItem.pcsQty + 1);
+                                        } else if (e.key === 'ArrowDown') {
+                                          e.preventDefault();
+                                          updateStockQuantity(product.id, 'pcs', Math.max(0, stockItem.pcsQty - 1));
+                                        }
+                                      }}
                                     />
                                     <Button
                                       type="button"
@@ -651,6 +938,11 @@ const StartRoute = () => {
                                       size="icon"
                                       className="h-8 w-8"
                                       onClick={() => updateStockQuantity(product.id, 'pcs', stockItem.pcsQty + 1)}
+                                      onMouseDown={() => startHoldIncrease(product.id, 'pcs', 1)}
+                                      onMouseUp={() => stopHoldIncrease(product.id, 'pcs')}
+                                      onMouseLeave={() => stopHoldIncrease(product.id, 'pcs')}
+                                      onTouchStart={() => startHoldIncrease(product.id, 'pcs', 1)}
+                                      onTouchEnd={() => stopHoldIncrease(product.id, 'pcs')}
                                     >
                                       <Plus className="w-3 h-3" />
                                     </Button>
@@ -666,15 +958,27 @@ const StartRoute = () => {
                 )}
               </div>
 
-              <Button
-                type="submit"
-                variant="success"
-                size="default"
-                className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation text-white"
-                disabled={loading || !selectedRoute || !selectedTruck || !selectedDate || (totalBoxes === 0 && totalPcs === 0)}
-              >
-                {loading ? "Saving Stock..." : "Start Route / Save Stock"}
-              </Button>
+              <div className="space-y-4">
+                {/* Summary */}
+                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
+                  <div className="text-sm font-medium text-muted-foreground">Total Boxes Assigned:</div>
+                  <div className="text-lg font-bold text-primary">{totalBoxes}</div>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
+                  <div className="text-sm font-medium text-muted-foreground">Total PCS Assigned:</div>
+                  <div className="text-lg font-bold text-primary">{totalPcs}</div>
+                </div>
+                
+                <Button
+                  type="submit"
+                  variant="success"
+                  size="default"
+                  className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation text-white"
+                  disabled={!isFormValid || loading || savingDisabled}
+                >
+                  {loading ? "Saving..." : "Save Stock"}
+                </Button>
+              </div>
             </form>
           </CardContent>
         </Card>
