@@ -1690,6 +1690,8 @@ export const addExpense = async (input: {
     if (!Number.isFinite(amount) || amount <= 0) throw new Error('Amount cannot be negative');
     const date = (input.date || new Date().toISOString().split('T')[0]).trim();
     const now = new Date().toISOString();
+    const { data: session } = await supabase.auth.getSession();
+    const uid = session?.session?.user?.id || null;
     const payload = {
         category,
         amount,
@@ -1697,6 +1699,7 @@ export const addExpense = async (input: {
         note: input.note?.trim() || null,
         created_at: now,
         updated_at: now,
+        auth_user_id: uid,
     } as any;
 
     const { data, error } = await supabase
@@ -1704,14 +1707,31 @@ export const addExpense = async (input: {
         .insert(payload)
         .select('*')
         .single();
+    if (error && (error.code === '42703' || /column\s+.*\s+does\s+not\s+exist/i.test(error.message || ''))) {
+        const { auth_user_id, created_at, updated_at, ...without } = payload as Record<string, unknown>;
+        const { data: data2, error: err2 } = await supabase
+            .from('expenses')
+            .insert(without)
+            .select('*')
+            .single();
+        if (err2) {
+            console.error('Error adding expense (fallback):', err2);
+            throw new Error('Failed to save expense, try again');
+        }
+        const exp2 = data2 as Expense;
+        try {
+            await supabase.from('expense_movements').insert({ expense_id: exp2.id, action: 'create', changes: payload, auth_user_id: uid });
+        } catch (e) {
+            console.error('Error logging expense movement:', e);
+        }
+        return exp2;
+    }
     if (error) {
         console.error('Error adding expense:', error);
         throw new Error('Failed to save expense, try again');
     }
     const exp = data as Expense;
     try {
-        const { data: session } = await supabase.auth.getSession();
-        const uid = session?.session?.user?.id || null;
         await supabase.from('expense_movements').insert({ expense_id: exp.id, action: 'create', changes: payload, auth_user_id: uid });
     } catch (e) {
         console.error('Error logging expense movement:', e);

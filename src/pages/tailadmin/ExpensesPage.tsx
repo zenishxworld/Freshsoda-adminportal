@@ -49,9 +49,9 @@ export const ExpensesPage: React.FC = () => {
         {
             key: 'actions',
             header: 'Actions',
-            render: (row: Expense) => (
+            render: (_value: unknown, row: Expense) => (
                 <div className="flex gap-2">
-                    <button className="p-1.5 hover:bg-gray-100 rounded transition-colors" onClick={() => { setEditing(row); setForm({ category: row.category, amount: String(row.amount), date: row.date, note: row.note || '' }); setIsEditOpen(true); }}>
+                    <button className="p-1.5 hover:bg-gray-100 rounded transition-colors" onClick={() => { setEditing(row); setForm({ category: row.category, amount: String((row as any)._originalAmount || row.amount), date: row.date, note: row.note || '' }); setIsEditOpen(true); }}>
                         <Edit className="w-4 h-4 text-primary" />
                     </button>
                     <button className="p-1.5 hover:bg-gray-100 rounded transition-colors" onClick={() => { setEditing(row); setIsDeleteOpen(true); }}>
@@ -229,7 +229,7 @@ export const ExpensesPage: React.FC = () => {
             </Card>
 
             <Card header={<div className="flex items-center justify-between"><h3 className="text-lg font-semibold text-gray-900">Expenses</h3><span className="text-sm text-gray-500">{expenses.length} records</span></div>}>
-                <Table columns={columns} data={pagedExpenses.map(e => ({ ...e, amount: `₹${e.amount.toFixed(2)}` }))} />
+                <Table columns={columns} data={pagedExpenses.map(e => ({ ...e, _originalAmount: e.amount, amount: `₹${e.amount.toFixed(2)}` }))} />
 
                 {totalPages > 1 && (
                     <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">

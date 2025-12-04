@@ -62,6 +62,13 @@ export default {
           DEFAULT: "#1C2434",
           light: "#24303F",
         },
+        // Driver Portal Colors
+        driver: {
+          background: "#EEE8FF", // Blend of E9E3FF and F3EEFF
+          primary: "#10B981",    // Green for main actions
+          secondary: "#3C50E0",  // Blue for secondary actions
+          card: "#FFFFFF",       // White cards
+        },
       },
       fontFamily: {
         sans: ["Inter", "sans-serif"],
