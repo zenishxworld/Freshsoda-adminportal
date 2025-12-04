@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -14,6 +14,7 @@ interface AddProductModalProps {
 
 const AddProductModal = ({ open, onClose, onSelectProduct, availableProducts }: AddProductModalProps) => {
   const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const filteredProducts = availableProducts.filter(({ product }) => {
     if (!searchQuery.trim()) return true;
@@ -25,6 +26,15 @@ const AddProductModal = ({ open, onClose, onSelectProduct, availableProducts }: 
     setSearchQuery("");
     onClose();
   };
+
+  // Autofocus search when modal opens
+  useEffect(() => {
+    if (open && searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+    }
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -39,11 +49,13 @@ const AddProductModal = ({ open, onClose, onSelectProduct, availableProducts }: 
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <Input
+                ref={searchInputRef}
                 type="text"
                 placeholder="Search products..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 h-11"
+                autoFocus
               />
             </div>
           </div>
@@ -73,8 +85,7 @@ const AddProductModal = ({ open, onClose, onSelectProduct, availableProducts }: 
                         <div>
                           <h4 className="font-semibold text-base">{product.name}</h4>
                           <p className="text-sm text-muted-foreground">
-                            Available: {stock.boxQty || 0} Box, {stock.pcsQty || 0} PCS
-                            <span className="ml-2">({availablePcs} total PCS)</span>
+                            Avail: {stock.boxQty || 0} Box, {stock.pcsQty || 0} pcs
                           </p>
                         </div>
                       </div>

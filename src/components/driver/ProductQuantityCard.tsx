@@ -1,3 +1,4 @@
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Card, CardContent } from "../ui/card";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -12,6 +13,8 @@ interface ProductQuantityCardProps {
   pcsQty: number;
   onBoxQtyChange: (value: number) => void;
   onPcsQtyChange: (value: number) => void;
+  onBoxPriceChange: (value: number) => void;
+  onPcsPriceChange: (value: number) => void;
   onRemove: () => void;
   boxPrice: number;
   pcsPrice: number;
@@ -25,6 +28,8 @@ const ProductQuantityCard = ({
   pcsQty,
   onBoxQtyChange,
   onPcsQtyChange,
+  onBoxPriceChange,
+  onPcsPriceChange,
   onRemove,
   boxPrice,
   pcsPrice,
@@ -36,6 +41,73 @@ const ProductQuantityCard = ({
   const totalAvailablePcs = (availableBoxQty * pcsPerBox) + availablePcsQty;
   const currentTotalPcs = (boxQty * pcsPerBox) + pcsQty;
   const maxPcsQty = totalAvailablePcs - (boxQty * pcsPerBox);
+
+  // Long press functionality
+  const boxIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pcsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [currentBoxQty, setCurrentBoxQty] = useState(boxQty);
+  const [currentPcsQty, setCurrentPcsQty] = useState(pcsQty);
+
+  useEffect(() => {
+    setCurrentBoxQty(boxQty);
+  }, [boxQty]);
+
+  useEffect(() => {
+    setCurrentPcsQty(pcsQty);
+  }, [pcsQty]);
+
+  const startBoxHold = useCallback((direction: number) => {
+    // Immediate change
+    const newValue = Math.max(0, Math.min(availableBoxQty, currentBoxQty + direction));
+    setCurrentBoxQty(newValue);
+    onBoxQtyChange(newValue);
+    
+    // Then repeat
+    boxIntervalRef.current = setInterval(() => {
+      setCurrentBoxQty((prev) => {
+        const next = Math.max(0, Math.min(availableBoxQty, prev + direction));
+        onBoxQtyChange(next);
+        return next;
+      });
+    }, 150);
+  }, [currentBoxQty, availableBoxQty, onBoxQtyChange]);
+
+  const stopBoxHold = useCallback(() => {
+    if (boxIntervalRef.current) {
+      clearInterval(boxIntervalRef.current);
+      boxIntervalRef.current = null;
+    }
+  }, []);
+
+  const startPcsHold = useCallback((direction: number) => {
+    // Immediate change
+    const newValue = Math.max(0, Math.min(maxPcsQty, currentPcsQty + direction));
+    setCurrentPcsQty(newValue);
+    onPcsQtyChange(newValue);
+    
+    // Then repeat
+    pcsIntervalRef.current = setInterval(() => {
+      setCurrentPcsQty((prev) => {
+        const next = Math.max(0, Math.min(maxPcsQty, prev + direction));
+        onPcsQtyChange(next);
+        return next;
+      });
+    }, 150);
+  }, [currentPcsQty, maxPcsQty, onPcsQtyChange]);
+
+  const stopPcsHold = useCallback(() => {
+    if (pcsIntervalRef.current) {
+      clearInterval(pcsIntervalRef.current);
+      pcsIntervalRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopBoxHold();
+      stopPcsHold();
+    };
+  }, [stopBoxHold, stopPcsHold]);
 
   return (
     <Card className="border">
@@ -69,6 +141,11 @@ const ProductQuantityCard = ({
                 size="icon"
                 className="h-9 w-9"
                 onClick={() => onBoxQtyChange(Math.max(0, boxQty - 1))}
+                onMouseDown={() => startBoxHold(-1)}
+                onMouseUp={stopBoxHold}
+                onMouseLeave={stopBoxHold}
+                onTouchStart={() => startBoxHold(-1)}
+                onTouchEnd={stopBoxHold}
                 disabled={boxQty === 0}
               >
                 <Minus className="w-4 h-4" />
@@ -90,12 +167,31 @@ const ProductQuantityCard = ({
                 size="icon"
                 className="h-9 w-9"
                 onClick={() => onBoxQtyChange(Math.min(availableBoxQty, boxQty + 1))}
+                onMouseDown={() => startBoxHold(1)}
+                onMouseUp={stopBoxHold}
+                onMouseLeave={stopBoxHold}
+                onTouchStart={() => startBoxHold(1)}
+                onTouchEnd={stopBoxHold}
                 disabled={boxQty >= availableBoxQty}
               >
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">₹{boxPrice.toFixed(2)} per box</p>
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">Price (₹)</Label>
+              <Input
+                type="number"
+                className="h-8 text-sm"
+                value={boxPrice}
+                onChange={(e) => {
+                  const value = Math.max(0, parseFloat(e.target.value || "0"));
+                  onBoxPriceChange(value);
+                }}
+                min={0}
+                step="0.01"
+                placeholder="0.00"
+              />
+            </div>
           </div>
 
           {/* PCS Quantity */}
@@ -108,6 +204,11 @@ const ProductQuantityCard = ({
                 size="icon"
                 className="h-9 w-9"
                 onClick={() => onPcsQtyChange(Math.max(0, pcsQty - 1))}
+                onMouseDown={() => startPcsHold(-1)}
+                onMouseUp={stopPcsHold}
+                onMouseLeave={stopPcsHold}
+                onTouchStart={() => startPcsHold(-1)}
+                onTouchEnd={stopPcsHold}
                 disabled={pcsQty === 0}
               >
                 <Minus className="w-4 h-4" />
@@ -129,12 +230,31 @@ const ProductQuantityCard = ({
                 size="icon"
                 className="h-9 w-9"
                 onClick={() => onPcsQtyChange(Math.min(maxPcsQty, pcsQty + 1))}
+                onMouseDown={() => startPcsHold(1)}
+                onMouseUp={stopPcsHold}
+                onMouseLeave={stopPcsHold}
+                onTouchStart={() => startPcsHold(1)}
+                onTouchEnd={stopPcsHold}
                 disabled={pcsQty >= maxPcsQty}
               >
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">₹{pcsPrice.toFixed(2)} per pcs</p>
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">Price (₹)</Label>
+              <Input
+                type="number"
+                className="h-8 text-sm"
+                value={pcsPrice}
+                onChange={(e) => {
+                  const value = Math.max(0, parseFloat(e.target.value || "0"));
+                  onPcsPriceChange(value);
+                }}
+                min={0}
+                step="0.01"
+                placeholder="0.00"
+              />
+            </div>
           </div>
         </div>
 

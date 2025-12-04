@@ -10,7 +10,7 @@ import {
   getDailyStockForBilling,
   searchProductsInStock,
   createOrGetShop,
-  saveBill,
+  saveShopBill,
   reduceDailyStock,
   getProducts,
   getActiveRoutes,
@@ -18,7 +18,7 @@ import {
   getDriverRoute,
   type Product,
   type DailyStockItem,
-  type BillItem,
+  type ShopBillItem,
 } from "../../lib/supabase";
 import { mapRouteName } from "../../lib/routeUtils";
 import { ArrowLeft, ShoppingCart, Plus, Store, Check, RefreshCw, Route as RouteIcon, MapPin, Phone } from "lucide-react";
@@ -175,6 +175,42 @@ const ShopBilling = () => {
     });
   };
 
+  const updateBoxPrice = (productId: string, value: number) => {
+    setCartItems(prev => {
+      const item = prev[productId];
+      if (!item) return prev;
+
+      const totalAmount = (item.boxQty * value) + (item.pcsQty * item.pcsPrice);
+
+      return {
+        ...prev,
+        [productId]: {
+          ...item,
+          boxPrice: value,
+          totalAmount,
+        }
+      };
+    });
+  };
+
+  const updatePcsPrice = (productId: string, value: number) => {
+    setCartItems(prev => {
+      const item = prev[productId];
+      if (!item) return prev;
+
+      const totalAmount = (item.boxQty * item.boxPrice) + (item.pcsQty * value);
+
+      return {
+        ...prev,
+        [productId]: {
+          ...item,
+          pcsPrice: value,
+          totalAmount,
+        }
+      };
+    });
+  };
+
   const removeFromCart = (productId: string) => {
     setCartItems(prev => {
       const newCart = { ...prev };
@@ -242,30 +278,28 @@ const ShopBilling = () => {
     setLoading(true);
 
     try {
-      // Create or get shop
-      const shop = await createOrGetShop(
-        shopName.trim(),
-        shopAddress.trim() || undefined,
-        shopPhone.trim() || undefined,
-        selectedRoute
-      );
-
       // Prepare bill items
-      const billItems: BillItem[] = Object.values(cartItems)
+      const billItems: ShopBillItem[] = Object.values(cartItems)
         .filter(item => item.boxQty > 0 || item.pcsQty > 0)
         .map(item => ({
           productId: item.product.id,
           productName: item.product.name,
           boxQty: item.boxQty,
           pcsQty: item.pcsQty,
-          rate: item.boxQty > 0 ? item.boxPrice : item.pcsPrice,
+          pricePerBox: item.boxPrice,
+          pricePerPcs: item.pcsPrice,
           amount: item.totalAmount,
         }));
 
-      // Save bill
-      await saveBill(
-        shop.id,
+      // Save shop bill
+      await saveShopBill(
         selectedRoute,
+        selectedTruck,
+        {
+          name: shopName.trim(),
+          address: shopAddress.trim() || undefined,
+          phone: shopPhone.trim() || undefined,
+        },
         billItems,
         totals.totalAmount,
         selectedDate
@@ -287,12 +321,19 @@ const ShopBilling = () => {
 
       // Prepare bill data for preview
       setGeneratedBill({
-        shopName: shop.name,
-        shopAddress: shop.address || shopAddress,
-        shopPhone: shop.phone || shopPhone,
+        shopName: shopName.trim(),
+        shopAddress: shopAddress.trim(),
+        shopPhone: shopPhone.trim(),
         routeName,
         date: selectedDate,
-        items: billItems,
+        items: billItems.map(item => ({
+          productId: item.productId,
+          productName: item.productName,
+          boxQty: item.boxQty,
+          pcsQty: item.pcsQty,
+          rate: item.boxQty > 0 ? item.pricePerBox : item.pricePerPcs,
+          amount: item.amount,
+        })),
         totalAmount: totals.totalAmount,
       });
 
@@ -303,11 +344,20 @@ const ShopBilling = () => {
       });
     } catch (error: any) {
       console.error("Error generating bill:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to generate bill. Please try again.",
-        variant: "destructive",
-      });
+      const errorMessage = error.message || "Failed to generate bill. Please try again.";
+      if (errorMessage.includes("stock") || errorMessage.includes("insufficient")) {
+        toast({
+          title: "Insufficient Stock",
+          description: "Not enough stock to complete this bill.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -443,24 +493,24 @@ const ShopBilling = () => {
                   </Label>
                   <Button
                     type="button"
-                    variant="outline"
                     onClick={() => setShowAddProductModal(true)}
                     disabled={availableProducts.length === 0}
+                    className="bg-primary hover:bg-primary/90 text-white"
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Add Product
                   </Button>
                 </div>
 
-                {/* Added Items List */}
+                {/* Selected Products Box - Old Portal Style */}
                 {addedItems.length > 0 && (
-                  <div className="rounded-md border p-4 bg-muted/30">
-                    <div className="text-sm font-semibold mb-3">Added Items</div>
-                    <div className="space-y-3">
+                  <div className="rounded-lg border-2 border-primary/20 bg-primary-light/10 p-4">
+                    <div className="text-sm font-semibold mb-3 text-foreground">Selected Products</div>
+                    <div className="space-y-2">
                       {addedItems.map((item) => (
-                        <div key={item.product.id} className="flex items-center justify-between p-2 bg-background rounded border">
+                        <div key={item.product.id} className="flex items-center justify-between p-2 bg-background rounded border border-border">
                           <div>
-                            <span className="text-sm font-medium">{item.product.name}</span>
+                            <span className="text-sm font-medium text-foreground">{item.product.name}</span>
                             <span className="text-xs text-muted-foreground ml-2">
                               {item.boxQty > 0 && `${item.boxQty} Box`}
                               {item.boxQty > 0 && item.pcsQty > 0 && ", "}
@@ -488,6 +538,8 @@ const ShopBilling = () => {
                         pcsQty={item.pcsQty}
                         onBoxQtyChange={(value) => updateBoxQty(item.product.id, value)}
                         onPcsQtyChange={(value) => updatePcsQty(item.product.id, value)}
+                        onBoxPriceChange={(value) => updateBoxPrice(item.product.id, value)}
+                        onPcsPriceChange={(value) => updatePcsPrice(item.product.id, value)}
                         onRemove={() => removeFromCart(item.product.id)}
                         boxPrice={item.boxPrice}
                         pcsPrice={item.pcsPrice}

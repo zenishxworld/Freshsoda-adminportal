@@ -143,6 +143,24 @@ export const getProducts = async (): Promise<Product[]> => {
     return data || [];
 };
 
+/**
+ * Get product by ID
+ */
+export const getProductById = async (productId: string): Promise<Product | null> => {
+    const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', productId)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Error fetching product:', error);
+        throw error;
+    }
+
+    return data;
+};
+
 export const upsertProduct = async (
     p: Omit<Product, 'id' | 'created_at' | 'updated_at'> & { id?: string }
 ): Promise<Product> => {
@@ -2094,6 +2112,121 @@ export const reduceDailyStock = async (
     products: Product[]
 ): Promise<void> => {
     await updateDailyStockAfterSale(routeId, truckId, date, items, products);
+};
+
+/**
+ * Save shop bill to shop_bills table
+ */
+export interface ShopBillItem {
+    productId: string;
+    productName: string;
+    boxQty: number;
+    pcsQty: number;
+    pricePerBox: number;
+    pricePerPcs: number;
+    amount: number;
+}
+
+export interface ShopBill {
+    id: string;
+    route_id: string;
+    truck_id: string;
+    shop_name: string;
+    shop_address?: string | null;
+    shop_phone?: string | null;
+    date: string;
+    items: ShopBillItem[];
+    total_amount: number;
+    created_at: string;
+}
+
+export const saveShopBill = async (
+    routeId: string,
+    truckId: string,
+    shopData: {
+        name: string;
+        address?: string;
+        phone?: string;
+    },
+    billItems: ShopBillItem[],
+    totalAmount: number,
+    date: string
+): Promise<ShopBill> => {
+    // Check if shop_bills table exists, if not use bills or sales table as fallback
+    try {
+        const { data, error } = await supabase
+            .from('shop_bills')
+            .insert({
+                route_id: routeId,
+                truck_id: truckId,
+                shop_name: shopData.name.trim(),
+                shop_address: shopData.address?.trim() || null,
+                shop_phone: shopData.phone?.trim() || null,
+                date,
+                items: billItems,
+                total_amount: totalAmount,
+                auth_user_id: null, // No authentication
+            })
+            .select()
+            .single();
+
+        if (error) {
+            // If shop_bills table doesn't exist, try bills table
+            if (error.code === '42P01') {
+                return await saveBill(
+                    '', // shopId not needed for bills table
+                    routeId,
+                    billItems.map(item => ({
+                        productId: item.productId,
+                        productName: item.productName,
+                        boxQty: item.boxQty,
+                        pcsQty: item.pcsQty,
+                        rate: item.boxQty > 0 ? item.pricePerBox : item.pricePerPcs,
+                        amount: item.amount,
+                    })),
+                    totalAmount,
+                    date
+                ) as any;
+            }
+            throw error;
+        }
+
+        return data as ShopBill;
+    } catch (error: any) {
+        console.error('Error saving shop bill:', error);
+        // Fallback to bills table
+        try {
+            await saveBill(
+                '',
+                routeId,
+                billItems.map(item => ({
+                    productId: item.productId,
+                    productName: item.productName,
+                    boxQty: item.boxQty,
+                    pcsQty: item.pcsQty,
+                    rate: item.boxQty > 0 ? item.pricePerBox : item.pricePerPcs,
+                    amount: item.amount,
+                })),
+                totalAmount,
+                date
+            );
+            // Return mock object
+            return {
+                id: '',
+                route_id: routeId,
+                truck_id: truckId,
+                shop_name: shopData.name,
+                shop_address: shopData.address || null,
+                shop_phone: shopData.phone || null,
+                date,
+                items: billItems,
+                total_amount: totalAmount,
+                created_at: new Date().toISOString(),
+            };
+        } catch (fallbackError: any) {
+            throw new Error('Failed to save bill. Please try again.');
+        }
+    }
 };
 
 // Expenses
