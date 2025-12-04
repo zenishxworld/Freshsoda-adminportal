@@ -8,16 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../../components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../../components/ui/alert-dialog";
 import { useToast } from "../../hooks/use-toast";
-import { getProducts, getActiveRoutes, setDailyStock, getDailyStock, addRoute, deactivateRoute, type Product, type DailyStock, type StockItem } from "../../lib/supabase";
+import { getProducts, getActiveRoutes, getTrucks, saveDailyStock, getDailyStockForRouteTruckDate, addRoute, deactivateRoute, type Product, type DailyStockItem, type RouteOption, type TruckOption } from "../../lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
-import { ArrowLeft, Route as RouteIcon, Package, Plus, Minus, Trash2, RefreshCw } from "lucide-react";
-import { isWithinAuthGracePeriod, nameMatchesQueryByWordPrefix } from "../../lib/utils";
+import { ArrowLeft, Route as RouteIcon, Package, Plus, Minus, Trash2, RefreshCw, Truck } from "lucide-react";
 
 
 
-interface RouteOption {
-  id: string;
-  name: string;
+// RouteOption and TruckOption are imported from supabase.ts
+interface RouteOptionWithDisplay extends RouteOption {
   displayName?: string;
 }
 
@@ -31,20 +29,21 @@ const StartRoute = () => {
   const [authLoading, setAuthLoading] = useState(true);
 
   const [selectedRoute, setSelectedRoute] = useState("");
+  const [selectedTruck, setSelectedTruck] = useState("");
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
   const [products, setProducts] = useState<Product[]>([]);
-  const [routes, setRoutes] = useState<RouteOption[]>([]);
-  const [stock, setStock] = useState<StockItem[]>([]);
+  const [routes, setRoutes] = useState<RouteOptionWithDisplay[]>([]);
+  const [trucks, setTrucks] = useState<TruckOption[]>([]);
+  const [stock, setStock] = useState<Record<string, DailyStockItem>>({}); // productId -> { productId, boxQty, pcsQty }
   const [loading, setLoading] = useState(false);
+  const [loadingStock, setLoadingStock] = useState(false);
   const [showNewRouteDialog, setShowNewRouteDialog] = useState(false);
   const [newRouteName, setNewRouteName] = useState("");
   const [creatingRoute, setCreatingRoute] = useState(false);
   const [deletingRoute, setDeletingRoute] = useState(false);
-  const [showAddProductDialog, setShowAddProductDialog] = useState(false);
-  const [productQuery, setProductQuery] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [unitMode, setUnitMode] = useState<'box' | 'pcs'>('box');
-  const [tempQuantity, setTempQuantity] = useState<number>(0);
-  const [itemUnitModes, setItemUnitModes] = useState<Record<string, 'box' | 'pcs'>>({});
 
   useEffect(() => {
     setUser(null);
@@ -52,87 +51,142 @@ const StartRoute = () => {
   }, [navigate]);
 
   useEffect(() => {
-    if (user) {
-      fetchData();
-    }
-  }, [user]);
-
-
+    fetchData();
+  }, []);
 
   useEffect(() => {
-    if (selectedRoute) {
-      checkExistingStock();
+    if (selectedRoute && selectedTruck && selectedDate) {
+      // Only load existing stock if products are available
+      if (products.length > 0) {
+        loadExistingStock();
+      }
+    } else {
+      // Reset stock when route/truck/date is cleared
+      setStock({});
     }
-  }, [selectedRoute]);
+  }, [selectedRoute, selectedTruck, selectedDate, products]);
 
   const fetchData = async () => {
     try {
-      // Fetch products and routes from Supabase
-      const productsRes = await getProducts();
-      const routesRes = await getActiveRoutes();
+      setLoading(true);
+      // Fetch products, routes, and trucks from Supabase
+      const [productsRes, routesRes, trucksRes] = await Promise.all([
+        getProducts(),
+        getActiveRoutes(),
+        getTrucks()
+      ]);
 
       const activeProducts = productsRes.filter((p) => (p.status || 'active') === 'active');
+      setProducts(activeProducts);
 
-      if (activeProducts) {
-        setProducts(activeProducts);
-        // Initialize stock list as empty; entries are added per product+unit
-        setStock([]);
-      }
+      // Initialize stock map with all products (0/0)
+      const initialStock: Record<string, DailyStockItem> = {};
+      activeProducts.forEach(product => {
+        initialStock[product.id] = {
+          productId: product.id,
+          boxQty: 0,
+          pcsQty: 0,
+        };
+      });
+      setStock(initialStock);
 
-      if (routesRes) {
-        // Map route names for display
-        const mappedRoutes = routesRes
-          .filter(route => shouldDisplayRoute(route.name))
-          .map(route => ({
-            ...route,
-            displayName: mapRouteName(route.name)
-          }));
+      // Map route names for display
+      const mappedRoutes = routesRes
+        .filter(route => shouldDisplayRoute(route.name))
+        .map(route => ({
+          ...route,
+          displayName: mapRouteName(route.name)
+        }));
+      setRoutes(mappedRoutes);
 
-        setRoutes(mappedRoutes);
-      }
+      setTrucks(trucksRes);
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to load data",
+        description: "Failed to load data. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const checkExistingStock = async () => {
+  const loadExistingStock = async () => {
+    if (!selectedRoute || !selectedTruck || !selectedDate) {
+      return;
+    }
+
+    // Ensure products are loaded before proceeding
+    if (products.length === 0) {
+      return;
+    }
+
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const data = await getDailyStock(selectedRoute, today);
-      if (data) {
-        // Stock already exists for today
-        toast({
-          title: "Stock Already Set",
-          description: "Initial stock for this route has already been set today. Loading existing stock...",
+      setLoadingStock(true);
+      const existingStock = await getDailyStockForRouteTruckDate(selectedRoute, selectedTruck, selectedDate);
+      
+      // existingStock can be: null (no record), [] (record exists but empty), or [{...}] (with items)
+      if (existingStock !== null && existingStock.length > 0) {
+        // Convert array to map
+        const stockMap: Record<string, DailyStockItem> = {};
+        existingStock.forEach(item => {
+          stockMap[item.productId] = {
+            productId: item.productId,
+            boxQty: item.boxQty || 0,
+            pcsQty: item.pcsQty || 0,
+          };
         });
 
-        // Load existing stock
-        if (data && Array.isArray(data.stock)) {
-          const items = data.stock;
-          setStock(items.map((s) => ({
-            productId: s.productId,
-            unit: s.unit ?? 'pcs',
-            quantity: s.quantity || 0,
-          })));
-        }
+        // Merge with existing stock map (to include all products)
+        const mergedStock: Record<string, DailyStockItem> = {};
+        products.forEach(product => {
+          mergedStock[product.id] = stockMap[product.id] || {
+            productId: product.id,
+            boxQty: 0,
+            pcsQty: 0,
+          };
+        });
+        setStock(mergedStock);
+
+        toast({
+          title: "Stock Loaded",
+          description: "Existing stock for this route/truck/date has been loaded.",
+        });
+      } else {
+        // No existing stock (null) or empty stock array ([]), reset to zeros for all products
+        const emptyStock: Record<string, DailyStockItem> = {};
+        products.forEach(product => {
+          emptyStock[product.id] = {
+            productId: product.id,
+            boxQty: 0,
+            pcsQty: 0,
+          };
+        });
+        setStock(emptyStock);
       }
     } catch (error: any) {
-      console.error("Error checking existing stock:", error);
+      console.error("Error loading existing stock:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load existing stock. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingStock(false);
     }
   };
 
-  const updateStock = (productId: string, unit: 'box' | 'pcs', change: number) => {
-    setStock(prev =>
-      prev.map(item =>
-        item.productId === productId && item.unit === unit
-          ? { ...item, quantity: Math.max(0, item.quantity + change) }
-          : item
-      )
-    );
+  const updateStockQuantity = (productId: string, type: 'box' | 'pcs', value: number) => {
+    setStock(prev => {
+      const current = prev[productId] || { productId, boxQty: 0, pcsQty: 0 };
+      return {
+        ...prev,
+        [productId]: {
+          ...current,
+          [type === 'box' ? 'boxQty' : 'pcsQty']: Math.max(0, value),
+        },
+      };
+    });
   };
 
   const createNewRoute = async () => {
@@ -220,40 +274,69 @@ const StartRoute = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validation
+    if (!selectedRoute) {
+      toast({
+        title: "Error",
+        description: "Please select a route",
+        variant: "destructive",
+      });
+      return;
+    }
 
+    if (!selectedTruck) {
+      toast({
+        title: "Error",
+        description: "Please select a truck",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!selectedDate) {
+      toast({
+        title: "Error",
+        description: "Please select a date",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setLoading(true);
 
     try {
-      // Filter out products with 0 quantity
-      const nonZeroStock = stock.filter(item => item.quantity > 0);
+      // Convert stock map to array
+      const stockArray: DailyStockItem[] = Object.values(stock).filter(item => 
+        item.boxQty > 0 || item.pcsQty > 0
+      );
 
-      if (nonZeroStock.length === 0) {
+      if (stockArray.length === 0) {
         toast({
           title: "Error",
-          description: "Please add at least one product to your stock",
+          description: "Please add at least one product with quantity",
           variant: "destructive",
         });
+        setLoading(false);
         return;
       }
 
-      const today = new Date().toISOString().split('T')[0];
-      await setDailyStock(selectedRoute, today, nonZeroStock);
+      await saveDailyStock(selectedRoute, selectedTruck, selectedDate, stockArray);
 
       // Store route in localStorage for use in other pages
       localStorage.setItem('currentRoute', selectedRoute);
-      localStorage.setItem('currentDate', today);
+      localStorage.setItem('currentTruck', selectedTruck);
+      localStorage.setItem('currentDate', selectedDate);
 
       toast({
         title: "Route Started!",
-        description: "Your daily stock has been recorded successfully",
+        description: "Your daily stock has been saved successfully",
       });
 
       navigate("/driver/dashboard");
     } catch (error: unknown) {
       toast({
         title: "Error",
-        description: (error as { message?: string }).message || "Failed to start route",
+        description: (error as { message?: string }).message || "Failed to save stock",
         variant: "destructive",
       });
     } finally {
@@ -261,48 +344,8 @@ const StartRoute = () => {
     }
   };
 
-  const totalBoxes = stock
-    .filter((item) => item.unit === 'box')
-    .reduce((sum, item) => sum + item.quantity, 0);
-  const totalPcs = stock
-    .filter((item) => item.unit === 'pcs')
-    .reduce((sum, item) => sum + item.quantity, 0);
-  const totalProducts = totalBoxes + totalPcs;
-
-  const resetAddProductState = () => {
-    setProductQuery("");
-    setSelectedProduct(null);
-    setUnitMode('box');
-    setTempQuantity(0);
-  };
-
-  const toggleUnitMode = () => {
-    setUnitMode((prev) => {
-      const next = prev === 'box' ? 'pcs' : 'box';
-      if (next === 'pcs' && tempQuantity === 0) {
-        setTempQuantity(1);
-      }
-      return next;
-    });
-  };
-
-  const adjustTempQuantity = (delta: number) => {
-    setTempQuantity((q) => Math.max(0, q + delta));
-  };
-
-  const handleAddProductToStock = () => {
-    if (!selectedProduct) return;
-    const quantity = Math.max(0, tempQuantity);
-    setStock((prev) => {
-      const idx = prev.findIndex(si => si.productId === selectedProduct.id && si.unit === unitMode);
-      if (idx >= 0) {
-        return prev.map((si, i) => i === idx ? { ...si, quantity } : si);
-      }
-      return [...prev, { productId: selectedProduct.id, unit: unitMode, quantity }];
-    });
-    setShowAddProductDialog(false);
-    resetAddProductState();
-  };
+  const totalBoxes = Object.values(stock).reduce((sum, item) => sum + (item.boxQty || 0), 0);
+  const totalPcs = Object.values(stock).reduce((sum, item) => sum + (item.pcsQty || 0), 0);
 
   if (authLoading) {
     return (
@@ -475,12 +518,44 @@ const StartRoute = () => {
                 </div>
               </div>
 
+              {/* Truck Selection */}
+              <div className="space-y-2">
+                <Label className="text-sm sm:text-base font-semibold flex items-center gap-2">
+                  <Truck className="w-4 h-4" />
+                  Select Truck
+                </Label>
+                <Select value={selectedTruck} onValueChange={setSelectedTruck} required>
+                  <SelectTrigger className="h-11 sm:h-10 text-base">
+                    <SelectValue placeholder="Choose your truck" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {trucks.map((truck) => (
+                      <SelectItem key={truck.id} value={truck.id} className="text-base py-3">
+                        {truck.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Date Selection */}
+              <div className="space-y-2">
+                <Label className="text-sm sm:text-base font-semibold">Select Date</Label>
+                <Input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  required
+                  className="h-11 sm:h-10 text-base"
+                />
+              </div>
+
               {/* Stock Configuration */}
               <div className="space-y-3 sm:space-y-4">
                 <div className="flex items-center justify-between">
                   <Label className="text-base sm:text-lg font-semibold flex items-center gap-2">
                     <Package className="w-4 h-4 sm:w-5 sm:h-5" />
-                    Initial Stock
+                    Stock Quantities
                   </Label>
                   <div className="text-xs sm:text-sm text-muted-foreground">
                     Boxes: <span className="font-semibold text-primary">{totalBoxes}</span>
@@ -489,194 +564,106 @@ const StartRoute = () => {
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:gap-4">
-                  <div className="flex justify-center py-4">
-                    <Button
-                      type="button"
-                      variant="default"
-                      size="icon"
-                      className="h-12 w-12 rounded-full"
-                      onClick={() => { resetAddProductState(); setShowAddProductDialog(true); }}
-                      title="Add product to route"
-                    >
-                      <Plus className="w-6 h-6" />
-                    </Button>
+                {loadingStock ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                      <p className="text-sm text-muted-foreground">Loading stock...</p>
+                    </div>
                   </div>
-
-                  <Dialog open={showAddProductDialog} onOpenChange={(open) => { setShowAddProductDialog(open); if (!open) resetAddProductState(); }}>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>Add Product to Route</DialogTitle>
-                        <DialogDescription>Search product and set quantity.</DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label>Product</Label>
-                          <Input
-                            value={productQuery}
-                            onChange={(e) => {
-                              setProductQuery(e.target.value);
-                              setSelectedProduct(null);
-                            }}
-                            placeholder="Type word start to search"
-                          />
-                          {productQuery && (
-                            <div className="max-h-40 overflow-auto border rounded-md">
-                              {products
-                                .filter((p) => nameMatchesQueryByWordPrefix(p.name, productQuery))
-                                .slice(0, 8)
-                                .map((p) => (
-                                  <button
-                                    key={p.id}
-                                    type="button"
-                                    className="w-full text-left px-3 py-2 hover:bg-muted"
-                                    onClick={() => {
-                                      setSelectedProduct(p);
-                                      setProductQuery(p.name);
-                                    }}
-                                  >
-                                    {p.name} <span className="text-muted-foreground">₹{p.price.toFixed(2)}</span>
-                                  </button>
-                                ))}
-                              {products.filter(p => nameMatchesQueryByWordPrefix(p.name, productQuery)).length === 0 && (
-                                <div className="px-3 py-2 text-muted-foreground text-sm">No matches</div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        {selectedProduct && (
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div className="font-medium">{selectedProduct.name}</div>
-                              <Button type="button" variant="secondary" size="sm" onClick={toggleUnitMode}>
-                                Unit: {unitMode === 'box' ? 'Box' : '1 pcs'}
-                              </Button>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                onClick={() => adjustTempQuantity(-5)}
-                                disabled={tempQuantity <= 0}
-                              >
-                                <Minus className="w-4 h-4" />
-                              </Button>
-                              <Input
-                                type="text"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                className="w-20 text-center"
-                                value={String(tempQuantity)}
-                                onChange={(e) => {
-                                  const raw = (e.target.value || '').replace(/\D+/g, '');
-                                  // Strip leading zeros but keep single zero
-                                  const sanitized = raw.replace(/^0+(?=\d)/, '');
-                                  const v = Math.max(0, parseInt(sanitized || '0', 10));
-                                  setTempQuantity(v);
-                                }}
-                              />
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                onClick={() => adjustTempQuantity(5)}
-                              >
-                                <Plus className="w-4 h-4" />
-                              </Button>
-                            </div>
-                            <div className="flex justify-end">
-                              <Button type="button" onClick={handleAddProductToStock} disabled={!selectedProduct}>
-                                Add to Route
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-
-                  {/* Added Stock List */}
-                  {stock.filter((item) => item.quantity > 0).length > 0 && (
-                    <div className="space-y-2">
-                      <Label className="text-sm font-semibold">Added Stock</Label>
-                      <div className="space-y-2">
-                        {stock
-                          .filter((item) => item.quantity > 0)
-                          .map((item) => {
-                            const product = products.find((p) => p.id === item.productId);
-                            if (!product) return null;
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-muted/50">
+                          <tr>
+                            <th className="text-left px-4 py-3 text-sm font-semibold">Product Name</th>
+                            <th className="text-center px-4 py-3 text-sm font-semibold">Box Qty</th>
+                            <th className="text-center px-4 py-3 text-sm font-semibold">Pcs Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {products.map((product) => {
+                            const stockItem = stock[product.id] || { productId: product.id, boxQty: 0, pcsQty: 0 };
                             return (
-                              <div
-                                key={`${item.productId}-${item.unit}`}
-                                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-md border px-3 py-2"
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <div className="font-medium truncate">{product.name}</div>
-                                    <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground flex-shrink-0">
-                                      {item.unit === 'pcs' ? '1 pcs' : 'Box'}
-                                    </span>
+                              <tr key={product.id} className="border-t hover:bg-muted/30">
+                                <td className="px-4 py-3">
+                                  <div className="font-medium">{product.name}</div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => updateStockQuantity(product.id, 'box', stockItem.boxQty - 1)}
+                                      disabled={stockItem.boxQty <= 0}
+                                    >
+                                      <Minus className="w-3 h-3" />
+                                    </Button>
+                                    <Input
+                                      type="number"
+                                      className="w-20 text-center h-8"
+                                      value={stockItem.boxQty || 0}
+                                      min={0}
+                                      onChange={(e) => {
+                                        const value = Math.max(0, parseInt(e.target.value || "0", 10));
+                                        updateStockQuantity(product.id, 'box', value);
+                                      }}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => updateStockQuantity(product.id, 'box', stockItem.boxQty + 1)}
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                    </Button>
                                   </div>
-                                </div>
-                                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end w-full sm:w-auto">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={() => updateStock(item.productId, item.unit, -5)}
-                                    disabled={item.quantity <= 0}
-                                    title="Decrease"
-                                  >
-                                    <Minus className="w-4 h-4" />
-                                  </Button>
-                                  <Input
-                                    type="number"
-                                    className="w-16 sm:w-20 text-center"
-                                    value={item.quantity}
-                                    min={0}
-                                    onChange={(e) => {
-                                      const v = Math.max(0, parseInt(e.target.value || "0"));
-                                      setStock((prev) =>
-                                        prev.map((si) =>
-                                          si.productId === item.productId && si.unit === item.unit ? { ...si, quantity: v } : si
-                                        )
-                                      );
-                                    }}
-                                  />
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={() => updateStock(item.productId, item.unit, 5)}
-                                    title="Increase"
-                                  >
-                                    <Plus className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => {
-                                      setStock((prev) =>
-                                        prev.map((si) =>
-                                          si.productId === item.productId && si.unit === item.unit ? { ...si, quantity: 0 } : si
-                                        )
-                                      );
-                                    }}
-                                    title="Remove"
-                                  >
-                                    <Trash2 className="w-4 h-4 text-destructive" />
-                                  </Button>
-                                </div>
-                              </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => updateStockQuantity(product.id, 'pcs', stockItem.pcsQty - 1)}
+                                      disabled={stockItem.pcsQty <= 0}
+                                    >
+                                      <Minus className="w-3 h-3" />
+                                    </Button>
+                                    <Input
+                                      type="number"
+                                      className="w-20 text-center h-8"
+                                      value={stockItem.pcsQty || 0}
+                                      min={0}
+                                      onChange={(e) => {
+                                        const value = Math.max(0, parseInt(e.target.value || "0", 10));
+                                        updateStockQuantity(product.id, 'pcs', value);
+                                      }}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => updateStockQuantity(product.id, 'pcs', stockItem.pcsQty + 1)}
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
                             );
                           })}
-                      </div>
+                        </tbody>
+                      </table>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
 
               <Button
@@ -684,9 +671,9 @@ const StartRoute = () => {
                 variant="success"
                 size="default"
                 className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation text-white"
-                disabled={loading || !selectedRoute || totalProducts === 0}
+                disabled={loading || !selectedRoute || !selectedTruck || !selectedDate || (totalBoxes === 0 && totalPcs === 0)}
               >
-                {loading ? "Starting Route..." : "Start Route"}
+                {loading ? "Saving Stock..." : "Start Route / Save Stock"}
               </Button>
             </form>
           </CardContent>

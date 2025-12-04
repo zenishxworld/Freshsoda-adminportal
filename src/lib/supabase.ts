@@ -423,6 +423,106 @@ export const setDailyStock = async (
     }
 };
 
+/**
+ * Get daily stock for driver portal (without authentication)
+ * Returns stock data for a specific route, truck, and date combination
+ */
+export const getDailyStockForRouteTruckDate = async (
+    routeId: string,
+    truckId: string,
+    date: string
+): Promise<DailyStockPayload | null> => {
+    const { data, error } = await supabase
+        .from('daily_stock')
+        .select('stock')
+        .eq('route_id', routeId)
+        .eq('truck_id', truckId)
+        .eq('date', date)
+        .is('auth_user_id', null)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Error fetching daily stock:', error);
+        throw new Error('Failed to fetch daily stock. Please try again.');
+    }
+
+    if (!data) {
+        return null;
+    }
+
+    // Parse the stock jsonb field
+    return Array.isArray(data.stock) ? data.stock : [];
+};
+
+/**
+ * Save daily stock for driver portal (without authentication)
+ * Creates or updates daily stock for a specific route, truck, and date combination
+ */
+export const saveDailyStock = async (
+    routeId: string,
+    truckId: string,
+    date: string,
+    items: DailyStockPayload
+): Promise<void> => {
+    // Validate inputs
+    if (!routeId || !truckId || !date) {
+        throw new Error('Route, truck, and date are required');
+    }
+
+    // Validate and filter items
+    const validItems = items
+        .filter(item => {
+            // Ensure quantities are valid numbers >= 0
+            const boxQty = Math.max(0, Number(item.boxQty) || 0);
+            const pcsQty = Math.max(0, Number(item.pcsQty) || 0);
+            return boxQty > 0 || pcsQty > 0;
+        })
+        .map(item => ({
+            productId: item.productId,
+            boxQty: Math.max(0, Number(item.boxQty) || 0),
+            pcsQty: Math.max(0, Number(item.pcsQty) || 0),
+        }));
+
+    // Check if record exists first (since upsert with NULL auth_user_id can be tricky)
+    // Returns null if no record exists, or an array (possibly empty) if record exists
+    const existing = await getDailyStockForRouteTruckDate(routeId, truckId, date);
+
+    // Prepare data for insert/update
+    const dailyStockData = {
+        route_id: routeId,
+        truck_id: truckId,
+        date,
+        stock: validItems,
+        auth_user_id: null, // No authentication
+    };
+
+    let error;
+    // Explicitly check for null to determine if record exists
+    // existing can be null (no record), [] (empty stock), or [{...}] (with items)
+    if (existing !== null) {
+        // Update existing record (even if stock array is empty)
+        const { error: updateError } = await supabase
+            .from('daily_stock')
+            .update({ stock: validItems })
+            .eq('route_id', routeId)
+            .eq('truck_id', truckId)
+            .eq('date', date)
+            .is('auth_user_id', null);
+        error = updateError;
+    } else {
+        // Insert new record
+        const { error: insertError } = await supabase
+            .from('daily_stock')
+            .insert(dailyStockData);
+        error = insertError;
+    }
+
+    if (error) {
+        console.error('Error saving daily stock:', error);
+        throw new Error('Failed to save daily stock. Please try again.');
+    }
+};
+
 // Sales
 export const getSalesFor = async (
     date: string,
