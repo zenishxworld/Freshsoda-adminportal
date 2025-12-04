@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, ErrorInfo, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
+import { format, subDays, parseISO } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
@@ -8,16 +8,65 @@ import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../../components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../../components/ui/alert-dialog";
+import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { useToast } from "../../hooks/use-toast";
 import { getProducts, getActiveRoutes, getTrucks, saveDailyStock, getDailyStockForRouteTruckDate, addRoute, deactivateRoute, type Product, type DailyStockItem, type RouteOption, type TruckOption } from "../../lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
-import { ArrowLeft, Route as RouteIcon, Package, Plus, Minus, Trash2, RefreshCw, Truck, RotateCcw } from "lucide-react";
+import { ArrowLeft, Route as RouteIcon, Package, Plus, Minus, Trash2, RefreshCw, Truck, RotateCcw, Copy, AlertTriangle } from "lucide-react";
 
 
 
 // RouteOption and TruckOption are imported from supabase.ts
 interface RouteOptionWithDisplay extends RouteOption {
   displayName?: string;
+}
+
+// Error Boundary Component
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends React.Component<{ children: ReactNode; onRetry: () => void }, ErrorBoundaryState> {
+  constructor(props: { children: ReactNode; onRetry: () => void }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-primary-light/10 flex items-center justify-center p-4">
+          <Card className="max-w-md w-full">
+            <CardHeader>
+              <CardTitle className="text-destructive flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5" />
+                Something went wrong
+              </CardTitle>
+              <CardDescription>
+                An error occurred while loading Start Route. Please try again.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={this.props.onRetry} className="w-full">
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 
@@ -59,15 +108,66 @@ const StartRoute = () => {
   
   // Refs for hold-to-increase functionality
   const holdIntervalRef = useRef<Record<string, NodeJS.Timeout | null>>({});
+  
+  // New state for production features
+  const [showRouteStartedWarning, setShowRouteStartedWarning] = useState(false);
+  const [hasExistingStock, setHasExistingStock] = useState(false);
+  const [loadingRoutes, setLoadingRoutes] = useState(true);
+  const [loadingTrucks, setLoadingTrucks] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [dirtyProducts, setDirtyProducts] = useState<Set<string>>(new Set()); // Track manually edited products
+  const [saveCooldown, setSaveCooldown] = useState(false);
 
   useEffect(() => {
     setUser(null);
     setAuthLoading(false);
   }, [navigate]);
 
+  // Offline queue sync function (defined early for use in useEffect)
+  const syncOfflineQueue = useCallback(async () => {
+    try {
+      const queueStr = localStorage.getItem('fs_start_route_offline_queue');
+      if (!queueStr) return;
+
+      const queue = JSON.parse(queueStr);
+      if (!Array.isArray(queue) || queue.length === 0) return;
+
+      // Try to sync each item
+      for (const item of queue) {
+        try {
+          await saveDailyStock(item.routeId, item.truckId, item.date, item.stock);
+        } catch (err) {
+          // If sync fails, keep item in queue
+          console.error('Failed to sync offline item:', err);
+          return;
+        }
+      }
+
+      // All items synced successfully
+      localStorage.removeItem('fs_start_route_offline_queue');
+      toast({
+        title: "Offline data synced successfully!",
+        description: "Your saved data has been synchronized.",
+      });
+    } catch (error) {
+      console.error('Error syncing offline queue:', error);
+    }
+  }, [toast]);
+
   useEffect(() => {
     fetchData();
-  }, []);
+    // Set up offline sync listener
+    const handleOnline = async () => {
+      await syncOfflineQueue();
+    };
+    window.addEventListener('online', handleOnline);
+    // Try to sync immediately on mount
+    syncOfflineQueue();
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [syncOfflineQueue]);
 
   // Save selections to localStorage
   useEffect(() => {
@@ -82,6 +182,16 @@ const StartRoute = () => {
     if (selectedDate) localStorage.setItem('fs_last_date', selectedDate);
   }, [selectedDate]);
 
+  // Check for existing stock when route/truck/date changes
+  useEffect(() => {
+    if (selectedRoute && selectedTruck && selectedDate && products.length > 0) {
+      checkExistingStock();
+    } else {
+      setShowRouteStartedWarning(false);
+      setHasExistingStock(false);
+    }
+  }, [selectedRoute, selectedTruck, selectedDate, products]);
+
   useEffect(() => {
     if (selectedRoute && selectedTruck && selectedDate) {
       // Only load existing stock if products are available
@@ -94,9 +204,114 @@ const StartRoute = () => {
     }
   }, [selectedRoute, selectedTruck, selectedDate, products]);
 
+
+  // Check if route already started today
+  const checkExistingStock = async () => {
+    if (!selectedRoute || !selectedTruck || !selectedDate || products.length === 0) return;
+
+    try {
+      const normalizedDate = selectedDate.includes('T') 
+        ? format(new Date(selectedDate), "yyyy-MM-dd")
+        : selectedDate;
+      
+      const existing = await getDailyStockForRouteTruckDate(selectedRoute, selectedTruck, normalizedDate);
+      
+      if (existing !== null && existing.length > 0) {
+        setHasExistingStock(true);
+        setShowRouteStartedWarning(true);
+      } else {
+        setHasExistingStock(false);
+        setShowRouteStartedWarning(false);
+      }
+    } catch (error) {
+      console.error("Error checking existing stock:", error);
+    }
+  };
+
+  // Copy previous day's stock
+  const copyPreviousDayStock = async () => {
+    if (!selectedRoute || !selectedTruck || !selectedDate) {
+      toast({
+        title: "Error",
+        description: "Please select route, truck, and date first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const normalizedDate = selectedDate.includes('T') 
+        ? format(new Date(selectedDate), "yyyy-MM-dd")
+        : selectedDate;
+      
+      const dateObj = parseISO(normalizedDate);
+      const yesterdayDate = format(subDays(dateObj, 1), "yyyy-MM-dd");
+      
+      const yesterdayStock = await getDailyStockForRouteTruckDate(selectedRoute, selectedTruck, yesterdayDate);
+      
+      if (yesterdayStock === null || yesterdayStock.length === 0) {
+        toast({
+          title: "No previous stock found",
+          description: "No stock found for this route and truck yesterday.",
+        });
+        return;
+      }
+
+      // Prefill stock from yesterday
+      const stockMap: Record<string, DailyStockItem> = {};
+      const copiedProductIds = new Set<string>();
+      
+      yesterdayStock.forEach(item => {
+        stockMap[item.productId] = {
+          productId: item.productId,
+          boxQty: item.boxQty || 0,
+          pcsQty: item.pcsQty || 0,
+        };
+        if ((item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0) {
+          copiedProductIds.add(item.productId);
+        }
+      });
+
+      // Merge with all products
+      const mergedStock: Record<string, DailyStockItem> = {};
+      products.forEach(product => {
+        mergedStock[product.id] = stockMap[product.id] || {
+          productId: product.id,
+          boxQty: 0,
+          pcsQty: 0,
+        };
+      });
+
+      setStock(mergedStock);
+      
+      // Highlight copied rows with light-blue
+      setHighlightedRows(copiedProductIds);
+      setTimeout(() => {
+        setHighlightedRows(new Set());
+      }, 1000);
+
+      toast({
+        title: "Stock Copied",
+        description: "Yesterday's stock has been copied successfully.",
+      });
+    } catch (error) {
+      console.error("Error copying previous day stock:", error);
+      toast({
+        title: "Error",
+        description: "Failed to copy previous day's stock",
+        variant: "destructive",
+      });
+    }
+  };
+
   const fetchData = async () => {
     try {
+      setError(null);
       setLoading(true);
+      setLoadingRoutes(true);
+      setLoadingTrucks(true);
+      setLoadingProducts(true);
+      
       // Fetch products, routes, and trucks from Supabase
       const [productsRes, routesRes, trucksRes] = await Promise.all([
         getProducts(),
@@ -106,6 +321,7 @@ const StartRoute = () => {
 
       const activeProducts = productsRes.filter((p) => (p.status || 'active') === 'active');
       setProducts(activeProducts);
+      setLoadingProducts(false);
 
       // Initialize stock map with all products (0/0)
       const initialStock: Record<string, DailyStockItem> = {};
@@ -126,9 +342,13 @@ const StartRoute = () => {
           displayName: mapRouteName(route.name)
         }));
       setRoutes(mappedRoutes);
+      setLoadingRoutes(false);
 
       setTrucks(trucksRes);
-    } catch (error) {
+      setLoadingTrucks(false);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error("Failed to load data");
+      setError(error);
       toast({
         title: "Error",
         description: "Failed to load data. Please try again.",
@@ -136,6 +356,9 @@ const StartRoute = () => {
       });
     } finally {
       setLoading(false);
+      setLoadingRoutes(false);
+      setLoadingTrucks(false);
+      setLoadingProducts(false);
     }
   };
 
@@ -162,31 +385,57 @@ const StartRoute = () => {
         // Convert array to map
         const stockMap: Record<string, DailyStockItem> = {};
         const prefilledProductIds = new Set<string>();
+        const changedProductIds = new Set<string>();
+        
         existingStock.forEach(item => {
+          const existingValue = stock[item.productId];
+          const newBoxQty = item.boxQty || 0;
+          const newPcsQty = item.pcsQty || 0;
+          
           stockMap[item.productId] = {
             productId: item.productId,
-            boxQty: item.boxQty || 0,
-            pcsQty: item.pcsQty || 0,
+            boxQty: newBoxQty,
+            pcsQty: newPcsQty,
           };
+          
           // Track which products were prefilled
-          if ((item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0) {
+          if (newBoxQty > 0 || newPcsQty > 0) {
             prefilledProductIds.add(item.productId);
+          }
+          
+          // Track changed products (only if not manually edited)
+          if (!dirtyProducts.has(item.productId)) {
+            if (!existingValue || existingValue.boxQty !== newBoxQty || existingValue.pcsQty !== newPcsQty) {
+              changedProductIds.add(item.productId);
+            }
           }
         });
 
         // Merge with existing stock map (to include all products)
+        // Only update non-dirty products
         const mergedStock: Record<string, DailyStockItem> = {};
         products.forEach(product => {
-          mergedStock[product.id] = stockMap[product.id] || {
-            productId: product.id,
-            boxQty: 0,
-            pcsQty: 0,
-          };
+          if (dirtyProducts.has(product.id)) {
+            // Keep manually edited values
+            mergedStock[product.id] = stock[product.id];
+          } else {
+            mergedStock[product.id] = stockMap[product.id] || {
+              productId: product.id,
+              boxQty: 0,
+              pcsQty: 0,
+            };
+          }
         });
         setStock(mergedStock);
 
-        // Highlight prefilled rows
+        // Highlight prefilled rows (green for all, blue for changed only)
         setPrefilledRows(prefilledProductIds);
+        if (changedProductIds.size > 0) {
+          setHighlightedRows(changedProductIds);
+          setTimeout(() => {
+            setHighlightedRows(new Set());
+          }, 1000);
+        }
         setTimeout(() => {
           setPrefilledRows(new Set());
         }, 1500);
@@ -197,13 +446,18 @@ const StartRoute = () => {
         });
       } else {
         // No existing stock (null) or empty stock array ([]), reset to zeros for all products
+        // But preserve dirty products
         const emptyStock: Record<string, DailyStockItem> = {};
         products.forEach(product => {
-          emptyStock[product.id] = {
-            productId: product.id,
-            boxQty: 0,
-            pcsQty: 0,
-          };
+          if (dirtyProducts.has(product.id)) {
+            emptyStock[product.id] = stock[product.id];
+          } else {
+            emptyStock[product.id] = {
+              productId: product.id,
+              boxQty: 0,
+              pcsQty: 0,
+            };
+          }
         });
         setStock(emptyStock);
       }
@@ -220,6 +474,9 @@ const StartRoute = () => {
   };
 
   const updateStockQuantity = (productId: string, type: 'box' | 'pcs', value: number) => {
+    // Mark product as dirty (manually edited)
+    setDirtyProducts(prev => new Set(prev).add(productId));
+    
     setStock(prev => {
       const current = prev[productId] || { productId, boxQty: 0, pcsQty: 0 };
       const newValue = Math.max(0, value);
@@ -315,6 +572,8 @@ const StartRoute = () => {
       };
     });
     setStock(resetStock);
+    setDirtyProducts(new Set()); // Clear dirty state
+    setShowRouteStartedWarning(false); // Dismiss warning
     toast({
       title: "All quantities reset.",
       description: "",
@@ -403,8 +662,11 @@ const StartRoute = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async (shouldNavigate: boolean = false) => {
+    // Cooldown check
+    if (saveCooldown) {
+      return;
+    }
 
     // Validation with specific warnings
     if (!selectedRoute) {
@@ -470,6 +732,7 @@ const StartRoute = () => {
 
     setLoading(true);
     setSavingDisabled(true);
+    setSaveCooldown(true);
 
     try {
       // Convert stock map to array and filter out zero values
@@ -481,94 +744,178 @@ const StartRoute = () => {
           pcsQty: item.pcsQty || 0,
         }));
 
-      await saveDailyStock(selectedRoute, selectedTruck, normalizedDate, stockArray);
+      const payload = {
+        routeId: selectedRoute,
+        truckId: selectedTruck,
+        date: normalizedDate,
+        stock: stockArray,
+      };
 
-      // Store route in localStorage for use in other pages
-      localStorage.setItem('currentRoute', selectedRoute);
-      localStorage.setItem('currentTruck', selectedTruck);
-      localStorage.setItem('currentDate', normalizedDate);
+      try {
+        await saveDailyStock(selectedRoute, selectedTruck, normalizedDate, stockArray);
 
-      toast({
-        title: "Success!",
-        description: "Starting stock saved successfully!",
-      });
+        // Store route in localStorage for use in other pages
+        localStorage.setItem('currentRoute', selectedRoute);
+        localStorage.setItem('currentTruck', selectedTruck);
+        localStorage.setItem('currentDate', normalizedDate);
 
-      // Refresh stock from database
-      setTimeout(async () => {
-        try {
-          const refreshedStock = await getDailyStockForRouteTruckDate(selectedRoute, selectedTruck, normalizedDate);
-          if (refreshedStock !== null && refreshedStock.length > 0) {
-            const stockMap: Record<string, DailyStockItem> = {};
-            refreshedStock.forEach(item => {
-              stockMap[item.productId] = {
-                productId: item.productId,
-                boxQty: item.boxQty || 0,
-                pcsQty: item.pcsQty || 0,
-              };
-            });
-            
-            const mergedStock: Record<string, DailyStockItem> = {};
-            products.forEach(product => {
-              mergedStock[product.id] = stockMap[product.id] || {
-                productId: product.id,
-                boxQty: 0,
-                pcsQty: 0,
-              };
-            });
-            setStock(mergedStock);
-            
-            // Highlight all saved rows with green (same as prefilled)
-            const savedProductIds = new Set<string>();
-            refreshedStock.forEach(item => {
-              if ((item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0) {
-                savedProductIds.add(item.productId);
-              }
-            });
-            setPrefilledRows(savedProductIds);
-            setTimeout(() => {
-              setPrefilledRows(new Set());
-            }, 1500);
+        // Clear offline queue if this was queued
+        const queueStr = localStorage.getItem('fs_start_route_offline_queue');
+        if (queueStr) {
+          try {
+            const queue = JSON.parse(queueStr);
+            const filteredQueue = queue.filter((item: any) => 
+              !(item.routeId === selectedRoute && item.truckId === selectedTruck && item.date === normalizedDate)
+            );
+            if (filteredQueue.length === 0) {
+              localStorage.removeItem('fs_start_route_offline_queue');
+            } else {
+              localStorage.setItem('fs_start_route_offline_queue', JSON.stringify(filteredQueue));
+            }
+          } catch (e) {
+            // Ignore queue parsing errors
           }
-        } catch (error) {
-          console.error("Error refreshing stock:", error);
         }
-      }, 500);
 
-      // Disable save button for 1 second to prevent double-submit
-      setTimeout(() => {
+        if (shouldNavigate) {
+          toast({
+            title: "Success!",
+            description: "Starting stock saved successfully!",
+          });
+
+          // Refresh stock from database
+          setTimeout(async () => {
+            try {
+              const refreshedStock = await getDailyStockForRouteTruckDate(selectedRoute, selectedTruck, normalizedDate);
+              if (refreshedStock !== null && refreshedStock.length > 0) {
+                const stockMap: Record<string, DailyStockItem> = {};
+                refreshedStock.forEach(item => {
+                  stockMap[item.productId] = {
+                    productId: item.productId,
+                    boxQty: item.boxQty || 0,
+                    pcsQty: item.pcsQty || 0,
+                  };
+                });
+                
+                const mergedStock: Record<string, DailyStockItem> = {};
+                products.forEach(product => {
+                  mergedStock[product.id] = stockMap[product.id] || {
+                    productId: product.id,
+                    boxQty: 0,
+                    pcsQty: 0,
+                  };
+                });
+                setStock(mergedStock);
+                
+                // Highlight all saved rows with green (same as prefilled)
+                const savedProductIds = new Set<string>();
+                refreshedStock.forEach(item => {
+                  if ((item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0) {
+                    savedProductIds.add(item.productId);
+                  }
+                });
+                setPrefilledRows(savedProductIds);
+                setTimeout(() => {
+                  setPrefilledRows(new Set());
+                }, 1500);
+              }
+            } catch (error) {
+              console.error("Error refreshing stock:", error);
+            }
+          }, 500);
+
+          // Navigate after a short delay
+          setTimeout(() => {
+            navigate("/driver/dashboard");
+          }, 1500);
+        } else {
+          toast({
+            title: "Draft saved",
+            description: "Your stock has been saved as a draft.",
+          });
+        }
+
+        // Disable save button for 1 second to prevent double-submit
+        setTimeout(() => {
+          setSavingDisabled(false);
+          setSaveCooldown(false);
+        }, 1000);
+      } catch (error: unknown) {
+        // Offline fallback
+        const errorMessage = (error as { message?: string }).message || "Failed to save stock";
+        
+        // Check if it's a network error
+        if (errorMessage.includes('network') || errorMessage.includes('fetch') || !navigator.onLine) {
+          // Save to offline queue
+          try {
+            const queueStr = localStorage.getItem('fs_start_route_offline_queue');
+            const queue = queueStr ? JSON.parse(queueStr) : [];
+            
+            // Remove duplicate entry if exists
+            const filteredQueue = queue.filter((item: any) => 
+              !(item.routeId === selectedRoute && item.truckId === selectedTruck && item.date === normalizedDate)
+            );
+            
+            filteredQueue.push(payload);
+            localStorage.setItem('fs_start_route_offline_queue', JSON.stringify(filteredQueue));
+            
+            toast({
+              title: "You're offline",
+              description: "Data saved locally and will sync automatically.",
+            });
+          } catch (queueError) {
+            console.error("Error saving to offline queue:", queueError);
+            toast({
+              title: "Error",
+              description: "Failed to save stock. Please check your connection.",
+              variant: "destructive",
+            });
+          }
+        } else {
+          toast({
+            title: "Error",
+            description: errorMessage,
+            variant: "destructive",
+          });
+        }
         setSavingDisabled(false);
-      }, 1000);
-
-      // Navigate after a short delay to allow user to see success message
-      setTimeout(() => {
-        navigate("/driver/dashboard");
-      }, 1500);
-    } catch (error: unknown) {
-      toast({
-        title: "Error",
-        description: (error as { message?: string }).message || "Failed to save stock",
-        variant: "destructive",
-      });
-      setSavingDisabled(false);
+        setSaveCooldown(false);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleSave(true); // Save & Continue
+  };
+
   // Calculate totals (sum all non-zero rows from current state)
-  const totalBoxes = Object.values(stock)
-    .filter(item => (item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0)
-    .reduce((sum, item) => sum + (item.boxQty || 0), 0);
-  const totalPcs = Object.values(stock)
-    .filter(item => (item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0)
-    .reduce((sum, item) => sum + (item.pcsQty || 0), 0);
-  
-  // Form validation
-  const assignmentsHaveAtLeastOneValue = Object.values(stock).some(item => 
+  const nonZeroItems = Object.values(stock).filter(item => 
     (item.boxQty || 0) > 0 || (item.pcsQty || 0) > 0
   );
   
+  const totalBoxes = nonZeroItems.reduce((sum, item) => sum + (item.boxQty || 0), 0);
+  const totalPcs = nonZeroItems.reduce((sum, item) => sum + (item.pcsQty || 0), 0);
+  const totalProductCount = nonZeroItems.length;
+  
+  // Calculate total value
+  const totalValue = nonZeroItems.reduce((sum, item) => {
+    const product = products.find(p => p.id === item.productId);
+    if (!product) return sum;
+    const boxPrice = product.box_price || product.price || 0;
+    const pcsPrice = product.pcs_price || (boxPrice / (product.pcs_per_box || 24)) || 0;
+    return sum + ((item.boxQty || 0) * boxPrice) + ((item.pcsQty || 0) * pcsPrice);
+  }, 0);
+  
+  // Form validation
+  const assignmentsHaveAtLeastOneValue = nonZeroItems.length > 0;
+  
   const isFormValid = selectedRoute && selectedTruck && selectedDate && assignmentsHaveAtLeastOneValue;
+  
+  // Check if selected date is not today
+  const isDateNotToday = selectedDate && format(new Date(selectedDate), "yyyy-MM-dd") !== format(new Date(), "yyyy-MM-dd");
   
   // Cleanup intervals on unmount
   useEffect(() => {
@@ -591,6 +938,7 @@ const StartRoute = () => {
   }
 
   return (
+    <ErrorBoundary onRetry={fetchData}>
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-primary-light/10">
       {/* Header */}
       <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
@@ -631,6 +979,37 @@ const StartRoute = () => {
           </CardHeader>
 
           <CardContent className="px-4 sm:px-6">
+            {/* Route Already Started Warning */}
+            {showRouteStartedWarning && hasExistingStock && (
+              <Alert className="mb-6 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20">
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <AlertTitle className="text-yellow-800 dark:text-yellow-200">Route Already Started Today</AlertTitle>
+                <AlertDescription className="text-yellow-700 dark:text-yellow-300">
+                  You have already started this route today. Updating stock will overwrite previous entries.
+                </AlertDescription>
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={resetAllQuantities}
+                    className="border-yellow-600 text-yellow-700 hover:bg-yellow-100"
+                  >
+                    Reset & Start Fresh
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowRouteStartedWarning(false)}
+                    className="text-yellow-700 hover:bg-yellow-100"
+                  >
+                    Keep Previous Stock
+                  </Button>
+                </div>
+              </Alert>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
               {/* Route Selection */}
               <div className="space-y-2">
@@ -639,12 +1018,15 @@ const StartRoute = () => {
                   Select Route
                 </Label>
                 <div className="flex gap-2 flex-wrap">
-                  <Select value={selectedRoute} onValueChange={setSelectedRoute} required>
-                    <SelectTrigger className="h-11 sm:h-10 text-base flex-1">
-                      <SelectValue placeholder="Choose your route" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {routes.map((route) => {
+                  {loadingRoutes ? (
+                    <div className="animate-pulse bg-gray-200 h-11 w-full rounded flex-1"></div>
+                  ) : (
+                    <Select value={selectedRoute} onValueChange={setSelectedRoute} required>
+                      <SelectTrigger className="h-11 sm:h-10 text-base flex-1">
+                        <SelectValue placeholder="Choose your route" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {routes.map((route) => {
                         const isCustomRoute = !['Route 1', 'Route 2', 'Route 3'].includes(route.displayName || route.name);
                         return (
                           <div key={route.id} className="flex items-center justify-between group">
@@ -689,6 +1071,7 @@ const StartRoute = () => {
                       })}
                     </SelectContent>
                   </Select>
+                  )}
 
                   <Dialog open={showNewRouteDialog} onOpenChange={setShowNewRouteDialog}>
                     <DialogTrigger asChild>
@@ -756,23 +1139,41 @@ const StartRoute = () => {
                   <Truck className="w-4 h-4" />
                   Select Truck
                 </Label>
-                <Select value={selectedTruck} onValueChange={setSelectedTruck} required>
-                  <SelectTrigger className="h-11 sm:h-10 text-base">
-                    <SelectValue placeholder="Choose your truck" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {trucks.map((truck) => (
-                      <SelectItem key={truck.id} value={truck.id} className="text-base py-3">
-                        {truck.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {loadingTrucks ? (
+                  <div className="animate-pulse bg-gray-200 h-11 w-full rounded"></div>
+                ) : (
+                  <Select value={selectedTruck} onValueChange={setSelectedTruck} required>
+                    <SelectTrigger className="h-11 sm:h-10 text-base">
+                      <SelectValue placeholder="Choose your truck" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {trucks.map((truck) => (
+                        <SelectItem key={truck.id} value={truck.id} className="text-base py-3">
+                          {truck.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               {/* Date Selection */}
               <div className="space-y-2">
-                <Label className="text-sm sm:text-base font-semibold">Select Date</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm sm:text-base font-semibold">Select Date</Label>
+                  {isDateNotToday && selectedRoute && selectedTruck && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={copyPreviousDayStock}
+                      className="h-8 text-xs"
+                    >
+                      <Copy className="w-3 h-3 mr-1" />
+                      Copy Yesterday's Stock
+                    </Button>
+                  )}
+                </div>
                 <Input
                   type="date"
                   value={selectedDate}
@@ -809,11 +1210,33 @@ const StartRoute = () => {
                   </div>
                 </div>
 
-                {loadingStock ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-                      <p className="text-sm text-muted-foreground">Loading stock...</p>
+                {loadingProducts || loadingStock ? (
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-muted/50">
+                          <tr>
+                            <th className="text-left px-4 py-3 text-sm font-semibold">Product Name</th>
+                            <th className="text-center px-4 py-3 text-sm font-semibold">Box Qty</th>
+                            <th className="text-center px-4 py-3 text-sm font-semibold">Pcs Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[1, 2, 3, 4, 5].map((i) => (
+                            <tr key={i} className="border-t">
+                              <td className="px-4 py-3">
+                                <div className="animate-pulse bg-gray-200 h-6 w-32 rounded"></div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="animate-pulse bg-gray-200 h-8 w-20 rounded mx-auto"></div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="animate-pulse bg-gray-200 h-8 w-20 rounded mx-auto"></div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 ) : (
@@ -832,17 +1255,24 @@ const StartRoute = () => {
                             const stockItem = stock[product.id] || { productId: product.id, boxQty: 0, pcsQty: 0 };
                             const isHighlighted = highlightedRows.has(product.id);
                             const isPrefilled = prefilledRows.has(product.id);
+                            const pcsPerBox = product.pcs_per_box || 24;
+                            const totalPcsForProduct = (stockItem.boxQty || 0) * pcsPerBox + (stockItem.pcsQty || 0);
                             
                             return (
                               <tr 
                                 key={product.id} 
-                                className={`border-t hover:bg-muted/30 transition-colors duration-300 ${
+                                className={`border-t hover:bg-muted/30 transition-all duration-500 ease-in-out ${
                                   isHighlighted ? 'bg-blue-50 animate-pulse' : 
                                   isPrefilled ? 'bg-green-50' : ''
                                 }`}
                               >
                                 <td className="px-4 py-3">
                                   <div className="font-medium">{product.name}</div>
+                                  {(stockItem.boxQty || 0) > 0 || (stockItem.pcsQty || 0) > 0 ? (
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      Total PCS: {totalPcsForProduct}
+                                    </div>
+                                  ) : null}
                                 </td>
                                 <td className="px-4 py-3">
                                   <div className="flex items-center justify-center gap-1">
@@ -959,31 +1389,63 @@ const StartRoute = () => {
               </div>
 
               <div className="space-y-4">
-                {/* Summary */}
-                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
-                  <div className="text-sm font-medium text-muted-foreground">Total Boxes Assigned:</div>
-                  <div className="text-lg font-bold text-primary">{totalBoxes}</div>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
-                  <div className="text-sm font-medium text-muted-foreground">Total PCS Assigned:</div>
-                  <div className="text-lg font-bold text-primary">{totalPcs}</div>
+                {/* Enhanced Summary */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Card className="p-3">
+                    <CardContent className="p-0">
+                      <div className="text-xs text-muted-foreground mb-1">Total Boxes</div>
+                      <div className="text-2xl font-bold text-primary">{totalBoxes}</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="p-3">
+                    <CardContent className="p-0">
+                      <div className="text-xs text-muted-foreground mb-1">Total PCS</div>
+                      <div className="text-2xl font-bold text-primary">{totalPcs}</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="p-3">
+                    <CardContent className="p-0">
+                      <div className="text-xs text-muted-foreground mb-1">Products Added</div>
+                      <div className="text-2xl font-bold text-primary">{totalProductCount}</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="p-3">
+                    <CardContent className="p-0">
+                      <div className="text-xs text-muted-foreground mb-1">Total Value</div>
+                      <div className="text-2xl font-bold text-primary">₹{totalValue.toFixed(2)}</div>
+                    </CardContent>
+                  </Card>
                 </div>
                 
-                <Button
-                  type="submit"
-                  variant="success"
-                  size="default"
-                  className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation text-white"
-                  disabled={!isFormValid || loading || savingDisabled}
-                >
-                  {loading ? "Saving..." : "Save Stock"}
-                </Button>
+                {/* Dual Save Buttons */}
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="default"
+                    className="flex-1 h-10 sm:h-11 text-sm sm:text-base font-semibold"
+                    onClick={() => handleSave(false)}
+                    disabled={!isFormValid || loading || savingDisabled || saveCooldown}
+                  >
+                    {loading ? "Saving..." : "Save Draft"}
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="success"
+                    size="default"
+                    className="flex-1 h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation text-white"
+                    disabled={!isFormValid || loading || savingDisabled || saveCooldown}
+                  >
+                    {loading ? "Saving..." : "Save & Continue"}
+                  </Button>
+                </div>
               </div>
             </form>
           </CardContent>
         </Card>
       </main>
     </div>
+    </ErrorBoundary>
   );
 };
 
