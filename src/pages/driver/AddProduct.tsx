@@ -327,7 +327,7 @@ const AddProduct = () => {
                   type="submit"
                   variant={editingId ? "default" : "success"}
                   size="default"
-                  className="flex-1 h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation"
+                  className="flex-1 h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation text-white"
                   disabled={loading}
                 >
                   {editingId ? (
@@ -373,7 +373,7 @@ const AddProduct = () => {
           <CardContent className="px-4 sm:px-6 pb-6">
             {products.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-muted-foreground">No products found</p>
+                <p className="text-gray-700 font-medium">No products found</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -488,7 +488,7 @@ const AddProduct = () => {
             <AlertDialogCancel className="touch-manipulation">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 touch-manipulation"
+              className="bg-destructive text-white hover:bg-destructive/90 touch-manipulation"
               disabled={loading}
             >
               {loading ? "Deleting..." : "Delete"}

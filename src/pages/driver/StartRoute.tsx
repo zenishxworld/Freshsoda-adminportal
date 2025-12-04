@@ -309,7 +309,7 @@ const StartRoute = () => {
       <div className="min-h-screen bg-gradient-to-br from-primary-light via-background to-accent-light flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
+          <p className="text-gray-700 font-medium">Loading...</p>
         </div>
       </div>
     );
@@ -401,7 +401,7 @@ const StartRoute = () => {
                                     <AlertDialogAction
                                       onClick={() => deleteRoute(route.id)}
                                       disabled={deletingRoute}
-                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      className="bg-destructive text-white hover:bg-destructive/90"
                                     >
                                       {deletingRoute ? "Deleting..." : "Delete"}
                                     </AlertDialogAction>
@@ -683,7 +683,7 @@ const StartRoute = () => {
                 type="submit"
                 variant="success"
                 size="default"
-                className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation"
+                className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation text-white"
                 disabled={loading || !selectedRoute || totalProducts === 0}
               >
                 {loading ? "Starting Route..." : "Start Route"}

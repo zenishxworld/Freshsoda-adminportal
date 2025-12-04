@@ -32,7 +32,7 @@ const DriverDashboard = () => {
       <div className="min-h-screen bg-gradient-to-br from-primary-light via-background to-accent-light flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
+          <p className="text-gray-700 font-medium">Loading...</p>
         </div>
       </div>
     );
@@ -129,10 +129,10 @@ const DriverDashboard = () => {
                     <action.icon className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
                   </div>
                   <h3 className="text-xl sm:text-2xl font-bold mb-2">{action.title}</h3>
-                  <p className="text-white/90 text-sm sm:text-base mb-4">{action.description}</p>
+                  <p className="text-white text-sm sm:text-base mb-4 font-medium">{action.description}</p>
                   <Button
                     variant="secondary"
-                    className="w-full bg-white text-gray-900 hover:bg-white/90 font-semibold"
+                    className="w-full bg-white text-gray-900 hover:bg-gray-50 font-semibold border-2 border-white/20"
                   >
                     Get Started
                   </Button>

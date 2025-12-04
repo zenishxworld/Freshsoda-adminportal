@@ -9,13 +9,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-gradient-to-r from-business-blue to-business-blue-dark text-primary-foreground hover:shadow-medium active:scale-[0.98]",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:shadow-soft",
-        outline: "border-2 border-primary bg-background text-primary hover:bg-primary hover:text-primary-foreground",
+        default: "bg-gradient-to-r from-business-blue to-business-blue-dark text-white hover:shadow-medium active:scale-[0.98]",
+        destructive: "bg-destructive text-white hover:bg-destructive/90 hover:shadow-soft",
+        outline: "border-2 border-primary bg-background text-primary hover:bg-primary hover:text-white",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        success: "bg-gradient-to-r from-success-green to-accent text-accent-foreground hover:shadow-medium active:scale-[0.98]",
+        success: "bg-gradient-to-r from-success-green to-success-green-dark text-white hover:shadow-medium active:scale-[0.98]",
         mobile: "bg-primary text-primary-foreground hover:bg-primary-dark shadow-soft active:scale-[0.98] min-h-[var(--touch-target)]",
         card: "bg-card border border-border hover:border-primary hover:shadow-soft text-card-foreground",
       },

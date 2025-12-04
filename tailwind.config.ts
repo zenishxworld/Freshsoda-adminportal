@@ -69,6 +69,24 @@ export default {
           secondary: "#3C50E0",  // Blue for secondary actions
           card: "#FFFFFF",       // White cards
         },
+        // Business Blue (for better contrast)
+        "business-blue": {
+          DEFAULT: "#2563EB",    // Blue-600 - better contrast than lighter blues
+          dark: "#1D4ED8",       // Blue-700
+          light: "#3B82F6",      // Blue-500
+        },
+        // Success Green (for better contrast)
+        "success-green": {
+          DEFAULT: "#059669",    // Emerald-700 - better contrast
+          light: "#10B981",      // Emerald-600
+          dark: "#047857",       // Emerald-800
+        },
+        // Accent colors (for better contrast)
+        accent: {
+          DEFAULT: "#059669",    // Emerald-700 - matches success-green for consistency
+          foreground: "#FFFFFF", // White text for contrast
+          light: "#D1FAE5",      // Emerald-50 for backgrounds
+        },
       },
       fontFamily: {
         sans: ["Inter", "sans-serif"],

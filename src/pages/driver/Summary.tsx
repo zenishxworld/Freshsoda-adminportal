@@ -367,7 +367,7 @@ const Summary = () => {
                   onClick={generateSummary}
                   variant="default"
                   size="default"
-                  className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation"
+                  className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation text-white"
                   disabled={loading || !selectedRoute}
                 >
                   <BarChart3 className="w-5 h-5 mr-2" />
@@ -387,7 +387,7 @@ const Summary = () => {
                     onClick={handlePrint}
                     variant="default"
                     size="default"
-                    className="flex-1 h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation"
+                    className="flex-1 h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation text-white"
                   >
                     <Printer className="w-5 h-5 mr-2" />
                     Print Summary
@@ -423,32 +423,32 @@ const Summary = () => {
 
                 {/* Stats Cards - Hidden on print */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-6 print:hidden">
-                  <Card className="border border-primary/20 bg-primary-light/10">
+                  <Card className="border border-primary-dark/30 bg-primary-light/20">
                     <CardContent className="p-3 sm:p-4 text-center">
-                      <Package className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-primary" />
-                      <p className="text-xs sm:text-sm text-muted-foreground">Total Stock</p>
-                      <p className="text-lg sm:text-xl font-bold text-primary">{totals.startBox} Box | {totals.startPcs} pcs</p>
+                      <Package className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-primary-dark" />
+                      <p className="text-xs sm:text-sm text-gray-700 font-medium">Total Stock</p>
+                      <p className="text-lg sm:text-xl font-bold text-primary-dark">{totals.startBox} Box | {totals.startPcs} pcs</p>
                     </CardContent>
                   </Card>
-                  <Card className="border border-primary/20 bg-primary-light/10">
+                  <Card className="border border-primary-dark/30 bg-primary-light/20">
                     <CardContent className="p-3 sm:p-4 text-center">
-                      <Package className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-primary" />
-                      <p className="text-xs sm:text-sm text-muted-foreground">Sold</p>
-                      <p className="text-lg sm:text-xl font-bold text-primary">{totals.soldBox} Box | {totals.soldPcs} pcs</p>
+                      <Package className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-primary-dark" />
+                      <p className="text-xs sm:text-sm text-gray-700 font-medium">Sold</p>
+                      <p className="text-lg sm:text-xl font-bold text-primary-dark">{totals.soldBox} Box | {totals.soldPcs} pcs</p>
                     </CardContent>
                   </Card>
-                  <Card className="border border-warning/20 bg-warning-light/10">
+                  <Card className="border border-warning-dark/30 bg-warning-light/20">
                     <CardContent className="p-3 sm:p-4 text-center">
-                      <Package className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-warning" />
-                      <p className="text-xs sm:text-sm text-muted-foreground">Remaining</p>
-                      <p className="text-lg sm:text-xl font-bold text-warning">{totals.remainingBox} Box | {totals.remainingPcs} pcs</p>
+                      <Package className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-warning-dark" />
+                      <p className="text-xs sm:text-sm text-gray-700 font-medium">Remaining</p>
+                      <p className="text-lg sm:text-xl font-bold text-warning-dark">{totals.remainingBox} Box | {totals.remainingPcs} pcs</p>
                     </CardContent>
                   </Card>
-                  <Card className="border border-success-green/20 bg-success-green-light/10">
+                  <Card className="border border-success-green-dark/30 bg-success-green-light/20">
                     <CardContent className="p-3 sm:p-4 text-center">
-                      <DollarSign className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-success-green" />
-                      <p className="text-xs sm:text-sm text-muted-foreground">Revenue</p>
-                      <p className="text-lg sm:text-xl font-bold text-success-green truncate max-w-full overflow-hidden">₹{grandTotal.toFixed(2)}</p>
+                      <DollarSign className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-success-green-dark" />
+                      <p className="text-xs sm:text-sm text-gray-700 font-medium">Revenue</p>
+                      <p className="text-lg sm:text-xl font-bold text-success-green-dark truncate max-w-full overflow-hidden">₹{grandTotal.toFixed(2)}</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -471,10 +471,10 @@ const Summary = () => {
                         <tr key={item.productId} className="border-b border-border">
                           <td className="py-3 text-foreground font-medium print:text-xs print:py-2">{item.productName}</td>
                           <td className="py-3 text-center text-muted-foreground print:text-xs print:py-2">{item.startBox} Box | {item.startPcs} pcs</td>
-                          <td className="py-3 text-center text-primary font-semibold print:text-xs print:py-2">{item.soldBox} Box | {item.soldPcs} pcs</td>
-                          <td className="py-3 text-center text-warning font-semibold print:text-xs print:py-2">{item.remainingBox} Box | {item.remainingPcs} pcs</td>
-                          <td className="py-3 text-right text-muted-foreground print:text-xs print:py-2">Box ₹{item.boxPrice.toFixed(2)} | pcs ₹{item.pcsPrice.toFixed(2)}</td>
-                          <td className="py-3 text-right font-semibold text-success-green print:text-xs print:py-2">₹{item.totalRevenue.toFixed(2)}</td>
+                          <td className="py-3 text-center text-primary-dark font-semibold print:text-xs print:py-2">{item.soldBox} Box | {item.soldPcs} pcs</td>
+                          <td className="py-3 text-center text-warning-dark font-semibold print:text-xs print:py-2">{item.remainingBox} Box | {item.remainingPcs} pcs</td>
+                          <td className="py-3 text-right text-gray-700 print:text-xs print:py-2">Box ₹{item.boxPrice.toFixed(2)} | pcs ₹{item.pcsPrice.toFixed(2)}</td>
+                          <td className="py-3 text-right font-semibold text-success-green-dark print:text-xs print:py-2">₹{item.totalRevenue.toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -487,7 +487,7 @@ const Summary = () => {
                     <div key={item.productId} className="rounded-md border p-3">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-semibold text-foreground truncate max-w-[60%]">{item.productName}</span>
-                        <span className="text-sm font-bold text-success-green">₹{item.totalRevenue.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-success-green-dark">₹{item.totalRevenue.toFixed(2)}</span>
                       </div>
                       <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                         <div>
@@ -496,11 +496,11 @@ const Summary = () => {
                         </div>
                         <div>
                           <span className="text-muted-foreground">Sold:</span>
-                          <span className="ml-1 font-semibold text-primary">{item.soldBox} Box | {item.soldPcs} pcs</span>
+                          <span className="ml-1 font-semibold text-primary-dark">{item.soldBox} Box | {item.soldPcs} pcs</span>
                         </div>
                         <div>
-                          <span className="text-muted-foreground">Left:</span>
-                          <span className="ml-1 font-semibold text-warning">{item.remainingBox} Box | {item.remainingPcs} pcs</span>
+                          <span className="text-gray-700">Left:</span>
+                          <span className="ml-1 font-semibold text-warning-dark">{item.remainingBox} Box | {item.remainingPcs} pcs</span>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Price:</span>
@@ -515,15 +515,15 @@ const Summary = () => {
                 <div className="border-t-2 border-foreground pt-4 print:pt-3 space-y-2 print:hidden">
                   <div className="flex justify-between items-center text-sm sm:text-base print:text-xs">
                     <span className="font-semibold text-muted-foreground">Total Items Sold:</span>
-                    <span className="font-bold text-primary">{totals.soldBox} Box | {totals.soldPcs} pcs</span>
+                    <span className="font-bold text-primary-dark">{totals.soldBox} Box | {totals.soldPcs} pcs</span>
                   </div>
                   <div className="flex justify-between items-center text-sm sm:text-base print:text-xs">
-                    <span className="font-semibold text-muted-foreground">Total Remaining:</span>
-                    <span className="font-bold text-warning">{totals.remainingBox} Box | {totals.remainingPcs} pcs</span>
+                    <span className="font-semibold text-gray-700">Total Remaining:</span>
+                    <span className="font-bold text-warning-dark">{totals.remainingBox} Box | {totals.remainingPcs} pcs</span>
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-dashed flex-wrap gap-2 sm:flex-nowrap min-w-0">
                     <span className="text-lg sm:text-xl font-bold text-foreground print:text-base">GRAND TOTAL:</span>
-                    <span className="text-2xl sm:text-3xl font-bold text-success-green print:text-xl truncate max-w-[60%] sm:max-w-none overflow-hidden text-right">₹{grandTotal.toFixed(2)}</span>
+                    <span className="text-2xl sm:text-3xl font-bold text-success-green-dark print:text-xl truncate max-w-[60%] sm:max-w-none overflow-hidden text-right">₹{grandTotal.toFixed(2)}</span>
                   </div>
                 </div>
 

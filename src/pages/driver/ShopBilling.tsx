@@ -714,7 +714,7 @@ const ShopBilling = () => {
                     onChange={(e) => { const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10); setShopPhone(digitsOnly); }}
                     pattern="[0-9]{10}" maxLength={10} className="h-11 sm:h-10 text-base"
                   />
-                  {shopPhone && !isValidPhone(shopPhone) && (<p className="text-xs text-destructive">Enter 10-digit mobile number</p>)}
+                  {shopPhone && !isValidPhone(shopPhone) && (<p className="text-xs text-destructive-dark font-medium">Enter 10-digit mobile number</p>)}
                 </div>
 
                 {/* Products Selection Section - remains same structure */}
@@ -813,7 +813,7 @@ const ShopBilling = () => {
                                 })()}
                               </div>
                             </div>
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t"><div className="space-y-1"><p className="text-sm font-semibold text-warning">Available: {boxAvail} Box, {pcsAvail} pcs</p></div>{(boxQty + pcsQty) > 0 && (<div className="text-right"><p className="text-sm font-semibold text-success-green">Line Total: ₹{lineTotal.toFixed(2)}</p></div>)}</div>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t"><div className="space-y-1"><p className="text-sm font-semibold text-warning-dark">Available: {boxAvail} Box, {pcsAvail} pcs</p></div>{(boxQty + pcsQty) > 0 && (<div className="text-right"><p className="text-sm font-semibold text-success-green-dark">Line Total: ₹{lineTotal.toFixed(2)}</p></div>)}</div>
                           </div></CardContent>
                         </Card>
                       );
@@ -822,12 +822,12 @@ const ShopBilling = () => {
                 </div>
 
                 {/* Total Amount - remains same */}
-                <div className="bg-primary-light/20 border-2 border-primary rounded-lg p-4">
-                  <div className="flex items-center justify-between"><span className="text-lg sm:text-xl font-bold text-foreground">Total Amount:</span><span className="text-2xl sm:text-3xl font-bold text-primary">₹{totalAmount.toFixed(2)}</span></div>
+                <div className="bg-primary-light/30 border-2 border-primary rounded-lg p-4">
+                  <div className="flex items-center justify-between"><span className="text-lg sm:text-xl font-bold text-gray-900">Total Amount:</span><span className="text-2xl sm:text-3xl font-bold text-primary-dark">₹{totalAmount.toFixed(2)}</span></div>
                 </div>
                 {/* Generate Bill Button - remains same */}
                 <div className="sticky bottom-3 sm:static bg-background/95 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none p-1 sm:p-0 -mx-2 sm:mx-0 rounded-md sm:rounded-none">
-                  <Button onClick={handleGenerateBill} variant="success" size="default" className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation shadow sm:shadow-none" disabled={!shopName.trim() || !isValidForBilling() || !isValidPhone(shopPhone)}><Check className="w-5 h-5 mr-2" /> Generate Bill</Button>
+                  <Button onClick={handleGenerateBill} variant="success" size="default" className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation shadow sm:shadow-none text-white" disabled={!shopName.trim() || !isValidForBilling() || !isValidPhone(shopPhone)}><Check className="w-5 h-5 mr-2" /> Generate Bill</Button>
                 </div>
               </div>
             </CardContent>
@@ -837,11 +837,11 @@ const ShopBilling = () => {
           <>
             <div className="space-y-4">
               <Card className="border-0 shadow-strong print:hidden">
-                <CardHeader className="text-center pb-4 px-4 sm:px-6"><CardTitle className="text-xl sm:text-2xl font-bold text-success-green">Bill Generated!</CardTitle><CardDescription className="text-sm sm:text-base">Review and print the bill</CardDescription></CardHeader>
+                <CardHeader className="text-center pb-4 px-4 sm:px-6"><CardTitle className="text-xl sm:text-2xl font-bold text-success-green-dark">Bill Generated!</CardTitle><CardDescription className="text-sm sm:text-base text-gray-700">Review and print the bill</CardDescription></CardHeader>
                 <CardContent className="px-4 sm:px-6 space-y-4">
                   <div className="sticky bottom-3 sm:static bg-background/95 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none p-1 sm:p-0 -mx-2 sm:mx-0 rounded-md sm:rounded-none">
                     <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                      <Button onClick={handlePrintBill} variant="success" size="default" className="flex-1 h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation w-full sm:w-auto shadow sm:shadow-none" disabled={loading}><Printer className="w-5 h-5 mr-2" />{loading ? "Printing..." : "Print Bill"}</Button>
+                      <Button onClick={handlePrintBill} variant="success" size="default" className="flex-1 h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation w-full sm:w-auto shadow sm:shadow-none text-white" disabled={loading}><Printer className="w-5 h-5 mr-2" />{loading ? "Printing..." : "Print Bill"}</Button>
                       <Button onClick={handleBackToForm} variant="outline" size="default" className="h-10 sm:h-11 px-4 sm:px-6 touch-manipulation w-full sm:w-auto shadow sm:shadow-none">Edit</Button>
                     </div>
                   </div>
@@ -858,7 +858,7 @@ const ShopBilling = () => {
                         <tbody>{getSoldItems().map((item, index) => (<tr key={`${item.productId}-${item.unit}-${index}`} className="border-b"><td className="py-2">{item.productName}</td><td className="text-center py-2">{item.quantity} {item.unit === 'box' ? 'Box' : 'pcs'}</td><td className="text-right py-2">₹{item.price.toFixed(2)}</td><td className="text-right py-2 font-semibold">₹{item.total.toFixed(2)}</td></tr>))}</tbody>
                       </table>
                     </div>
-                    <div className="border-t pt-4"><div className="flex justify-between items-center"><span className="text-lg font-bold">TOTAL:</span><span className="text-2xl font-bold text-success-green">₹{totalAmount.toFixed(2)}</span></div></div>
+                    <div className="border-t pt-4"><div className="flex justify-between items-center"><span className="text-lg font-bold text-gray-900">TOTAL:</span><span className="text-2xl font-bold text-success-green-dark">₹{totalAmount.toFixed(2)}</span></div></div>
                   </div>
                 </CardContent>
               </Card>

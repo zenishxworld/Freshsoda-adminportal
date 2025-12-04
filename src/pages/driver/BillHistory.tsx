@@ -152,13 +152,13 @@ const BillHistory = () => {
               <div className="space-y-2">
                 <Label className="text-sm sm:text-base font-semibold">Summary</Label>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="p-3 rounded-lg bg-primary-light/20 border">
-                    <div className="text-xs text-muted-foreground">Bills</div>
-                    <div className="text-lg font-bold text-primary">{totalBills}</div>
+                  <div className="p-3 rounded-lg bg-primary-light/20 border border-primary-dark/20">
+                    <div className="text-xs text-gray-700 font-medium">Bills</div>
+                    <div className="text-lg font-bold text-primary-dark">{totalBills}</div>
                   </div>
-                  <div className="p-3 rounded-lg bg-success-green-light/20 border">
-                    <div className="text-xs text-muted-foreground">Revenue</div>
-                    <div className="text-lg font-bold text-success-green">₹{totalRevenue.toFixed(2)}</div>
+                  <div className="p-3 rounded-lg bg-success-green-light/20 border border-success-green-dark/20">
+                    <div className="text-xs text-gray-700 font-medium">Revenue</div>
+                    <div className="text-lg font-bold text-success-green-dark">₹{totalRevenue.toFixed(2)}</div>
                   </div>
                 </div>
               </div>
@@ -167,9 +167,9 @@ const BillHistory = () => {
             {/* Bills List */}
             <div className="mt-4">
               {loading ? (
-                <div className="text-center text-muted-foreground py-6">Loading bills...</div>
+                <div className="text-center text-gray-700 font-medium py-6">Loading bills...</div>
               ) : sales.length === 0 ? (
-                <div className="text-center text-muted-foreground py-6">No bills found for the selected date</div>
+                <div className="text-center text-gray-700 font-medium py-6">No bills found for the selected date</div>
               ) : (
                 <div className="grid grid-cols-1 gap-3 sm:gap-4">
                   {sales.map((sale) => {
@@ -186,7 +186,7 @@ const BillHistory = () => {
                               <div className="text-xs text-muted-foreground">Items: {totalItems}</div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <div className="text-lg font-bold text-success-green">₹{sale.total_amount.toFixed(2)}</div>
+                              <div className="text-lg font-bold text-success-green-dark">₹{sale.total_amount.toFixed(2)}</div>
                               <Button variant="outline" size="sm" onClick={() => setSelectedSale(sale)}>
                                 View / Print
                               </Button>
@@ -299,7 +299,7 @@ const BillHistory = () => {
                       <div className="border-t border-foreground border-dashed pt-3 print:pt-2">
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-lg font-bold text-foreground print:text-sm">TOTAL:</span>
-                          <span className="text-2xl font-bold text-primary print:text-base">₹{selectedSale.total_amount.toFixed(2)}</span>
+                          <span className="text-2xl font-bold text-primary-dark print:text-base">₹{selectedSale.total_amount.toFixed(2)}</span>
                         </div>
                         <div className="text-xs text-muted-foreground text-right print:text-[10px]">
                           Items: {(Array.isArray(selectedSale.products_sold) ? selectedSale.products_sold : (selectedSale.products_sold?.items || [])).reduce((sum: number, it: any) => sum + (it.quantity || 0), 0)}
