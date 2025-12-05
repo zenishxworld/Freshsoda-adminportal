@@ -7,7 +7,7 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useToast } from "../../hooks/use-toast";
-import { getActiveRoutes, getRouteAssignedStock, subscribeAssignedStockForRouteDate, type AssignedStockRow } from "../../lib/supabase";
+import { getActiveRoutes, getRouteAssignedStock, subscribeAssignedStockForRouteDate, getProducts, type AssignedStockRow, type Product } from "../../lib/supabase";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { mapRouteName } from "../../lib/routeUtils";
 import { ArrowLeft, Route as RouteIcon, RefreshCw, Package } from "lucide-react";
@@ -19,6 +19,7 @@ const StartRouteAssigned = () => {
   const [selectedRoute, setSelectedRoute] = useState("");
   const [selectedDate, setSelectedDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [assigned, setAssigned] = useState<AssignedStockRow[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const subRef = useRef<RealtimeChannel | null>(null);
 
@@ -26,9 +27,10 @@ const StartRouteAssigned = () => {
     const init = async () => {
       try {
         setLoading(true);
-        const rs = await getActiveRoutes();
+        const [rs, ps] = await Promise.all([getActiveRoutes(), getProducts()]);
         const mapped = rs.map(r => ({ id: r.id, name: r.name, displayName: mapRouteName(r.name) }));
         setRoutes(mapped);
+        setProducts(ps);
       } catch (e: unknown) {
         const msg = (e as { message?: string })?.message || "Failed to load routes";
         toast({ title: "Error", description: msg, variant: "destructive" });
@@ -63,8 +65,21 @@ const StartRouteAssigned = () => {
     return () => { mounted = false; subRef.current?.unsubscribe?.(); };
   }, [selectedRoute, selectedDate, loadAssigned]);
 
-  const totalAssigned = useMemo(() => assigned.reduce((s, r) => s + (r.qty_assigned || 0), 0), [assigned]);
-  const totalRemaining = useMemo(() => assigned.reduce((s, r) => s + (r.qty_remaining || 0), 0), [assigned]);
+  const totals = useMemo(() => {
+    const pmap = new Map(products.map(p => [p.id, p]));
+    let assignedBoxes = 0, assignedPcs = 0, remainingBoxes = 0, remainingPcs = 0;
+    assigned.forEach(r => {
+      const p = pmap.get(r.product_id);
+      const per = p?.pcs_per_box || 24;
+      const a = r.qty_assigned || 0;
+      const rem = r.qty_remaining || 0;
+      assignedBoxes += Math.floor(a / per);
+      assignedPcs += a % per;
+      remainingBoxes += Math.floor(rem / per);
+      remainingPcs += rem % per;
+    });
+    return { assignedBoxes, assignedPcs, remainingBoxes, remainingPcs };
+  }, [assigned, products]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-primary-light/10">
@@ -118,7 +133,7 @@ const StartRouteAssigned = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-base sm:text-lg font-semibold flex items-center gap-2"><Package className="w-4 h-4 sm:w-5 sm:h-5" />Assigned Stock</Label>
-                <div className="text-xs sm:text-sm text-muted-foreground">Assigned: {totalAssigned} • Remaining: {totalRemaining}</div>
+                <div className="text-xs sm:text-sm text-muted-foreground">Assigned: {totals.assignedBoxes} Box | {totals.assignedPcs} pcs • Remaining: {totals.remainingBoxes} Box | {totals.remainingPcs} pcs</div>
               </div>
               <div className="border rounded-lg overflow-hidden">
                 <div className="overflow-x-auto">
@@ -151,6 +166,9 @@ const StartRouteAssigned = () => {
             </div>
           </CardContent>
         </Card>
+        <div className="mt-6 flex justify-end">
+          <Button onClick={() => { localStorage.setItem('currentRoute', selectedRoute); localStorage.setItem('currentDate', selectedDate); navigate('/driver/shop-billing'); }}>Start Route</Button>
+        </div>
       </main>
     </div>
   );
