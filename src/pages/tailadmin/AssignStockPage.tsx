@@ -10,6 +10,7 @@ import {
     getAssignableProducts,
     getDailyStockForDriverRouteDate,
     assignStockRPC,
+    saveAssignedStock,
     type DriverOption,
     type RouteOption,
     type AssignableProductRow,
@@ -178,6 +179,15 @@ export const AssignStockPage: React.FC = () => {
             await assignStockRPC(
                 null,
                 selectedRoute,
+                selectedDate,
+                payload
+            );
+
+            // Reduce warehouse stock and persist legacy daily_stock for logs
+            await saveAssignedStock(
+                null,
+                selectedRoute,
+                null,
                 selectedDate,
                 payload
             );

@@ -154,8 +154,26 @@ const StartRouteAssigned = () => {
                             <td className="px-4 py-3">
                               <div className="font-medium">{row.product_name}</div>
                             </td>
-                            <td className="px-4 py-3 text-center">{row.qty_assigned}</td>
-                            <td className="px-4 py-3 text-center">{row.qty_remaining}</td>
+                            <td className="px-4 py-3 text-center">
+                              {(() => {
+                                const p = products.find(pp => pp.id === row.product_id);
+                                const per = p?.pcs_per_box || 24;
+                                const a = row.qty_assigned || 0;
+                                const box = Math.floor(a / per);
+                                const pcs = a % per;
+                                return `${box} Box | ${pcs} pcs`;
+                              })()}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {(() => {
+                                const p = products.find(pp => pp.id === row.product_id);
+                                const per = p?.pcs_per_box || 24;
+                                const r = row.qty_remaining || 0;
+                                const box = Math.floor(r / per);
+                                const pcs = r % per;
+                                return `${box} Box | ${pcs} pcs`;
+                              })()}
+                            </td>
                           </tr>
                         ))
                       )}
