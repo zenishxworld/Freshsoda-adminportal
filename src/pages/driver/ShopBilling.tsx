@@ -329,7 +329,7 @@ const ShopBilling = () => {
   }, [cartItems]);
 
   // Phone validation
-  const isValidPhone = (p: string) => /^\d{10}$/.test(p);
+  const isValidPhone = (p: string) => p.trim() === '' || /^\d{10}$/.test(p);
 
   // Validation
   const isFormValid = useMemo(() => {
@@ -338,7 +338,7 @@ const ShopBilling = () => {
     // For now, we'll allow empty truck for assigned routes
     if (!selectedTruck && availableProducts.length === 0) return false;
     if (!shopName.trim()) return false;
-    if (!isValidPhone(shopPhone)) return false;
+    if (shopPhone.trim() && !isValidPhone(shopPhone)) return false;
     const hasItems = Object.values(cartItems).some(item => item.boxQty > 0 || item.pcsQty > 0);
     if (!hasItems) return false;
 
@@ -367,7 +367,7 @@ const ShopBilling = () => {
       toast({ title: "Error", description: "Please enter shop name", variant: "destructive" });
       return;
     }
-    if (!isValidPhone(shopPhone)) {
+    if (shopPhone.trim() && !isValidPhone(shopPhone)) {
       toast({ title: "Error", description: "Enter a valid 10-digit mobile number", variant: "destructive" });
       return;
     }
@@ -471,6 +471,8 @@ const ShopBilling = () => {
 
       setLoading(false);
       toast({ title: "Saved", description: "Bill saved successfully." });
+      setShowBillPreviewUI(false);
+      navigate('/driver/shop-billing');
     } catch (error: unknown) {
       const msg = (error as { message?: string }).message || "Failed to save bill";
       toast({ title: "Error", description: msg, variant: "destructive" });
@@ -491,6 +493,57 @@ const ShopBilling = () => {
     return () => window.removeEventListener('afterprint', handleAfterPrint);
   }, []);
 
+  const handleSaveBill = async () => {
+    setLoading(true);
+    const soldItems = getSoldItems();
+    const billItems: ShopBillItem[] = soldItems.map(item => ({
+      productId: item.productId,
+      productName: item.productName,
+      boxQty: item.boxQty,
+      pcsQty: item.pcsQty,
+      pricePerBox: item.boxQty > 0 ? item.price : 0,
+      pricePerPcs: item.pcsQty > 0 ? item.price : 0,
+      amount: item.total,
+    }));
+    try {
+      await saveShopBill(
+        selectedRoute,
+        selectedTruck || '',
+        { name: shopName.trim(), address: shopAddress.trim() || undefined, phone: shopPhone.trim() || undefined },
+        billItems,
+        totals.totalAmount,
+        selectedDate
+      );
+      const products = await getProducts();
+      const saleItems = billItems.map(item => {
+        const p = products.find(pp => pp.id === item.productId);
+        const perBox = p?.pcs_per_box || 24;
+        return { productId: item.productId, qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0) };
+      });
+      if (user?.id) {
+        await updateStockAfterSaleRPC(user.id, selectedRoute, selectedDate, saleItems);
+      } else {
+        await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
+      }
+      await loadAssignedStock();
+      setCartItems(prev => {
+        const updated: Record<string, CartItem> = {};
+        Object.keys(prev).forEach(key => {
+          updated[key] = { ...prev[key], boxQty: 0, pcsQty: 0, totalAmount: 0 };
+        });
+        return updated;
+      });
+      setLoading(false);
+      toast({ title: "Saved", description: "Bill saved successfully." });
+      setShowBillPreviewUI(false);
+      navigate('/driver/shop-billing');
+    } catch (error: unknown) {
+      const msg = (error as { message?: string }).message || "Failed to save bill";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+      setLoading(false);
+    }
+  };
+
   const addedItems = Object.values(cartItems).filter(item => item.boxQty > 0 || item.pcsQty > 0);
   const soldItems = getSoldItems();
   const totalAmount = totals.totalAmount;
@@ -502,7 +555,7 @@ const ShopBilling = () => {
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 sm:gap-3">
-              <Button variant="ghost" size="sm" onClick={() => navigate("/driver/dashboard")} className="h-9 w-9 p-0">
+              <Button variant="ghost" size="sm" onClick={() => navigate("/driver/shop-billing")} className="h-9 w-9 p-0">
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div className="flex items-center gap-2 sm:gap-3">
@@ -906,6 +959,15 @@ const ShopBilling = () => {
                       >
                         <Printer className="w-5 h-5 mr-2" />
                         {loading ? "Printing..." : "Print Bill"}
+                      </Button>
+                      <Button
+                        onClick={handleSaveBill}
+                        variant="default"
+                        size="default"
+                        className="flex-1 h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation w-full sm:w-auto shadow sm:shadow-none"
+                        disabled={loading}
+                      >
+                        Save Bill
                       </Button>
                       <Button
                         onClick={handleBackToForm}
