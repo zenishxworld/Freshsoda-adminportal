@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../../components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { useToast } from "../../hooks/use-toast";
-import { getProducts, getActiveRoutes, getTrucks, saveDailyStock, getDailyStockForRouteTruckDate, addRoute, deactivateRoute, type Product, type DailyStockItem, type RouteOption, type TruckOption } from "../../lib/supabase";
+import { getProducts, getActiveRoutes, getTrucks, saveDailyStock, getDailyStockForRouteTruckDate, getAssignedStockForBilling, addRoute, deactivateRoute, type Product, type DailyStockItem, type RouteOption, type TruckOption } from "../../lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
 import { ArrowLeft, Route as RouteIcon, Package, Plus, Minus, Trash2, RefreshCw, Truck, RotateCcw, Copy, AlertTriangle } from "lucide-react";
 
@@ -88,7 +88,7 @@ const StartRoute = () => {
   const [selectedDate, setSelectedDate] = useState(() => {
     const lastDate = localStorage.getItem('fs_last_date');
     if (lastDate) return lastDate;
-    return format(new Date(), "yyyy-MM-dd");
+    return new Date().toISOString().split('T')[0];
   });
   const [products, setProducts] = useState<Product[]>([]);
   const [routes, setRoutes] = useState<RouteOptionWithDisplay[]>([]);
@@ -204,15 +204,45 @@ const StartRoute = () => {
     }
   }, [selectedRoute, selectedTruck, selectedDate, products]);
 
+  useEffect(() => {
+    const prefillAssigned = async () => {
+      if (!selectedRoute || !selectedDate || products.length === 0) return;
+      try {
+        setLoadingStock(true);
+        const rows = await getAssignedStockForBilling(null, selectedRoute, selectedDate);
+        const prefilledIds = new Set<string>();
+        const merged: Record<string, DailyStockItem> = {};
+        const rowMap = new Map<string, DailyStockItem>();
+        rows.forEach(r => {
+          const s = r.stock;
+          rowMap.set(r.product.id, { productId: r.product.id, boxQty: s.boxQty || 0, pcsQty: s.pcsQty || 0 });
+          if ((s.boxQty || 0) > 0 || (s.pcsQty || 0) > 0) prefilledIds.add(r.product.id);
+        });
+        products.forEach(p => {
+          if (dirtyProducts.has(p.id)) {
+            merged[p.id] = stock[p.id];
+          } else {
+            merged[p.id] = rowMap.get(p.id) || { productId: p.id, boxQty: 0, pcsQty: 0 };
+          }
+        });
+        setStock(merged);
+        setPrefilledRows(prefilledIds);
+        setHasExistingStock(prefilledIds.size > 0);
+        setTimeout(() => { setPrefilledRows(new Set()); }, 1500);
+      } finally {
+        setLoadingStock(false);
+      }
+    };
+    prefillAssigned();
+  }, [selectedRoute, selectedDate, products]);
+
 
   // Check if route already started today
   const checkExistingStock = async () => {
     if (!selectedRoute || !selectedTruck || !selectedDate || products.length === 0) return;
 
     try {
-      const normalizedDate = selectedDate.includes('T') 
-        ? format(new Date(selectedDate), "yyyy-MM-dd")
-        : selectedDate;
+      const normalizedDate = new Date(selectedDate).toISOString().split('T')[0];
       
       const existing = await getDailyStockForRouteTruckDate(selectedRoute, selectedTruck, normalizedDate);
       
@@ -240,9 +270,7 @@ const StartRoute = () => {
     }
 
     try {
-      const normalizedDate = selectedDate.includes('T') 
-        ? format(new Date(selectedDate), "yyyy-MM-dd")
-        : selectedDate;
+      const normalizedDate = new Date(selectedDate).toISOString().split('T')[0];
       
       const dateObj = parseISO(normalizedDate);
       const yesterdayDate = format(subDays(dateObj, 1), "yyyy-MM-dd");
@@ -445,21 +473,41 @@ const StartRoute = () => {
           description: "Existing stock for this route/truck/date has been loaded.",
         });
       } else {
-        // No existing stock (null) or empty stock array ([]), reset to zeros for all products
-        // But preserve dirty products
-        const emptyStock: Record<string, DailyStockItem> = {};
-        products.forEach(product => {
-          if (dirtyProducts.has(product.id)) {
-            emptyStock[product.id] = stock[product.id];
-          } else {
-            emptyStock[product.id] = {
-              productId: product.id,
-              boxQty: 0,
-              pcsQty: 0,
-            };
-          }
-        });
-        setStock(emptyStock);
+        // No daily_stock yet; fallback to admin assigned stock (route-only) for prefill
+        try {
+          const assigned = await getAssignedStockForBilling(null, selectedRoute, normalizedDate);
+          const rowMap = new Map<string, DailyStockItem>();
+          const prefilledIds = new Set<string>();
+          assigned.forEach(({ product, stock: s }) => {
+            rowMap.set(product.id, { productId: product.id, boxQty: s.boxQty || 0, pcsQty: s.pcsQty || 0 });
+            if ((s.boxQty || 0) > 0 || (s.pcsQty || 0) > 0) prefilledIds.add(product.id);
+          });
+
+          const merged: Record<string, DailyStockItem> = {};
+          products.forEach(product => {
+            if (dirtyProducts.has(product.id)) {
+              merged[product.id] = stock[product.id];
+            } else {
+              merged[product.id] = rowMap.get(product.id) || { productId: product.id, boxQty: 0, pcsQty: 0 };
+            }
+          });
+
+          setStock(merged);
+          setPrefilledRows(prefilledIds);
+          setHasExistingStock(prefilledIds.size > 0);
+          setTimeout(() => { setPrefilledRows(new Set()); }, 1500);
+        } catch (e) {
+          // Fallback to zeros if assigned stock not available
+          const emptyStock: Record<string, DailyStockItem> = {};
+          products.forEach(product => {
+            if (dirtyProducts.has(product.id)) {
+              emptyStock[product.id] = stock[product.id];
+            } else {
+              emptyStock[product.id] = { productId: product.id, boxQty: 0, pcsQty: 0 };
+            }
+          });
+          setStock(emptyStock);
+        }
       }
     } catch (error: any) {
       console.error("Error loading existing stock:", error);
@@ -699,9 +747,7 @@ const StartRoute = () => {
     // Validate and normalize date format
     let normalizedDate: string;
     try {
-      normalizedDate = selectedDate.includes('T') 
-        ? format(new Date(selectedDate), "yyyy-MM-dd")
-        : selectedDate;
+      normalizedDate = new Date(selectedDate).toISOString().split('T')[0];
       // Validate the date is valid
       const dateObj = new Date(normalizedDate);
       if (isNaN(dateObj.getTime())) {

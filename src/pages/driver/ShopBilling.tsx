@@ -48,7 +48,7 @@ const ShopBilling = () => {
   // Route/Truck/Date
   const [selectedRoute, setSelectedRoute] = useState("");
   const [selectedTruck, setSelectedTruck] = useState("");
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [routeName, setRouteName] = useState("");
 
   // Shop details
@@ -93,6 +93,12 @@ const ShopBilling = () => {
         if (routeId) setSelectedRoute(routeId);
         if (truckId) setSelectedTruck(truckId);
         if (date) setSelectedDate(date);
+        if (!routeId) {
+          const routes = await getActiveRoutes();
+          if (routes.length > 0) {
+            setSelectedRoute(routes[0].id);
+          }
+        }
       }
     };
     loadRoute();
