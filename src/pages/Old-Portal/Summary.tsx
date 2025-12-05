@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { Button } from "../components/ui/button";
-import { Label } from "../components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { useToast } from "../hooks/use-toast";
-import { getRoutes, getProducts, getDailyStock, getSalesFor, type Product, type DailyStock, type Sale } from "../lib/supabase";
-import { mapRouteName, shouldDisplayRoute } from "../lib/routeUtils";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
+import { Label } from "../../components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import { useToast } from "../../hooks/use-toast";
+import { getRoutes, getProducts, getDailyStock, getSalesFor, type Product, type DailyStock, type Sale } from "../../lib/supabase";
+import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
 import { ArrowLeft, BarChart3, Printer, Calendar, TrendingUp, Package, DollarSign } from "lucide-react";
 
 

@@ -6,11 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { getProducts, getDailyStock, getSalesFor, appendSale, getRoutes, type Product, type Route, type DailyStock, type Sale } from "../lib/supabase";
-import { mapRouteName } from "../lib/routeUtils";
+import { getProducts, getDailyStock, getSalesFor, appendSale, getRoutes, type Product, type Route, type DailyStock, type Sale } from "../../lib/supabase";
+import { mapRouteName } from "../../lib/routeUtils";
 import { ArrowLeft, ShoppingCart, Plus, Minus, Printer, Store, Check, RefreshCw, X, MapPin, Phone } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { nameMatchesQueryByWordPrefix } from "../lib/utils";
+import { nameMatchesQueryByWordPrefix } from "../../lib/utils";
 
 
 
@@ -193,7 +193,7 @@ const ShopBilling = () => {
     setCurrentRoute(route);
     setCurrentDate(date);
     fetchProductsAndStock(route, date);
-  }, [navigate, toast, loadShopSuggestions, fetchProductsAndStock]);
+  }, [navigate, toast, loadShopSuggestions]);
 
 
 
@@ -263,7 +263,7 @@ const ShopBilling = () => {
         toast({ title: "No Stock Set", description: "Please set initial stock for today's route first", variant: "destructive" });
       }
     } catch (error: unknown) {
-      toast({ title: "Error", description: `Failed to load data: ${error.message}`, variant: "destructive" });
+      toast({ title: "Error", description: `Failed to load data: ${(error as { message?: string }).message || String(error)}`, variant: "destructive" });
     }
   }, [toast, normalizeSaleProducts]);
 
