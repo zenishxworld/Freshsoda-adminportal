@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
@@ -7,19 +7,21 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { useToast } from "../../hooks/use-toast";
 import {
-  getDailyStockForBilling,
-  searchProductsInStock,
+  getAssignedStockForBilling,
+  searchAssignedProductsInStock,
   createOrGetShop,
   saveShopBill,
-  reduceDailyStock,
+  updateStockAfterSaleRouteRPC,
   getProducts,
   getActiveRoutes,
   getTrucks,
   getDriverRoute,
+  subscribeAssignedStockForRouteDate,
   type Product,
   type DailyStockItem,
   type ShopBillItem,
 } from "../../lib/supabase";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { mapRouteName } from "../../lib/routeUtils";
 import { ArrowLeft, ShoppingCart, Plus, Store, Check, RefreshCw, Route as RouteIcon, MapPin, Phone } from "lucide-react";
 import AddProductModal from "../../components/driver/AddProductModal";
@@ -53,6 +55,7 @@ const ShopBilling = () => {
 
   // Products
   const [availableProducts, setAvailableProducts] = useState<Array<{ product: Product; stock: DailyStockItem }>>([]);
+  const assignedSubRef = useRef<RealtimeChannel | null>(null);
   const [cartItems, setCartItems] = useState<Record<string, CartItem>>({});
   const [showAddProductModal, setShowAddProductModal] = useState(false);
 
@@ -96,12 +99,23 @@ const ShopBilling = () => {
     }
   }, [selectedRoute, selectedTruck, selectedDate]);
 
+  useEffect(() => {
+    let mounted = true;
+    const doSub = async () => {
+      if (!selectedRoute || !selectedDate || !mounted) return;
+      assignedSubRef.current?.unsubscribe?.();
+      assignedSubRef.current = subscribeAssignedStockForRouteDate(selectedRoute, selectedDate, loadAssignedStock);
+    };
+    doSub();
+    return () => { mounted = false; assignedSubRef.current?.unsubscribe?.(); };
+  }, [selectedRoute, selectedDate]);
+
   const loadAssignedStock = async () => {
     if (!selectedRoute || !selectedTruck || !selectedDate) return;
 
     try {
       setLoadingStock(true);
-      const stock = await getDailyStockForBilling(selectedRoute, selectedTruck, selectedDate);
+      const stock = await getAssignedStockForBilling(null, selectedRoute, selectedDate);
       setAvailableProducts(stock);
     } catch (error) {
       console.error("Error loading stock:", error);
@@ -304,20 +318,15 @@ const ShopBilling = () => {
         totals.totalAmount,
         selectedDate
       );
-
-      // Reduce daily stock
-      const products = await getProducts();
-      await reduceDailyStock(
-        selectedRoute,
-        selectedTruck,
-        selectedDate,
-        billItems.map(item => ({
-          productId: item.productId,
-          boxQty: item.boxQty,
-          pcsQty: item.pcsQty,
-        })),
-        products
-      );
+      {
+        const products = await getProducts();
+        const saleItems = billItems.map(item => {
+          const p = products.find(pp => pp.id === item.productId);
+          const perBox = p?.pcs_per_box || 24;
+          return { productId: item.productId, qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0) };
+        });
+        await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
+      }
 
       // Prepare bill data for preview
       setGeneratedBill({

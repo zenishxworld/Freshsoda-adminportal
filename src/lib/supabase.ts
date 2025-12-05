@@ -71,6 +71,13 @@ export type WarehouseMovement = {
     created_at: string;
 };
 
+export type AssignedStockRow = {
+    product_id: string;
+    product_name: string;
+    qty_assigned: number;
+    qty_remaining: number;
+};
+
 export type LowStockItem = {
     product_id: string;
     name: string;
@@ -1973,6 +1980,39 @@ export const searchProductsInStock = async (
     );
 };
 
+export const getAssignedStockForBilling = async (
+    driverId: string | null,
+    routeId: string,
+    date: string
+): Promise<Array<{ product: Product; stock: DailyStockItem }>> => {
+    const rows = driverId
+        ? await getDriverAssignedStock(driverId, routeId, date)
+        : await getRouteAssignedStock(routeId, date);
+    if (!rows || rows.length === 0) return [];
+    const products = await getProducts();
+    const pmap = new Map(products.map(p => [p.id, p]));
+    return rows.map(r => {
+        const p = pmap.get(r.product_id);
+        if (!p) return null as any;
+        const perBox = p.pcs_per_box || 24;
+        const boxQty = Math.floor((r.qty_remaining || 0) / perBox);
+        const pcsQty = (r.qty_remaining || 0) % perBox;
+        return { product: p, stock: { productId: r.product_id, boxQty, pcsQty } };
+    }).filter(Boolean);
+};
+
+export const searchAssignedProductsInStock = async (
+    driverId: string | null,
+    routeId: string,
+    date: string,
+    query: string
+): Promise<Array<{ product: Product; stock: DailyStockItem }>> => {
+    const all = await getAssignedStockForBilling(driverId, routeId, date);
+    if (!query.trim()) return all;
+    const q = query.toLowerCase();
+    return all.filter(({ product }) => product.name.toLowerCase().includes(q));
+};
+
 /**
  * Create or get shop
  */
@@ -2430,6 +2470,166 @@ export const getExpenseSummary = async (): Promise<{
     const breakdown = Array.from(byCatMap.entries()).map(([category, total]) => ({ category, total }));
     breakdown.sort((a, b) => b.total - a.total);
     return { today_total: todayTotal, month_total: monthTotal, month_by_category: breakdown };
+};
+
+export const assignStockRPC = async (
+    driverId: string | null,
+    routeId: string,
+    date: string,
+    items: Array<{ productId: string; boxQty?: number; pcsQty?: number; qty_pcs?: number }>
+): Promise<void> => {
+    const payload = items.map(it => ({
+        productId: it.productId,
+        boxQty: it.boxQty || 0,
+        pcsQty: it.pcsQty || 0,
+        qty_pcs: it.qty_pcs || undefined,
+    }));
+    const { error } = await supabase.rpc('fn_assign_stock', {
+        p_driver_id: driverId,
+        p_route_id: routeId,
+        p_work_date: date,
+        items: payload,
+    });
+    if (error) {
+        throw new Error(error.message || 'Failed to assign stock');
+    }
+};
+
+export const getDriverAssignedStock = async (
+    driverId: string,
+    routeId: string,
+    date: string
+): Promise<AssignedStockRow[]> => {
+    const { data, error } = await supabase.rpc('fn_get_driver_assigned_stock', {
+        driver_id: driverId,
+        route_id: routeId,
+        work_date: date,
+    });
+    if (error) {
+        throw new Error(error.message || 'Failed to fetch assigned stock');
+    }
+    return (data || []) as AssignedStockRow[];
+};
+
+export const getRouteAssignedStock = async (
+    routeId: string,
+    date: string
+): Promise<AssignedStockRow[]> => {
+    const { data, error } = await supabase.rpc('fn_get_route_assigned_stock', {
+        route_id: routeId,
+        work_date: date,
+    });
+    if (error) {
+        throw new Error(error.message || 'Failed to fetch assigned stock');
+    }
+    return (data || []) as AssignedStockRow[];
+};
+
+export const updateStockAfterSaleRPC = async (
+    driverId: string,
+    routeId: string,
+    date: string,
+    saleItems: Array<{ productId: string; qty_pcs: number }>
+): Promise<void> => {
+    const items = saleItems.map(it => ({ productId: it.productId, qty_pcs: it.qty_pcs }));
+    const { error } = await supabase.rpc('fn_update_stock_after_sale', {
+        p_driver_id: driverId,
+        p_route_id: routeId,
+        p_work_date: date,
+        sale_items: items,
+    });
+    if (error) {
+        throw new Error(error.message || 'Failed to update stock after sale');
+    }
+};
+
+export const updateStockAfterSaleRouteRPC = async (
+    routeId: string,
+    date: string,
+    saleItems: Array<{ productId: string; qty_pcs: number }>
+): Promise<void> => {
+    const items = saleItems.map(it => ({ productId: it.productId, qty_pcs: it.qty_pcs }));
+    const { error } = await supabase.rpc('fn_update_stock_after_sale_route', {
+        p_route_id: routeId,
+        p_work_date: date,
+        sale_items: items,
+    });
+    if (error) {
+        throw new Error(error.message || 'Failed to update stock after sale');
+    }
+};
+
+export const endRouteReturnStockRPC = async (
+    driverId: string,
+    routeId: string,
+    date: string
+): Promise<void> => {
+    const { error } = await supabase.rpc('fn_end_route_return_stock', {
+        p_driver_id: driverId,
+        p_route_id: routeId,
+        p_work_date: date,
+    });
+    if (error) {
+        throw new Error(error.message || 'Failed to return stock to warehouse');
+    }
+};
+
+export const endRouteReturnStockRouteRPC = async (
+    routeId: string,
+    date: string
+): Promise<void> => {
+    const { error } = await supabase.rpc('fn_end_route_return_stock_route', {
+        p_route_id: routeId,
+        p_work_date: date,
+    });
+    if (error) {
+        throw new Error(error.message || 'Failed to return stock to warehouse');
+    }
+};
+
+export const subscribeAssignedStockForDate = (
+    driverId: string,
+    routeId: string,
+    date: string,
+    onChange: () => void
+): import('@supabase/supabase-js').RealtimeChannel => {
+    const channel = supabase.channel(`assigned_stock_${driverId}_${routeId}_${date}`)
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'assigned_stock',
+            filter: `driver_id=eq.${driverId}`,
+        }, payload => {
+            const row = (payload.new || payload.old) as any;
+            if (!row) return;
+            if (String(row.route_id) === String(routeId) && String(row.date).startsWith(date)) {
+                onChange();
+            }
+        })
+        .subscribe();
+    return channel;
+};
+
+export const subscribeAssignedStockForRouteDate = (
+    routeId: string,
+    date: string,
+    onChange: () => void
+): import('@supabase/supabase-js').RealtimeChannel => {
+    const channel = supabase.channel(`assigned_stock_route_${routeId}_${date}`)
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'assigned_stock',
+            filter: `route_id=eq.${routeId}`,
+        }, payload => {
+            const row = (payload.new || payload.old) as any;
+            if (!row) return;
+            if (String(row.date).startsWith(date)) {
+                onChange();
+            }
+        })
+        .subscribe();
+    return channel;
 };
 
 export const getExpenseMovements = async (

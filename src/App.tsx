@@ -18,10 +18,11 @@ import { ExpensesPage } from './pages/tailadmin/ExpensesPage';
 import { ReportsPage } from './pages/tailadmin/ReportsPage';
 import { SettingsPage } from './pages/tailadmin/SettingsPage';
 import { ManageProductsPage } from './pages/tailadmin/ManageProductsPage';
+import EndRouteApprovalPage from './pages/tailadmin/EndRouteApprovalPage';
 
 // Driver Pages
 import DriverDashboard from './pages/driver/DriverDashboard';
-import StartRoute from './pages/driver/StartRoute';
+import StartRouteAssigned from './pages/driver/StartRouteAssigned';
 import ShopBilling from './pages/driver/ShopBilling';
 import Summary from './pages/driver/Summary';
 import BillHistory from './pages/driver/BillHistory';
@@ -80,6 +81,7 @@ function AppRoutes() {
                 <Route path="/shops" element={<ShopsPage />} />
                 <Route path="/expenses" element={<ExpensesPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/end-route" element={<EndRouteApprovalPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Routes>
             </DashboardLayout>
@@ -95,7 +97,7 @@ function AppRoutes() {
             <Routes>
               <Route path="/" element={<Navigate to="/driver/dashboard" replace />} />
               <Route path="/dashboard" element={<DriverDashboard />} />
-              <Route path="/start-route" element={<StartRoute />} />
+              <Route path="/start-route" element={<StartRouteAssigned />} />
               <Route path="/shop-billing" element={<ShopBilling />} />
               <Route path="/summary" element={<Summary />} />
               <Route path="/bill-history" element={<BillHistory />} />
