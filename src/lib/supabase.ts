@@ -2095,7 +2095,11 @@ export const saveBill = async (
 
         if (error) {
             // If bills table doesn't exist, fallback to sales table
-            if (error.code === '42P01') {
+            const isMissingTable =
+                error.code === '42P01' ||
+                error.code === 'PGRST205' ||
+                /Could not find the table 'public\.bills'/i.test(error.message || '');
+            if (isMissingTable) {
                 // Table doesn't exist, use sales table
                 const shop = await supabase
                     .from('shops')
@@ -2212,7 +2216,11 @@ export const saveShopBill = async (
 
         if (error) {
             // If shop_bills table doesn't exist, try bills table
-            if (error.code === '42P01') {
+            const isMissingTable =
+                error.code === '42P01' || // PostgreSQL undefined table
+                error.code === 'PGRST205' || // PostgREST schema cache missing table
+                /Could not find the table 'public\.shop_bills'/i.test(error.message || '');
+            if (isMissingTable) {
                 return await saveBill(
                     '', // shopId not needed for bills table
                     routeId,

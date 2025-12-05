@@ -12,6 +12,7 @@ import {
   searchAssignedProductsInStock,
   createOrGetShop,
   saveShopBill,
+  updateStockAfterSaleRPC,
   updateStockAfterSaleRouteRPC,
   getProducts,
   getActiveRoutes,
@@ -446,7 +447,11 @@ const ShopBilling = () => {
         const perBox = p?.pcs_per_box || 24;
         return { productId: item.productId, qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0) };
       });
-      await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
+      if (user?.id) {
+        await updateStockAfterSaleRPC(user.id, selectedRoute, selectedDate, saleItems);
+      } else {
+        await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
+      }
 
       // Refresh stock and reset quantities
       await loadAssignedStock();
