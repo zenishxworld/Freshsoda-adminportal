@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
@@ -24,10 +25,9 @@ import {
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { mapRouteName } from "../../lib/routeUtils";
 import { useAuth } from "../../contexts/AuthContext";
-import { ArrowLeft, ShoppingCart, Plus, Minus, Store, Check, RefreshCw, Route as RouteIcon, MapPin, Phone } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Plus, Minus, Printer, Store, Check, RefreshCw, Route as RouteIcon, MapPin, Phone } from "lucide-react";
 import AddProductModal from "../../components/driver/AddProductModal";
 import ProductQuantityCard from "../../components/driver/ProductQuantityCard";
-import BillPreview from "./BillPreview";
 
 interface CartItem {
   product: Product;
@@ -65,8 +65,16 @@ const ShopBilling = () => {
   // UI states
   const [loading, setLoading] = useState(false);
   const [loadingStock, setLoadingStock] = useState(false);
-  const [showBillPreview, setShowBillPreview] = useState(false);
-  const [generatedBill, setGeneratedBill] = useState<any>(null);
+  const [showBillPreviewUI, setShowBillPreviewUI] = useState(false);
+  // Snapshot to ensure printed data is consistent and not affected by state resets
+  const [printSnapshot, setPrintSnapshot] = useState<null | {
+    shopName: string;
+    shopAddress: string;
+    shopPhone: string;
+    routeName: string;
+    items: Array<{ productId: string; productName: string; boxQty: number; pcsQty: number; price: number; total: number; }>;
+    total: number;
+  }>(null);
 
   // Load route/truck/date from localStorage
   useEffect(() => {
@@ -313,6 +321,9 @@ const ShopBilling = () => {
     return { totalAmount };
   }, [cartItems]);
 
+  // Phone validation
+  const isValidPhone = (p: string) => /^\d{10}$/.test(p);
+
   // Validation
   const isFormValid = useMemo(() => {
     if (!selectedRoute || !selectedDate) return false;
@@ -320,6 +331,7 @@ const ShopBilling = () => {
     // For now, we'll allow empty truck for assigned routes
     if (!selectedTruck && availableProducts.length === 0) return false;
     if (!shopName.trim()) return false;
+    if (!isValidPhone(shopPhone)) return false;
     const hasItems = Object.values(cartItems).some(item => item.boxQty > 0 || item.pcsQty > 0);
     if (!hasItems) return false;
 
@@ -343,48 +355,75 @@ const ShopBilling = () => {
     return true;
   }, [selectedRoute, selectedTruck, selectedDate, shopName, cartItems]);
 
-  const handleGenerateBill = async () => {
-    if (!isFormValid) {
-      toast({
-        title: "Validation Error",
-        description: "Please fill all required fields and add products with valid quantities.",
-        variant: "destructive",
-      });
+  const handleGenerateBill = () => {
+    if (!shopName.trim()) {
+      toast({ title: "Error", description: "Please enter shop name", variant: "destructive" });
       return;
     }
-
-    // Validate stock
-    for (const item of Object.values(cartItems)) {
-      if (item.boxQty > 0 || item.pcsQty > 0) {
-        const pcsPerBox = item.product.pcs_per_box || 24;
-        const totalAvailablePcs = ((item.stock.boxQty || 0) * pcsPerBox) + (item.stock.pcsQty || 0);
-        const totalRequestedPcs = (item.boxQty * pcsPerBox) + item.pcsQty;
-        if (totalRequestedPcs > totalAvailablePcs) {
-          toast({
-            title: "Insufficient Stock",
-            description: `Insufficient stock for ${item.product.name}`,
-            variant: "destructive",
-          });
-          return;
-        }
-      }
+    if (!isValidPhone(shopPhone)) {
+      toast({ title: "Error", description: "Enter a valid 10-digit mobile number", variant: "destructive" });
+      return;
     }
+    if (!isFormValid) {
+      toast({ title: "Error", description: "Please add products with valid quantity and non-negative price (₹0 allowed)", variant: "destructive" });
+      return;
+    }
+    setShowBillPreviewUI(true); // Show the preview UI
+  };
 
+  // Get sold items for preview/print
+  const getSoldItems = () => {
+    return Object.values(cartItems)
+      .filter(item => item.boxQty > 0 || item.pcsQty > 0)
+      .map(item => ({
+        productId: item.product.id,
+        productName: item.product.name,
+        boxQty: item.boxQty,
+        pcsQty: item.pcsQty,
+        price: item.boxQty > 0 ? item.boxPrice : item.pcsPrice,
+        total: item.totalAmount,
+      }));
+  };
+
+  // Handle print bill - saves and prints
+  const handlePrintBill = async () => {
+    // Make printing synchronous with the user click to fix mobile blank preview
     setLoading(true);
 
+    const soldItems = getSoldItems();
+    // Build snapshot for print content
+    const snapshot = {
+      shopName: shopName.trim(),
+      shopAddress: shopAddress.trim(),
+      shopPhone: shopPhone.trim(),
+      routeName: routeName,
+      items: soldItems.map(item => ({
+        productId: item.productId,
+        productName: item.productName,
+        boxQty: item.boxQty,
+        pcsQty: item.pcsQty,
+        price: item.price,
+        total: item.total,
+      })),
+      total: totals.totalAmount,
+    };
+    setPrintSnapshot(snapshot);
+
+    // 1) Trigger print immediately (synchronously) to preserve mobile gesture context
+    window.print();
+
+    // 2) After print dialog opens, persist the sale
     try {
       // Prepare bill items
-      const billItems: ShopBillItem[] = Object.values(cartItems)
-        .filter(item => item.boxQty > 0 || item.pcsQty > 0)
-        .map(item => ({
-          productId: item.product.id,
-          productName: item.product.name,
-          boxQty: item.boxQty,
-          pcsQty: item.pcsQty,
-          pricePerBox: item.boxPrice,
-          pricePerPcs: item.pcsPrice,
-          amount: item.totalAmount,
-        }));
+      const billItems: ShopBillItem[] = soldItems.map(item => ({
+        productId: item.productId,
+        productName: item.productName,
+        boxQty: item.boxQty,
+        pcsQty: item.pcsQty,
+        pricePerBox: item.boxQty > 0 ? item.price : 0,
+        pricePerPcs: item.pcsQty > 0 ? item.price : 0,
+        amount: item.total,
+      }));
 
       // Save shop bill (use empty string for truck if not set, for assigned routes)
       await saveShopBill(
@@ -399,82 +438,56 @@ const ShopBilling = () => {
         totals.totalAmount,
         selectedDate
       );
-      {
-        const products = await getProducts();
-        const saleItems = billItems.map(item => {
-          const p = products.find(pp => pp.id === item.productId);
-          const perBox = p?.pcs_per_box || 24;
-          return { productId: item.productId, qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0) };
-        });
-        await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
-      }
 
-      // Prepare bill data for preview
-      setGeneratedBill({
-        shopName: shopName.trim(),
-        shopAddress: shopAddress.trim(),
-        shopPhone: shopPhone.trim(),
-        routeName,
-        date: selectedDate,
-        items: billItems.map(item => ({
-          productId: item.productId,
-          productName: item.productName,
-          boxQty: item.boxQty,
-          pcsQty: item.pcsQty,
-          rate: item.boxQty > 0 ? item.pricePerBox : item.pricePerPcs,
-          amount: item.amount,
-        })),
-        totalAmount: totals.totalAmount,
+      // Update stock after sale
+      const products = await getProducts();
+      const saleItems = billItems.map(item => {
+        const p = products.find(pp => pp.id === item.productId);
+        const perBox = p?.pcs_per_box || 24;
+        return { productId: item.productId, qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0) };
+      });
+      await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
+
+      // Refresh stock and reset quantities
+      await loadAssignedStock();
+      setCartItems(prev => {
+        const updated: Record<string, CartItem> = {};
+        Object.keys(prev).forEach(key => {
+          updated[key] = { ...prev[key], boxQty: 0, pcsQty: 0, totalAmount: 0 };
+        });
+        return updated;
       });
 
-      setShowBillPreview(true);
-      toast({
-        title: "Bill generated successfully!",
-        description: "Bill has been saved and stock updated.",
-      });
-    } catch (error: any) {
-      console.error("Error generating bill:", error);
-      const errorMessage = error.message || "Failed to generate bill. Please try again.";
-      if (errorMessage.includes("stock") || errorMessage.includes("insufficient")) {
-        toast({
-          title: "Insufficient Stock",
-          description: "Not enough stock to complete this bill.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: errorMessage,
-          variant: "destructive",
-        });
-      }
-    } finally {
+      setLoading(false);
+      toast({ title: "Saved", description: "Bill saved successfully." });
+    } catch (error: unknown) {
+      const msg = (error as { message?: string }).message || "Failed to save bill";
+      toast({ title: "Error", description: msg, variant: "destructive" });
       setLoading(false);
     }
   };
 
-  const addedItems = Object.values(cartItems).filter(item => item.boxQty > 0 || item.pcsQty > 0);
+  const handleBackToForm = () => {
+    setShowBillPreviewUI(false); // Hide the preview UI
+  };
 
-  if (showBillPreview && generatedBill) {
-    return (
-      <BillPreview
-        bill={generatedBill}
-        onBack={() => {
-          setShowBillPreview(false);
-          setCartItems({});
-          setShopName("");
-          setShopAddress("");
-          setShopPhone("");
-          loadAssignedStock();
-        }}
-      />
-    );
-  }
+  // Defer cleanup until the print dialog completes
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      setLoading(false);
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => window.removeEventListener('afterprint', handleAfterPrint);
+  }, []);
+
+  const addedItems = Object.values(cartItems).filter(item => item.boxQty > 0 || item.pcsQty > 0);
+  const soldItems = getSoldItems();
+  const totalAmount = totals.totalAmount;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-success-green-light/10">
       {/* Header */}
-      <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
+      <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10 print:hidden">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 sm:gap-3">
@@ -510,16 +523,25 @@ const ShopBilling = () => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-24 sm:pb-safe">
-        <Card className="border-0 shadow-strong">
-          <CardHeader className="text-center pb-4 sm:pb-6 px-4 sm:px-6">
-            <CardTitle className="text-xl sm:text-2xl font-bold">New Sale</CardTitle>
-            <CardDescription className="text-sm sm:text-base">
-              Enter shop details and select products
-            </CardDescription>
-          </CardHeader>
+      <main className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-20 sm:pb-safe">
+        {!showBillPreviewUI ? (
+          // Billing Form
+          <Card className="border-0 shadow-strong">
+            <CardHeader className="text-center pb-4 sm:pb-6 px-4 sm:px-6">
+              <CardTitle className="text-xl sm:text-2xl font-bold">New Sale</CardTitle>
+              <CardDescription className="text-sm sm:text-base">
+                Enter shop details and select products
+              </CardDescription>
+              {routeName && (
+                <div className="mt-3 pt-3 border-t">
+                  <p className="text-sm font-semibold text-primary">
+                    📍 Route: {routeName}
+                  </p>
+                </div>
+              )}
+            </CardHeader>
 
-          <CardContent className="px-4 sm:px-6">
+            <CardContent className="px-4 sm:px-6">
             <div className="space-y-6 sm:space-y-8">
               {/* Shop Details */}
               <div className="space-y-4">
@@ -559,17 +581,19 @@ const ShopBilling = () => {
                   </Label>
                   <Input
                     type="tel"
+                    inputMode="numeric"
                     placeholder="Enter 10-digit mobile number"
                     value={shopPhone}
                     onChange={(e) => {
                       const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
                       setShopPhone(digitsOnly);
                     }}
-                    className="h-11 sm:h-10"
+                    pattern="[0-9]{10}"
                     maxLength={10}
+                    className="h-11 sm:h-10 text-base"
                   />
-                  {shopPhone && shopPhone.length !== 10 && (
-                    <p className="text-xs text-destructive">Enter a valid 10-digit mobile number</p>
+                  {shopPhone && !isValidPhone(shopPhone) && (
+                    <p className="text-xs text-destructive">Enter 10-digit mobile number</p>
                   )}
                 </div>
               </div>
@@ -835,26 +859,207 @@ const ShopBilling = () => {
               </div>
 
               {/* Generate Bill Button */}
-              <div className="sticky bottom-0 bg-background/95 backdrop-blur-sm -mx-4 sm:-mx-6 px-4 sm:px-6 py-4 border-t">
+              <div className="sticky bottom-3 sm:static bg-background/95 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none p-1 sm:p-0 -mx-2 sm:mx-0 rounded-md sm:rounded-none">
                 <Button
                   onClick={handleGenerateBill}
                   variant="success"
                   size="default"
-                  className="w-full h-11 text-base font-semibold"
+                  className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation shadow sm:shadow-none"
                   disabled={!isFormValid || loading}
                 >
-                  {loading ? "Generating..." : (
-                    <>
-                      <Check className="w-5 h-5 mr-2" />
-                      Generate Bill
-                    </>
-                  )}
+                  <Check className="w-5 h-5 mr-2" />
+                  Generate Bill
                 </Button>
               </div>
             </div>
           </CardContent>
         </Card>
+        ) : (
+          // Bill Preview & Print UI
+          <>
+            <div className="space-y-4">
+              <Card className="border-0 shadow-strong print:hidden">
+                <CardHeader className="text-center pb-4 px-4 sm:px-6">
+                  <CardTitle className="text-xl sm:text-2xl font-bold text-success-green">Bill Generated!</CardTitle>
+                  <CardDescription className="text-sm sm:text-base">Review and print the bill</CardDescription>
+                </CardHeader>
+                <CardContent className="px-4 sm:px-6 space-y-4">
+                  <div className="sticky bottom-3 sm:static bg-background/95 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none p-1 sm:p-0 -mx-2 sm:mx-0 rounded-md sm:rounded-none">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                      <Button
+                        onClick={handlePrintBill}
+                        variant="success"
+                        size="default"
+                        className="flex-1 h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation w-full sm:w-auto shadow sm:shadow-none"
+                        disabled={loading}
+                      >
+                        <Printer className="w-5 h-5 mr-2" />
+                        {loading ? "Printing..." : "Print Bill"}
+                      </Button>
+                      <Button
+                        onClick={handleBackToForm}
+                        variant="outline"
+                        size="default"
+                        className="h-10 sm:h-11 px-4 sm:px-6 touch-manipulation w-full sm:w-auto shadow sm:shadow-none"
+                      >
+                        Edit
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-0 shadow-strong print:hidden">
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    <div className="text-center">
+                      <h2 className="text-xl font-bold">BHAVYA ENTERPRICE</h2>
+                      <p className="text-sm">Sales Invoice</p>
+                    </div>
+                    <div className="border-t pt-4">
+                      <p className="font-semibold">Shop: {shopName}</p>
+                      {shopAddress && <p className="text-sm text-muted-foreground">Address: {shopAddress}</p>}
+                      {shopPhone && <p className="text-sm text-muted-foreground">Phone: {shopPhone}</p>}
+                    </div>
+                    <div className="border-t pt-4">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-2">Item</th>
+                            <th className="text-center py-2">Qty</th>
+                            <th className="text-right py-2">Rate</th>
+                            <th className="text-right py-2">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {soldItems.map((item, index) => (
+                            <tr key={`${item.productId}-${index}`} className="border-b">
+                              <td className="py-2">{item.productName}</td>
+                              <td className="text-center py-2">
+                                {item.boxQty > 0 && `${item.boxQty} Box`}
+                                {item.boxQty > 0 && item.pcsQty > 0 && ", "}
+                                {item.pcsQty > 0 && `${item.pcsQty} pcs`}
+                              </td>
+                              <td className="text-right py-2">₹{item.price.toFixed(2)}</td>
+                              <td className="text-right py-2 font-semibold">₹{item.total.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="border-t pt-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-lg font-bold">TOTAL:</span>
+                        <span className="text-2xl font-bold text-success-green">₹{totalAmount.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
       </main>
+
+      {/* Portal for Print Content - Now always rendered */}
+      {createPortal(
+        <div id="print-receipt-container" style={{ display: 'none' }}>
+          <div className="receipt-58mm">
+            {/* Bill Header */}
+            <div style={{ textAlign: 'center', marginBottom: '4px' }}>
+              <h1 style={{ margin: '0', fontSize: '14px', fontWeight: 'bold' }}>BHAVYA ENTERPRICE</h1>
+              <p style={{ margin: '0', fontSize: '10px', fontWeight: '600' }}>Sales Invoice</p>
+              <div style={{ marginTop: '2px', fontSize: '8px' }}>
+                <p style={{ margin: '0', lineHeight: '1.1' }}>Near Bala petrol pump</p>
+                <p style={{ margin: '0', lineHeight: '1.1' }}>Jambusar Bharuch road</p>
+              </div>
+              <div style={{ marginTop: '2px', fontSize: '8px' }}>
+                <p style={{ margin: '0', lineHeight: '1.1' }}>Phone: 8866756059</p>
+                <p style={{ margin: '0', lineHeight: '1.1' }}>GSTIN: 24EVVPS8220P1ZF</p>
+              </div>
+              <div style={{ marginTop: '2px', fontSize: '8px' }}>
+                <p style={{ margin: '0' }}>Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                {routeName && <p style={{ margin: '0', fontWeight: 'bold' }}>Route: {routeName}</p>}
+              </div>
+            </div>
+            {/* Shop Details */}
+            <div style={{ marginBottom: '4px', paddingBottom: '2px', borderTop: '1px dashed black', borderBottom: '1px dashed black', paddingTop: '2px' }}>
+              <p style={{ fontSize: '9px', fontWeight: '600', margin: '0' }}>Shop: {printSnapshot?.shopName || shopName}</p>
+              {(printSnapshot?.shopAddress || shopAddress) && <p style={{ fontSize: '8px', margin: '0' }}>Addr: {printSnapshot?.shopAddress || shopAddress}</p>}
+              {(printSnapshot?.shopPhone || shopPhone) && <p style={{ fontSize: '8px', margin: '0' }}>Ph: {printSnapshot?.shopPhone || shopPhone}</p>}
+            </div>
+            {/* Products Table */}
+            <div style={{ marginBottom: '4px' }}>
+              <table style={{ width: '100%', fontSize: '8px', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px dashed black' }}>
+                    <th style={{ textAlign: 'left', padding: '1px 0', fontSize: '8px' }}>Item</th>
+                    <th style={{ textAlign: 'center', padding: '1px 0', fontSize: '8px' }}>Qty</th>
+                    <th style={{ textAlign: 'right', padding: '1px 0', fontSize: '8px' }}>Rate</th>
+                    <th style={{ textAlign: 'right', padding: '1px 0', fontSize: '8px' }}>Amt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(printSnapshot?.items || soldItems).map((item, index) => (
+                    <tr key={`${item.productId}-${index}`}>
+                      <td style={{ padding: '1px 0', fontSize: '8px' }}>{item.productName}</td>
+                      <td style={{ padding: '1px 0', textAlign: 'center', fontSize: '8px' }}>
+                        {item.boxQty > 0 && `${item.boxQty} Box`}
+                        {item.boxQty > 0 && item.pcsQty > 0 && " "}
+                        {item.pcsQty > 0 && `${item.pcsQty} pcs`}
+                      </td>
+                      <td style={{ padding: '1px 0', textAlign: 'right', fontSize: '8px' }}>₹{item.price.toFixed(2)}</td>
+                      <td style={{ padding: '1px 0', textAlign: 'right', fontSize: '8px', fontWeight: '600' }}>₹{item.total.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Total Section */}
+            <div style={{ borderTop: '1px dashed black', paddingTop: '2px', marginBottom: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', fontWeight: 'bold' }}>TOTAL:</span>
+                <span style={{ fontSize: '12px', fontWeight: 'bold' }}>₹{(printSnapshot?.total ?? totalAmount).toFixed(2)}</span>
+              </div>
+              <div style={{ fontSize: '8px', textAlign: 'right' }}>
+                Items: {(printSnapshot?.items || soldItems).reduce((sum, it) => sum + (it.boxQty || 0) + (it.pcsQty || 0), 0)}
+              </div>
+            </div>
+            {/* Footer */}
+            <div style={{ marginTop: '4px', paddingTop: '2px', borderTop: '1px dashed black', textAlign: 'center' }}>
+              <p style={{ fontSize: '9px', fontWeight: '600', margin: '0' }}>Thank you for your business!</p>
+              <p style={{ fontSize: '8px', margin: '0' }}>Have a great day!</p>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Print Styles */}
+      <style>{`
+        @media print {
+          /* Hide everything except the portal */
+          body > *:not(#print-receipt-container) { display: none !important; }
+          #print-receipt-container { display: block !important; }
+
+          @page { size: 58mm auto; margin: 0mm; }
+          html, body { margin: 0 !important; padding: 0 !important; background-color: #fff !important; width: 58mm !important; }
+          * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; print-color-adjust: exact !important; }
+          .print\\:hidden { display: none !important; }
+          .receipt-58mm { display: block !important; width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 2mm !important; background: white !important; color: #000 !important; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important; font-size: 9px !important; line-height: 1.15 !important; page-break-after: avoid !important; page-break-inside: avoid !important; box-sizing: border-box !important; }
+          .receipt-58mm * { color: #000 !important; border-color: #000 !important; box-shadow: none !important; border-radius: 0 !important; }
+          .receipt-58mm p { margin: 0 !important; }
+          .receipt-58mm h1 { font-size: 12px !important; font-weight: bold !important; margin: 2px 0 !important; text-align: center !important; }
+          .receipt-58mm table { width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; margin: 2px 0 !important; }
+          .receipt-58mm th, .receipt-58mm td { padding: 1px 2px !important; font-size: 9px !important; white-space: normal !important; word-break: break-word !important; overflow-wrap: anywhere !important; }
+          .receipt-58mm th { font-weight: bold !important; border-bottom: 1px dashed black !important; }
+          .receipt-58mm th:nth-child(1), .receipt-58mm td:nth-child(1) { width: 52% !important; }
+          .receipt-58mm th:nth-child(2), .receipt-58mm td:nth-child(2) { width: 14% !important; }
+          .receipt-58mm th:nth-child(3), .receipt-58mm td:nth-child(3) { width: 16% !important; }
+          .receipt-58mm th:nth-child(4), .receipt-58mm td:nth-child(4) { width: 18% !important; }
+          .receipt { width: 58mm !important; margin: 0 !important; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important; color: #000 !important; }
+          .print-container { padding: 0 !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
+        }
+      `}</style>
 
       {/* Add Product Modal */}
       <AddProductModal
