@@ -1828,30 +1828,33 @@ export const insertShopIfNotExists = async (name: string, phone?: string, villag
  */
 export const saveSale = async (salePayload: {
     route_id: string;
-    truck_id: string;
+    truck_id: string | null;
     shop_name: string;
     date: string;
-    products_sold: Array<{
-        productId: string;
-        boxQty: number;
-        pcsQty: number;
-        totalAmount: number;
-    }>;
+    products_sold: any;
     total_amount: number;
 }): Promise<Sale> => {
+    const { data: session } = await supabase.auth.getSession();
+    const uid = session?.session?.user?.id || null;
+    const payload = {
+        route_id: salePayload.route_id,
+        truck_id: salePayload.truck_id,
+        shop_name: salePayload.shop_name,
+        date: salePayload.date,
+        products_sold: salePayload.products_sold,
+        total_amount: salePayload.total_amount,
+        auth_user_id: uid,
+    } as any;
+    console.log(
+        "saveSale insert payload:",
+        JSON.stringify(payload, null, 2)
+    );
     const { data, error } = await supabase
         .from('sales')
-        .insert({
-            route_id: salePayload.route_id,
-            truck_id: salePayload.truck_id,
-            shop_name: salePayload.shop_name,
-            date: salePayload.date,
-            products_sold: salePayload.products_sold,
-            total_amount: salePayload.total_amount,
-            auth_user_id: null, // No authentication
-        })
+        .insert(payload)
         .select()
         .single();
+    console.log("saveSale result:", { data, error });
 
     if (error) {
         console.error('Error saving sale:', error);
@@ -2538,9 +2541,9 @@ export const updateStockAfterSaleRPC = async (
     routeId: string,
     date: string,
     saleItems: Array<{ productId: string; qty_pcs: number }>
-): Promise<void> => {
+): Promise<unknown> => {
     const items = saleItems.map(it => ({ productId: it.productId, qty_pcs: it.qty_pcs }));
-    const { error } = await supabase.rpc('fn_update_stock_after_sale', {
+    const { data, error } = await supabase.rpc('fn_update_stock_after_sale', {
         p_driver_id: driverId,
         p_route_id: routeId,
         p_work_date: date,
@@ -2549,15 +2552,16 @@ export const updateStockAfterSaleRPC = async (
     if (error) {
         throw new Error(error.message || 'Failed to update stock after sale');
     }
+    return data as unknown;
 };
 
 export const updateStockAfterSaleRouteRPC = async (
     routeId: string,
     date: string,
     saleItems: Array<{ productId: string; qty_pcs: number }>
-): Promise<void> => {
+): Promise<unknown> => {
     const items = saleItems.map(it => ({ productId: it.productId, qty_pcs: it.qty_pcs }));
-    const { error } = await supabase.rpc('fn_update_stock_after_sale_route', {
+    const { data, error } = await supabase.rpc('fn_update_stock_after_sale_route', {
         p_route_id: routeId,
         p_work_date: date,
         sale_items: items,
@@ -2565,6 +2569,7 @@ export const updateStockAfterSaleRouteRPC = async (
     if (error) {
         throw new Error(error.message || 'Failed to update stock after sale');
     }
+    return data as unknown;
 };
 
 export const endRouteReturnStockRPC = async (

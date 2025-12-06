@@ -11,7 +11,7 @@ import {
   getAssignedStockForBilling,
   searchAssignedProductsInStock,
   createOrGetShop,
-  saveShopBill,
+  saveSale,
   updateStockAfterSaleRPC,
   updateStockAfterSaleRouteRPC,
   getProducts,
@@ -55,6 +55,25 @@ const ShopBilling = () => {
   const [shopName, setShopName] = useState("");
   const [shopAddress, setShopAddress] = useState("");
   const [shopPhone, setShopPhone] = useState("");
+
+  const fillDevDetails = () => {
+    const name = shopName?.trim() ? shopName : "BHAVYA ENTERPRICE";
+    const addr = shopAddress?.trim() ? shopAddress : "Dev Village";
+    const phone = shopPhone?.trim() ? shopPhone : "9999999999";
+    setShopName(name);
+    setShopAddress(addr);
+    setShopPhone(phone);
+    console.log("Dev: temporary shop details set", { name, addr, phone });
+  };
+
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      if (!shopName && !shopAddress && !shopPhone) {
+        fillDevDetails();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Products
   const [availableProducts, setAvailableProducts] = useState<Array<{ product: Product; stock: DailyStockItem }>>([]);
@@ -421,7 +440,7 @@ const ShopBilling = () => {
 
     // 2) After print dialog opens, persist the sale
     try {
-      // Prepare bill items
+      // Prepare bill items for stock deduction
       const billItems: ShopBillItem[] = soldItems.map(item => ({
         productId: item.productId,
         productName: item.productName,
@@ -432,19 +451,63 @@ const ShopBilling = () => {
         amount: item.total,
       }));
 
-      // Save shop bill (use empty string for truck if not set, for assigned routes)
-      await saveShopBill(
-        selectedRoute,
-        selectedTruck || '',
-        {
-          name: shopName.trim(),
-          address: shopAddress.trim() || undefined,
-          phone: shopPhone.trim() || undefined,
-        },
-        billItems,
-        totals.totalAmount,
-        selectedDate
+      // Build products_sold payload in old-portal shape
+      const items = Object.values(cartItems)
+        .filter(ci => (ci.boxQty > 0 || ci.pcsQty > 0))
+        .flatMap(ci => {
+          const boxLine = ci.boxQty > 0 ? [{
+            productId: ci.product.id,
+            productName: ci.product.name,
+            unit: 'box' as const,
+            quantity: ci.boxQty,
+            price: ci.boxPrice,
+            total: ci.boxQty * ci.boxPrice,
+          }] : [];
+          const pcsLine = ci.pcsQty > 0 ? [{
+            productId: ci.product.id,
+            productName: ci.product.name,
+            unit: 'pcs' as const,
+            quantity: ci.pcsQty,
+            price: ci.pcsPrice,
+            total: ci.pcsQty * ci.pcsPrice,
+          }] : [];
+          return [...boxLine, ...pcsLine];
+        });
+      const products_sold = {
+        items,
+        shop_address: shopAddress.trim() || undefined,
+        shop_phone: shopPhone.trim() || undefined,
+      };
+
+      const truckId = selectedTruck && /^[0-9a-fA-F-]{36}$/.test(selectedTruck) ? selectedTruck : null;
+      const routeId = selectedRoute;
+      const totalAmount = totals.totalAmount;
+      const salePayload = {
+        route_id: routeId,
+        truck_id: truckId,
+        shop_name: shopName.trim(),
+        date: selectedDate,
+        products_sold,
+        total_amount: totalAmount,
+      };
+      console.log(
+        "saveSale payload JSON:",
+        JSON.stringify(
+          {
+            route_id: routeId,
+            truck_id: truckId,
+            shop_name: shopName,
+            date: selectedDate,
+            products_sold: items,
+            total_amount: totalAmount,
+            auth_user_id: user?.id ?? null,
+          },
+          null,
+          2
+        )
       );
+      const savedSale = await saveSale(salePayload);
+      console.log("Sale saved:", savedSale);
 
       // Update stock after sale
       const products = await getProducts();
@@ -453,14 +516,22 @@ const ShopBilling = () => {
         const perBox = p?.pcs_per_box || 24;
         return { productId: item.productId, qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0) };
       });
-      if (user?.id) {
-        await updateStockAfterSaleRPC(user.id, selectedRoute, selectedDate, saleItems);
-      } else {
-        await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
+      for (const item of saleItems) {
+        const soldPcs = item.qty_pcs;
+        console.log("RPC CALL:", { route_id: selectedRoute, date: selectedDate, product_id: item.productId, sold_pcs: soldPcs });
       }
+      let rpcResult: unknown;
+      if (user?.id) {
+        rpcResult = await updateStockAfterSaleRPC(user.id, selectedRoute, selectedDate, saleItems);
+      } else {
+        rpcResult = await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
+      }
+      console.log("RPC RESULT:", rpcResult);
 
       // Refresh stock and reset quantities
+      console.log("Reloading assigned stock after sale...");
       await loadAssignedStock();
+      console.log("Assigned stock reloaded");
       setCartItems(prev => {
         const updated: Record<string, CartItem> = {};
         Object.keys(prev).forEach(key => {
@@ -468,12 +539,16 @@ const ShopBilling = () => {
         });
         return updated;
       });
+      setShopName("");
+      setShopAddress("");
+      setShopPhone("");
+      console.log("Cleared cart quantities and reset shop details");
 
       setLoading(false);
       toast({ title: "Saved", description: "Bill saved successfully." });
       setShowBillPreviewUI(false);
-      navigate('/driver/shop-billing');
     } catch (error: unknown) {
+      console.error("Error during print+save flow:", error);
       const msg = (error as { message?: string }).message || "Failed to save bill";
       toast({ title: "Error", description: msg, variant: "destructive" });
       setLoading(false);
@@ -506,14 +581,44 @@ const ShopBilling = () => {
       amount: item.total,
     }));
     try {
-      await saveShopBill(
-        selectedRoute,
-        selectedTruck || '',
-        { name: shopName.trim(), address: shopAddress.trim() || undefined, phone: shopPhone.trim() || undefined },
-        billItems,
-        totals.totalAmount,
-        selectedDate
-      );
+      const items = Object.values(cartItems)
+        .filter(ci => (ci.boxQty > 0 || ci.pcsQty > 0))
+        .flatMap(ci => {
+          const boxLine = ci.boxQty > 0 ? [{
+            productId: ci.product.id,
+            productName: ci.product.name,
+            unit: 'box' as const,
+            quantity: ci.boxQty,
+            price: ci.boxPrice,
+            total: ci.boxQty * ci.boxPrice,
+          }] : [];
+          const pcsLine = ci.pcsQty > 0 ? [{
+            productId: ci.product.id,
+            productName: ci.product.name,
+            unit: 'pcs' as const,
+            quantity: ci.pcsQty,
+            price: ci.pcsPrice,
+            total: ci.pcsQty * ci.pcsPrice,
+          }] : [];
+          return [...boxLine, ...pcsLine];
+        });
+      const products_sold = {
+        items,
+        shop_address: shopAddress.trim() || undefined,
+        shop_phone: shopPhone.trim() || undefined,
+      };
+      const truckId = selectedTruck && /^[0-9a-fA-F-]{36}$/.test(selectedTruck) ? selectedTruck : null;
+      const salePayload = {
+        route_id: selectedRoute,
+        truck_id: truckId,
+        shop_name: shopName.trim(),
+        date: selectedDate,
+        products_sold,
+        total_amount: totals.totalAmount,
+      };
+      console.log("saveSale payload:", { route_id: salePayload.route_id, truck_id: salePayload.truck_id, date: salePayload.date, shop_name: salePayload.shop_name, items: products_sold.items, total_amount: salePayload.total_amount });
+      const savedSale = await saveSale(salePayload);
+      console.log("Sale saved:", savedSale);
       const products = await getProducts();
       const saleItems = billItems.map(item => {
         const p = products.find(pp => pp.id === item.productId);
@@ -525,7 +630,9 @@ const ShopBilling = () => {
       } else {
         await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
       }
+      console.log("Reloading assigned stock after save...");
       await loadAssignedStock();
+      console.log("Assigned stock reloaded");
       setCartItems(prev => {
         const updated: Record<string, CartItem> = {};
         Object.keys(prev).forEach(key => {
@@ -533,11 +640,16 @@ const ShopBilling = () => {
         });
         return updated;
       });
+      setShopName("");
+      setShopAddress("");
+      setShopPhone("");
+      console.log("Cleared cart quantities and reset shop details");
       setLoading(false);
       toast({ title: "Saved", description: "Bill saved successfully." });
       setShowBillPreviewUI(false);
-      navigate('/driver/shop-billing');
+      // stay on the page
     } catch (error: unknown) {
+      console.error("Error during save bill flow:", error);
       const msg = (error as { message?: string }).message || "Failed to save bill";
       toast({ title: "Error", description: msg, variant: "destructive" });
       setLoading(false);
@@ -656,11 +768,18 @@ const ShopBilling = () => {
                     maxLength={10}
                     className="h-11 sm:h-10 text-base"
                   />
-                  {shopPhone && !isValidPhone(shopPhone) && (
-                    <p className="text-xs text-destructive">Enter 10-digit mobile number</p>
-                  )}
-                </div>
+                {shopPhone && !isValidPhone(shopPhone) && (
+                  <p className="text-xs text-destructive">Enter 10-digit mobile number</p>
+                )}
+                {import.meta.env.DEV && (
+                  <div className="flex justify-end pt-2">
+                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={fillDevDetails}>
+                      Set Temp Details
+                    </Button>
+                  </div>
+                )}
               </div>
+            </div>
 
               {/* Products Section */}
               <div className="space-y-4">
