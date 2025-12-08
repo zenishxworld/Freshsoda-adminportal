@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
     LayoutDashboard,
@@ -14,7 +14,6 @@ import {
     ChevronLeft,
     ChevronRight,
     LogOut,
-    ArrowRightLeft,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -29,7 +28,6 @@ const menuItems: MenuItem[] = [
     { path: '/admin/manage-products', label: 'Manage Products', icon: <Package className="w-5 h-5" /> },
     { path: '/admin/assign-stock', label: 'Assign Stock', icon: <TruckIcon className="w-5 h-5" /> },
     { path: '/admin/routes', label: 'Routes', icon: <Route className="w-5 h-5" /> },
-    { path: '/admin/drivers', label: 'Drivers', icon: <Users className="w-5 h-5" /> },
     { path: '/admin/shops', label: 'Shops', icon: <Store className="w-5 h-5" /> },
     { path: '/admin/expenses', label: 'Expenses', icon: <Receipt className="w-5 h-5" /> },
     { path: '/admin/reports', label: 'Reports', icon: <FileText className="w-5 h-5" /> },
@@ -43,7 +41,6 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     const location = useLocation();
-    const navigate = useNavigate();
     const { user, logout } = useAuth();
 
     return (
@@ -108,17 +105,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
                     {/* Footer */}
                     <div className={`border-t border-sidebar-light ${!isOpen && 'lg:hidden'}`}>
-                        {/* Portal Switching Button */}
-                        <div className="p-4 border-b border-sidebar-light">
-                            <button
-                                onClick={() => navigate('/driver/dashboard')}
-                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-300 hover:bg-sidebar-light hover:text-white transition-colors"
-                            >
-                                <ArrowRightLeft className="w-5 h-5" />
-                                <span className="text-sm font-medium">Go to Driver Portal</span>
-                            </button>
-                        </div>
-
                         {/* User Info */}
                         <div className="p-4">
                             <div className="flex items-center gap-3 mb-3">

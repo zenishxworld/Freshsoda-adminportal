@@ -12,7 +12,6 @@ import { DashboardPage } from './pages/tailadmin/DashboardPage';
 import { WarehouseStockPage } from './pages/tailadmin/WarehouseStockPage';
 import { AssignStockPage } from './pages/tailadmin/AssignStockPage';
 import { RoutesPage } from './pages/tailadmin/RoutesPage';
-import { DriversPage } from './pages/tailadmin/DriversPage';
 import { ShopsPage } from './pages/tailadmin/ShopsPage';
 import { ExpensesPage } from './pages/tailadmin/ExpensesPage';
 import { ReportsPage } from './pages/tailadmin/ReportsPage';
@@ -77,7 +76,6 @@ function AppRoutes() {
                 <Route path="/manage-products" element={<ManageProductsPage />} />
                 <Route path="/assign-stock" element={<AssignStockPage />} />
                 <Route path="/routes" element={<RoutesPage />} />
-                <Route path="/drivers" element={<DriversPage />} />
                 <Route path="/shops" element={<ShopsPage />} />
                 <Route path="/expenses" element={<ExpensesPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
