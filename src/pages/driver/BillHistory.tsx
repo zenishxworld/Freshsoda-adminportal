@@ -91,6 +91,36 @@ const BillHistory = () => {
     window.print();
   };
 
+  function normalizeSaleProducts(ps: unknown): Array<{ productId?: string; name?: string; productName?: string; unit?: 'box' | 'pcs'; quantity?: number; price?: number; total?: number }> {
+    if (!ps) return [];
+    if (Array.isArray(ps)) return ps as any[];
+    if (typeof ps === 'object' && ps !== null) {
+      const obj = ps as { items?: unknown };
+      if (Array.isArray(obj.items)) return obj.items as any[];
+    }
+    if (typeof ps === 'string') {
+      try {
+        const parsed = JSON.parse(ps);
+        if (Array.isArray(parsed)) return parsed as any[];
+        if (typeof parsed === 'object' && parsed !== null) {
+          const obj2 = parsed as { items?: unknown };
+          if (Array.isArray(obj2.items)) return obj2.items as any[];
+        }
+      } catch {}
+    }
+    return [];
+  }
+
+  function getSaleMeta(ps: unknown): { shop_address?: string; shop_phone?: string } {
+    if (!ps) return {};
+    let obj: any = ps;
+    if (typeof ps === 'string') {
+      try { obj = JSON.parse(ps); } catch { return {}; }
+    }
+    if (Array.isArray(obj)) return {};
+    return { shop_address: obj?.shop_address, shop_phone: obj?.shop_phone };
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-accent-light/10">
       {/* Header - Hidden when printing */}
@@ -116,7 +146,7 @@ const BillHistory = () => {
       </header>
 
       {/* Filters and Stats */}
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-safe">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-safe overflow-y-auto">
         <Card className="border-0 shadow-strong">
           <CardHeader className="pb-3 sm:pb-4 px-4 sm:px-6">
             <CardTitle className="text-lg sm:text-xl font-bold">Filters</CardTitle>
@@ -173,7 +203,7 @@ const BillHistory = () => {
               ) : (
                 <div className="grid grid-cols-1 gap-3 sm:gap-4">
                   {sales.map((sale) => {
-                    const items = Array.isArray(sale.products_sold) ? sale.products_sold : (sale.products_sold?.items || []);
+                    const items = normalizeSaleProducts(sale.products_sold);
                     const totalItems = items.reduce((sum: number, it: any) => sum + (it.quantity || 0), 0);
                     return (
                       <Card key={sale.id} className="border hover:border-primary/50 transition-colors">
@@ -204,7 +234,7 @@ const BillHistory = () => {
 
         {/* Bill details dialog */}
         <Dialog open={!!selectedSale} onOpenChange={() => setSelectedSale(null)}>
-          <DialogContent className="max-w-2xl print:shadow-none print:border-0 print:bg-white">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto print:shadow-none print:border-0 print:bg-white">
             {/* Header inside dialog - hide when printing */}
             <DialogHeader className="print:hidden">
               <DialogTitle>Bill Details</DialogTitle>
@@ -263,11 +293,11 @@ const BillHistory = () => {
                           <span className="font-semibold text-foreground print:text-[11px]">Shop:</span>
                         </div>
                         <p className="text-lg font-bold text-foreground pl-7 print:text-sm">{selectedSale.shop_name}</p>
-                        {!Array.isArray(selectedSale.products_sold) && selectedSale.products_sold?.shop_address && (
-                          <p className="text-xs text-muted-foreground pl-7 mt-1 print:text-[10px]">Address/Village: {selectedSale.products_sold.shop_address}</p>
+                        {getSaleMeta(selectedSale.products_sold).shop_address && (
+                          <p className="text-xs text-muted-foreground pl-7 mt-1 print:text-[10px]">Address/Village: {getSaleMeta(selectedSale.products_sold).shop_address}</p>
                         )}
-                        {!Array.isArray(selectedSale.products_sold) && selectedSale.products_sold?.shop_phone && (
-                          <p className="text-xs text-muted-foreground pl-7 print:text-[10px]">Phone: {selectedSale.products_sold.shop_phone}</p>
+                        {getSaleMeta(selectedSale.products_sold).shop_phone && (
+                          <p className="text-xs text-muted-foreground pl-7 print:text-[10px]">Phone: {getSaleMeta(selectedSale.products_sold).shop_phone}</p>
                         )}
                       </div>
 
@@ -283,7 +313,7 @@ const BillHistory = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {(Array.isArray(selectedSale.products_sold) ? selectedSale.products_sold : (selectedSale.products_sold?.items || [])).map((item: any, index: number) => (
+                            {normalizeSaleProducts(selectedSale.products_sold).map((item: any, index: number) => (
                               <tr key={index} className="border-b border-border">
                                 <td className="py-3 text-foreground print:text-[11px] print:py-1">{item.productName || item.name}</td>
                                 <td className="py-3 text-center text-foreground print:text-[11px] print:py-1">{item.quantity} {item.unit === 'box' ? 'Box' : item.unit === 'pcs' ? 'pcs' : ''}</td>
@@ -302,7 +332,7 @@ const BillHistory = () => {
                           <span className="text-2xl font-bold text-primary-dark print:text-base">₹{selectedSale.total_amount.toFixed(2)}</span>
                         </div>
                         <div className="text-xs text-muted-foreground text-right print:text-[10px]">
-                          Items: {(Array.isArray(selectedSale.products_sold) ? selectedSale.products_sold : (selectedSale.products_sold?.items || [])).reduce((sum: number, it: any) => sum + (it.quantity || 0), 0)}
+                          Items: {normalizeSaleProducts(selectedSale.products_sold).reduce((sum: number, it: any) => sum + (it.quantity || 0), 0)}
                         </div>
                       </div>
 
@@ -349,11 +379,11 @@ const BillHistory = () => {
                       {/* Shop Details */}
                       <div style={{ marginBottom: '4px', paddingBottom: '2px', borderTop: '1px dashed black', borderBottom: '1px dashed black', paddingTop: '2px' }}>
                         <p style={{ fontSize: '9px', fontWeight: 600, margin: 0 }}>Shop: {selectedSale?.shop_name}</p>
-                        {!Array.isArray(selectedSale?.products_sold) && (selectedSale as any)?.products_sold?.shop_address && (
-                          <p style={{ fontSize: '8px', margin: 0 }}>Addr: {(selectedSale as any).products_sold.shop_address}</p>
+                        {getSaleMeta(selectedSale?.products_sold).shop_address && (
+                          <p style={{ fontSize: '8px', margin: 0 }}>Addr: {getSaleMeta(selectedSale?.products_sold).shop_address}</p>
                         )}
-                        {!Array.isArray(selectedSale?.products_sold) && (selectedSale as any)?.products_sold?.shop_phone && (
-                          <p style={{ fontSize: '8px', margin: 0 }}>Ph: {(selectedSale as any).products_sold.shop_phone}</p>
+                        {getSaleMeta(selectedSale?.products_sold).shop_phone && (
+                          <p style={{ fontSize: '8px', margin: 0 }}>Ph: {getSaleMeta(selectedSale?.products_sold).shop_phone}</p>
                         )}
                       </div>
 
@@ -369,7 +399,7 @@ const BillHistory = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {(Array.isArray(selectedSale.products_sold) ? selectedSale.products_sold : (selectedSale.products_sold?.items || [])).map((item: any, index: number) => (
+                            {normalizeSaleProducts(selectedSale!.products_sold).map((item: any, index: number) => (
                               <tr key={index}>
                                 <td style={{ padding: '1px 0', fontSize: '8px' }}>{item.productName || item.name}</td>
                                 <td style={{ padding: '1px 0', textAlign: 'center', fontSize: '8px' }}>{item.quantity} {item.unit === 'box' ? 'Box' : item.unit === 'pcs' ? 'pcs' : ''}</td>
@@ -388,7 +418,7 @@ const BillHistory = () => {
                           <span style={{ fontSize: '12px', fontWeight: 'bold' }}>₹{selectedSale?.total_amount.toFixed(2)}</span>
                         </div>
                         <div style={{ fontSize: '8px', textAlign: 'right' }}>
-                          Items: {(Array.isArray(selectedSale!.products_sold) ? selectedSale!.products_sold : (selectedSale!.products_sold?.items || [])).reduce((sum: number, it: any) => sum + (it.quantity || 0), 0)}
+                          Items: {normalizeSaleProducts(selectedSale!.products_sold).reduce((sum: number, it: any) => sum + (it.quantity || 0), 0)}
                         </div>
                       </div>
 
