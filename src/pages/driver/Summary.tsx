@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useToast } from "../../hooks/use-toast";
-import { getActiveRoutes, getProducts, getDailyStock, getSalesFor, type Product, type DailyStock, type Sale } from "../../lib/supabase";
+import { getActiveRoutes, getProducts, getRouteAssignedStock, getSalesFor, type Product, type Sale } from "../../lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
 import { ArrowLeft, BarChart3, Printer, Calendar, TrendingUp, Package, DollarSign } from "lucide-react";
 
@@ -130,7 +130,7 @@ const Summary = () => {
     try {
       const products = await getProducts();
       const activeProducts = products.filter((p) => (p.status || 'active') === 'active');
-      const dailyStock = await getDailyStock(selectedRoute, selectedDate);
+      const assignedRows = await getRouteAssignedStock(selectedRoute, selectedDate);
       const sales = await getSalesFor(selectedDate, selectedRoute);
 
       // Calculate summary with separate box and pcs units
@@ -138,22 +138,17 @@ const Summary = () => {
 
       if (products) {
         products.forEach(product => {
-          // Read initial stock per unit from daily_stock (treated as START)
-          let startBox = 0;
-          let startPcs = 0;
-          if (dailyStock && Array.isArray(dailyStock.stock)) {
-            const stockItems = dailyStock.stock;
-            const boxStock = stockItems.find((s) => s.productId === product.id && s.unit === 'box');
-            const pcsStock = stockItems.find((s) => s.productId === product.id && (s.unit === 'pcs' || !('unit' in s)));
-            startBox = boxStock?.quantity || 0;
-            startPcs = pcsStock?.quantity || 0;
-          }
+          const ppb = getPcsPerBoxFromProduct(product);
+          const asRow = assignedRows.find(r => r.product_id === product.id);
+          const startTotalPcsFromAssigned = asRow ? (asRow.qty_assigned || 0) : 0;
+          const remainingTotalPcsFromAssigned = asRow ? (asRow.qty_remaining || 0) : 0;
+          const startBox = Math.floor(startTotalPcsFromAssigned / ppb);
+          const startPcs = startTotalPcsFromAssigned % ppb;
 
           // Sold per unit and revenue
           let soldBox = 0;
           let soldPcs = 0;
           let totalRevenue = 0;
-          const ppb = getPcsPerBoxFromProduct(product);
           const boxPrice = (product as any).box_price ?? product.price;
           const pcsPrice = (product as any).pcs_price ?? (((product as any).box_price ?? product.price) / ppb);
 
@@ -174,14 +169,10 @@ const Summary = () => {
               });
             });
           }
-          // Compute remaining using precise unit conversion (all to pcs)
-          const startTotalPcs = (startBox * ppb) + startPcs;
-          const soldTotalPcs = (soldBox * ppb) + soldPcs;
-          const remainingTotalPcs = startTotalPcs - soldTotalPcs;
-          const remainingBox = Math.max(0, Math.floor(remainingTotalPcs / ppb));
-          const remainingPcs = Math.max(0, remainingTotalPcs % ppb);
+          const remainingBox = Math.max(0, Math.floor(remainingTotalPcsFromAssigned / ppb));
+          const remainingPcs = Math.max(0, remainingTotalPcsFromAssigned % ppb);
 
-          // Only include products that were loaded or sold
+          // Only include products that were assigned or sold
           if ((startBox + startPcs) > 0 || (soldBox + soldPcs) > 0) {
             summary.push({
               productId: product.id,
