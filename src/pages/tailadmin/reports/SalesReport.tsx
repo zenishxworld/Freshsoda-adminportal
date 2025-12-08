@@ -28,7 +28,11 @@ export const SalesReport: React.FC = () => {
     setLoading(true);
     try {
       const data = await buildSalesReport({ from, to });
-      setRows(data);
+      const formatted = data.map(r => ({
+        ...r,
+        date: r.date ? new Date(r.date).toLocaleString() : r.date,
+      }));
+      setRows(formatted);
     } finally {
       setLoading(false);
     }
@@ -77,4 +81,3 @@ export const SalesReport: React.FC = () => {
     </div>
   );
 };
-

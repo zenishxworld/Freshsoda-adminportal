@@ -1,16 +1,25 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card } from '../../../components/tailadmin/Card';
 import { Table } from '../../../components/tailadmin/Table';
 import { Button } from '../../../components/tailadmin/Button';
 import { Input } from '../../../components/tailadmin/Input';
 import { RefreshCw, Download } from 'lucide-react';
 import { buildDriverSummary, exportCsv, type DriverSummaryRow } from '../../../lib/reports';
+import { getDrivers, type DriverOption } from '../../../lib/supabase';
 
 export const DriverSummary: React.FC = () => {
   const [from, setFrom] = useState<string>('');
   const [to, setTo] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [rows, setRows] = useState<DriverSummaryRow[]>([]);
+  const [drivers, setDrivers] = useState<DriverOption[]>([]);
+  const [driverId, setDriverId] = useState<string>('');
+
+  useEffect(() => {
+    (async () => {
+      try { const d = await getDrivers(); setDrivers(d); } catch { setDrivers([]); }
+    })();
+  }, []);
 
   const columns = useMemo(() => ([
     { key: 'driver_name', header: 'Driver' },
@@ -27,13 +36,14 @@ export const DriverSummary: React.FC = () => {
     setLoading(true);
     try {
       const data = await buildDriverSummary({ from, to });
-      setRows(data);
+      const filtered = driverId ? data.filter(r => r.driver_id === driverId) : data;
+      setRows(filtered);
     } finally {
       setLoading(false);
     }
   };
 
-  const reset = () => { setFrom(''); setTo(''); setRows([]); };
+  const reset = () => { setFrom(''); setTo(''); setDriverId(''); setRows([]); };
 
   const onExport = () => {
     const headers = ['Driver','Routes','AssignedPCS','SoldPCS','ReturnedPCS','Revenue','Bills'];
@@ -67,9 +77,16 @@ export const DriverSummary: React.FC = () => {
   return (
     <div className="space-y-6">
       <Card>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <Input label="From Date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
           <Input label="To Date" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Driver</label>
+            <select value={driverId} onChange={(e) => setDriverId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+              <option value="">All Drivers</option>
+              {drivers.map(d => (<option key={d.id} value={d.id}>{d.name}</option>))}
+            </select>
+          </div>
           <div className="flex items-end gap-2">
             <Button variant="primary" onClick={load} disabled={!from || !to || loading}>{loading ? 'Loading...' : 'Filter'}</Button>
             <Button variant="outline" onClick={onExport} disabled={rows.length === 0}><Download className="w-4 h-4 mr-2" />Export</Button>
@@ -91,4 +108,3 @@ export const DriverSummary: React.FC = () => {
     </div>
   );
 };
-

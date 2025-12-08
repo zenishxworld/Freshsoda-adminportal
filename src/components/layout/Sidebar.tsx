@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
     LayoutDashboard,
@@ -14,6 +14,7 @@ import {
     ChevronLeft,
     ChevronRight,
     LogOut,
+    ArrowRightLeft,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -41,6 +42,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     const location = useLocation();
+    const navigate = useNavigate();
     const { user, logout } = useAuth();
 
     return (
@@ -105,6 +107,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
                     {/* Footer */}
                     <div className={`border-t border-sidebar-light ${!isOpen && 'lg:hidden'}`}>
+                        {/* Portal Switching Button */}
+                        <div className="p-4 border-b border-sidebar-light">
+                            <button
+                                onClick={() => navigate('/driver/dashboard')}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-300 hover:bg-sidebar-light hover:text-white transition-colors"
+                            >
+                                <ArrowRightLeft className="w-5 h-5" />
+                                <span className="text-sm font-medium">Go to Driver Portal</span>
+                            </button>
+                        </div>
+
                         {/* User Info */}
                         <div className="p-4">
                             <div className="flex items-center gap-3 mb-3">
