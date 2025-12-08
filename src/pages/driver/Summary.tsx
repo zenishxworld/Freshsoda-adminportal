@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useToast } from "../../hooks/use-toast";
-import { getActiveRoutes, getProducts, getRouteAssignedStock, getSalesFor, type Product, type Sale } from "../../lib/supabase";
+import { getActiveRoutes, getProducts, getRouteAssignedStock, getSalesFor, endRouteReturnStockRouteRPC, getWarehouseMovements } from "../../lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
 import { ArrowLeft, BarChart3, Printer, Calendar, TrendingUp, Package, DollarSign } from "lucide-react";
 
@@ -71,6 +71,8 @@ const Summary = () => {
   const [summaryData, setSummaryData] = useState<SummaryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [hasAssignedStock, setHasAssignedStock] = useState(false);
+  const loadOutTimerRef = useRef<number | null>(null);
 
   // Memoize totals calculation to avoid re-calculating on every render
   const { totals, grandTotal } = useMemo(() => {
@@ -129,8 +131,8 @@ const Summary = () => {
     setLoading(true);
     try {
       const products = await getProducts();
-      const activeProducts = products.filter((p) => (p.status || 'active') === 'active');
       const assignedRows = await getRouteAssignedStock(selectedRoute, selectedDate);
+      setHasAssignedStock((assignedRows || []).length > 0);
       const sales = await getSalesFor(selectedDate, selectedRoute);
 
       // Calculate summary with separate box and pcs units
@@ -215,6 +217,75 @@ const Summary = () => {
   const handlePrint = () => {
     window.print();
   };
+
+  const handleLoadOut = async () => {
+    try {
+      console.log("LoadOut -> Calling RPC", { route_id: selectedRoute, p_work_date: selectedDate });
+      // Pre-check: show remaining before
+      const beforeAssigned = await getRouteAssignedStock(selectedRoute, selectedDate);
+      const beforeRemaining = (beforeAssigned || []).reduce((sum, r) => sum + (r.qty_remaining || 0), 0);
+      console.log("LoadOut -> Before Assigned Remaining (pcs)", beforeRemaining, beforeAssigned);
+
+      const result = await endRouteReturnStockRouteRPC(selectedRoute, selectedDate);
+      console.log("LoadOut -> RPC Result", result);
+
+      // Post-check: assigned stock should be zero
+      const afterAssigned = await getRouteAssignedStock(selectedRoute, selectedDate);
+      const afterRemaining = (afterAssigned || []).reduce((sum, r) => sum + (r.qty_remaining || 0), 0);
+      console.log("LoadOut -> After Assigned Remaining (pcs)", afterRemaining, afterAssigned);
+
+      // Fetch recent warehouse movements to confirm returns logged
+      const movements = await getWarehouseMovements(undefined, 20);
+      console.log("LoadOut -> Recent Warehouse Movements", movements.filter(m => m.movement_type === 'RETURN'));
+
+      toast({ title: "LoadOut successful", description: "Remaining stock returned to warehouse." });
+      setSummaryData([]);
+      setShowSummary(false);
+      // Delay navigation so toast is visible and logs can be seen
+      setTimeout(() => navigate('/driver/dashboard'), 1500);
+    } catch (error: any) {
+      console.log("LoadOut -> Error", error);
+      toast({ title: "Error", description: error?.message || "Failed to return remaining stock", variant: "destructive" });
+    }
+  };
+
+  // Auto LoadOut at midnight or when viewing a past day with remaining stock
+  useEffect(() => {
+    if (loadOutTimerRef.current) {
+      clearTimeout(loadOutTimerRef.current);
+      loadOutTimerRef.current = null;
+    }
+    if (!showSummary || !hasAssignedStock || !selectedRoute || !selectedDate) return;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (selectedDate < todayStr) {
+      console.log("Auto LoadOut -> Past day detected, finalizing immediately", { route_id: selectedRoute, p_work_date: selectedDate });
+      handleLoadOut();
+      return;
+    }
+    if (selectedDate === todayStr) {
+      const now = new Date();
+      const nextMidnight = new Date(now);
+      nextMidnight.setHours(24, 0, 0, 0);
+      const delay = nextMidnight.getTime() - now.getTime();
+      if (delay <= 0) {
+        console.log("Auto LoadOut -> Midnight reached, finalizing now", { route_id: selectedRoute, p_work_date: selectedDate });
+        handleLoadOut();
+      } else {
+        console.log("Auto LoadOut -> Scheduled", { at: nextMidnight.toISOString(), route_id: selectedRoute, p_work_date: selectedDate, delay_ms: delay });
+        loadOutTimerRef.current = window.setTimeout(() => {
+          handleLoadOut();
+          loadOutTimerRef.current = null;
+        }, delay);
+      }
+    }
+    return () => {
+      if (loadOutTimerRef.current) {
+        clearTimeout(loadOutTimerRef.current);
+        loadOutTimerRef.current = null;
+      }
+    };
+  }, [showSummary, hasAssignedStock, selectedRoute, selectedDate]);
 
   const getRouteName = () => {
     const route = routes.find(r => r.id === selectedRoute);
@@ -527,6 +598,15 @@ const Summary = () => {
                 </div>
               </CardContent>
             </Card>
+            <div className="mt-4 print:hidden">
+              <Button
+                onClick={handleLoadOut}
+                disabled={!showSummary || !hasAssignedStock}
+                className="w-full h-11 text-base font-semibold"
+              >
+                LoadOut / Return Remaining Stock
+              </Button>
+            </div>
           </div>
         )}
       </main>

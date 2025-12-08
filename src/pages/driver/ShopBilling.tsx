@@ -668,7 +668,18 @@ const ShopBilling = () => {
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 sm:gap-3">
-              <Button variant="ghost" size="sm" onClick={() => navigate("/driver/shop-billing")} className="h-9 w-9 p-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (showBillPreviewUI) {
+                    handleBackToForm();
+                  } else {
+                    navigate(-1);
+                  }
+                }}
+                className="h-9 w-9 p-0"
+              >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div className="flex items-center gap-2 sm:gap-3">
