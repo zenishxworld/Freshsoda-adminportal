@@ -120,6 +120,12 @@ export const AssignStockPage: React.FC = () => {
         return assignments.get(productId) || { boxQty: 0, pcsQty: 0 };
     };
 
+    const sanitizeNumber = (raw: string): number => {
+        const digits = raw.replace(/\D+/g, '');
+        if (!digits) return 0;
+        return parseInt(digits, 10);
+    };
+
     // Calculate subtotal for a product
     const calculateSubtotal = (product: AssignableProductRow): number => {
         const assignment = getAssignment(product.product_id);
@@ -357,14 +363,11 @@ export const AssignStockPage: React.FC = () => {
                                                             type="number"
                                                             min="0"
                                                             max={product.boxes}
-                                                            value={assignment.boxQty}
-                                                            onChange={(e) =>
-                                                                updateAssignment(
-                                                                    product.product_id,
-                                                                    'boxQty',
-                                                                    parseInt(e.target.value) || 0
-                                                                )
-                                                            }
+                                                            value={assignment.boxQty === 0 ? '' : String(assignment.boxQty)}
+                                                            onChange={(e) => {
+                                                                const v = Math.min(product.boxes, sanitizeNumber(e.target.value));
+                                                                updateAssignment(product.product_id, 'boxQty', v);
+                                                            }}
                                                             className="max-w-24"
                                                             placeholder="0"
                                                         />
@@ -374,14 +377,11 @@ export const AssignStockPage: React.FC = () => {
                                                             type="number"
                                                             min="0"
                                                             max={product.pcs}
-                                                            value={assignment.pcsQty}
-                                                            onChange={(e) =>
-                                                                updateAssignment(
-                                                                    product.product_id,
-                                                                    'pcsQty',
-                                                                    parseInt(e.target.value) || 0
-                                                                )
-                                                            }
+                                                            value={assignment.pcsQty === 0 ? '' : String(assignment.pcsQty)}
+                                                            onChange={(e) => {
+                                                                const v = Math.min(product.pcs, sanitizeNumber(e.target.value));
+                                                                updateAssignment(product.product_id, 'pcsQty', v);
+                                                            }}
                                                             className="max-w-24"
                                                             placeholder="0"
                                                         />
