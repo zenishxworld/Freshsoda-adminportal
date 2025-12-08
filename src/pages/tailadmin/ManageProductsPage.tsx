@@ -267,19 +267,23 @@ export const ManageProductsPage: React.FC = () => {
                                         </td>
 
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <div className="flex items-center justify-end gap-2">
+                                            <div className="flex items-center justify-end gap-3">
                                                 <button
                                                     onClick={() => openEditModal(product)}
-                                                    className="text-primary hover:text-primary-dark"
+                                                    className="text-primary hover:text-primary-dark p-2 rounded-md"
+                                                    title="Edit Product"
+                                                    aria-label="Edit Product"
                                                 >
-                                                    <Edit className="w-4 h-4" />
+                                                    <Edit className="w-5 h-5" />
                                                 </button>
 
                                                 <button
                                                     onClick={() => handleDeleteProduct(product)}
-                                                    className="text-red-600 hover:text-red-800"
+                                                    className="text-red-600 hover:text-red-800 p-2 rounded-md"
+                                                    title="Delete Product"
+                                                    aria-label="Delete Product"
                                                 >
-                                                    <Trash2 className="w-4 h-4" />
+                                                    <Trash2 className="w-5 h-5" />
                                                 </button>
                                             </div>
                                         </td>

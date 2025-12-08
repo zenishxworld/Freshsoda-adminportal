@@ -284,20 +284,22 @@ export const WarehouseStockPage: React.FC = () => {
                                             </Badge>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <div className="flex items-center justify-end gap-2">
+                                            <div className="flex items-center justify-end gap-3">
                                                 <button
                                                     onClick={() => openAddModal(item)}
-                                                    className="text-green-600 hover:text-green-800"
+                                                    className="text-green-600 hover:text-green-800 p-2 rounded-md"
                                                     title="Add Stock"
+                                                    aria-label="Add Stock"
                                                 >
-                                                    <Plus className="w-4 h-4" />
+                                                    <Plus className="w-5 h-5" />
                                                 </button>
                                                 <button
                                                     onClick={() => openEditModal(item)}
-                                                    className="text-primary hover:text-primary-dark"
+                                                    className="text-primary hover:text-primary-dark p-2 rounded-md"
                                                     title="Edit Stock"
+                                                    aria-label="Edit Stock"
                                                 >
-                                                    <Edit className="w-4 h-4" />
+                                                    <Edit className="w-5 h-5" />
                                                 </button>
                                             </div>
                                         </td>
@@ -368,20 +370,22 @@ export const WarehouseStockPage: React.FC = () => {
                                             </Badge>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <div className="flex items-center justify-end gap-2">
+                                            <div className="flex items-center justify-end gap-3">
                                                 <button
                                                     onClick={() => openAddModal(item)}
-                                                    className="text-green-600 hover:text-green-800"
+                                                    className="text-green-600 hover:text-green-800 p-2 rounded-md"
                                                     title="Add Stock"
+                                                    aria-label="Add Stock"
                                                 >
-                                                    <Plus className="w-4 h-4" />
+                                                    <Plus className="w-5 h-5" />
                                                 </button>
                                                 <button
                                                     onClick={() => openEditModal(item)}
-                                                    className="text-primary hover:text-primary-dark"
+                                                    className="text-primary hover:text-primary-dark p-2 rounded-md"
                                                     title="Edit Stock"
+                                                    aria-label="Edit Stock"
                                                 >
-                                                    <Edit className="w-4 h-4" />
+                                                    <Edit className="w-5 h-5" />
                                                 </button>
                                             </div>
                                         </td>
@@ -449,7 +453,7 @@ export const WarehouseStockPage: React.FC = () => {
                     }}>
                         Cancel
                     </Button>
-                    <Button onClick={handleAddStock}>
+                    <Button size="lg" onClick={handleAddStock}>
                         Add Stock
                     </Button>
                 </div>
@@ -505,7 +509,7 @@ export const WarehouseStockPage: React.FC = () => {
                     }}>
                         Cancel
                     </Button>
-                    <Button onClick={handleEditStock}>
+                    <Button size="lg" onClick={handleEditStock}>
                         Save Changes
                     </Button>
                 </div>

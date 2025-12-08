@@ -174,20 +174,22 @@ export const RoutesPage: React.FC = () => {
             key: 'actions',
             header: 'Actions',
             render: (_: any, row: Route) => (
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                     <button
                         onClick={() => handleOpenEditModal(row)}
-                        className="p-1.5 hover:bg-gray-100 rounded transition-colors"
+                        className="p-2 hover:bg-gray-100 rounded-md transition-colors"
                         title="Edit route"
+                        aria-label="Edit route"
                     >
-                        <Edit className="w-4 h-4 text-primary" />
+                        <Edit className="w-5 h-5 text-primary" />
                     </button>
                     <button
                         onClick={() => handleDeleteRoute(row)}
-                        className="p-1.5 hover:bg-red-50 rounded transition-colors"
+                        className="p-2 hover:bg-red-50 rounded-md transition-colors"
                         title="Delete route"
+                        aria-label="Delete route"
                     >
-                        <Trash2 className="w-4 h-4 text-red-600" />
+                        <Trash2 className="w-5 h-5 text-red-600" />
                     </button>
                 </div>
             ),

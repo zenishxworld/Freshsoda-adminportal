@@ -50,15 +50,30 @@ export const ExpensesPage: React.FC = () => {
             key: 'actions',
             header: 'Actions',
             render: (_value: unknown, row: Expense) => (
-                <div className="flex gap-2">
-                    <button className="p-1.5 hover:bg-gray-100 rounded transition-colors" onClick={() => { setEditing(row); setForm({ category: row.category, amount: String((row as any)._originalAmount || row.amount), date: row.date, note: row.note || '' }); setIsEditOpen(true); }}>
-                        <Edit className="w-4 h-4 text-primary" />
+                <div className="flex gap-3">
+                    <button
+                        className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+                        onClick={() => { setEditing(row); setForm({ category: row.category, amount: String((row as any)._originalAmount || row.amount), date: row.date, note: row.note || '' }); setIsEditOpen(true); }}
+                        title="Edit expense"
+                        aria-label="Edit expense"
+                    >
+                        <Edit className="w-5 h-5 text-primary" />
                     </button>
-                    <button className="p-1.5 hover:bg-gray-100 rounded transition-colors" onClick={() => { setEditing(row); setIsDeleteOpen(true); }}>
-                        <Trash2 className="w-4 h-4 text-danger" />
+                    <button
+                        className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+                        onClick={() => { setEditing(row); setIsDeleteOpen(true); }}
+                        title="Delete expense"
+                        aria-label="Delete expense"
+                    >
+                        <Trash2 className="w-5 h-5 text-danger" />
                     </button>
-                    <button className="p-1.5 hover:bg-gray-100 rounded transition-colors" onClick={async () => { setEditing(row); setIsLogsOpen(true); setLoadingLogs(true); try { const l = await getExpenseMovements(row.id, 100); setLogs(l); } catch (e: unknown) { const msg = e instanceof Error ? e.message : 'Failed to load logs'; toast({ title: 'Error', description: msg, variant: 'destructive' }); setLogs([]); } finally { setLoadingLogs(false); } }}>
-                        <PieChart className="w-4 h-4 text-muted-foreground" />
+                    <button
+                        className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+                        onClick={async () => { setEditing(row); setIsLogsOpen(true); setLoadingLogs(true); try { const l = await getExpenseMovements(row.id, 100); setLogs(l); } catch (e: unknown) { const msg = e instanceof Error ? e.message : 'Failed to load logs'; toast({ title: 'Error', description: msg, variant: 'destructive' }); setLogs([]); } finally { setLoadingLogs(false); } }}
+                        title="View logs"
+                        aria-label="View logs"
+                    >
+                        <PieChart className="w-5 h-5 text-muted-foreground" />
                     </button>
                 </div>
             ),
