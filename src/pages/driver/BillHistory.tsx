@@ -234,7 +234,7 @@ const BillHistory = () => {
 
         {/* Bill details dialog */}
         <Dialog open={!!selectedSale} onOpenChange={() => setSelectedSale(null)}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto print:shadow-none print:border-0 print:bg-white">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto bg-white print:shadow-none print:border-0 print:bg-white">
             {/* Header inside dialog - hide when printing */}
             <DialogHeader className="print:hidden">
               <DialogTitle>Bill Details</DialogTitle>
@@ -256,8 +256,8 @@ const BillHistory = () => {
                 </div>
 
                 {/* Printable Bill — same layout as ShopBilling */}
-                <div className="receipt print:p-0 print:bg-white print:text-black print:font-mono print:w-[58mm] print:mx-0">
-                  <Card className="border-0 shadow-strong print:shadow-none print:border-0">
+                <div className="receipt bg-white print:p-0 print:bg-white print:text-black print:font-mono print:w-[58mm] print:mx-0">
+                  <Card className="border-0 shadow-strong bg-white print:shadow-none print:border-0">
                     <CardContent className="p-6 sm:p-8 print:p-2">
                       {/* Bill Header */}
                       <div className="text-center mb-6 print:mb-3">
