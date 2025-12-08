@@ -524,6 +524,7 @@ const ShopBilling = () => {
       if (user?.id) {
         rpcResult = await updateStockAfterSaleRPC(user.id, selectedRoute, selectedDate, saleItems);
       } else {
+        console.log("RPC PAYLOAD:", saleItems);
         rpcResult = await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
       }
       console.log("RPC RESULT:", rpcResult);
