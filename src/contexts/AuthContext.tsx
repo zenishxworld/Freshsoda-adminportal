@@ -21,24 +21,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
 
-    // Fetch user role from database
-    const fetchUserRole = async (userId: string): Promise<UserRole> => {
+    // Fetch user role from database and cache in metadata
+    const fetchUserRole = async (authUser: User): Promise<UserRole> => {
         try {
+            // First, check if role is cached in user metadata
+            const cachedRole = authUser.user_metadata?.role;
+            if (cachedRole && (cachedRole === 'admin' || cachedRole === 'driver')) {
+                console.log('Using cached role from metadata:', cachedRole);
+                return cachedRole as UserRole;
+            }
+
+            // Fetch from database
             const { data, error } = await supabase
                 .from('users')
-                .select('role')
-                .eq('id', userId)
+                .select('role, is_active')
+                .eq('auth_user_id', authUser.id)
                 .single();
 
             if (error) {
                 console.error('Error fetching user role:', error);
-                return null;
+                throw new Error('Failed to fetch user role');
             }
 
-            return (data?.role as UserRole) || null;
-        } catch (error) {
-            console.error('Error fetching user role:', error);
-            return null;
+            if (!data) {
+                throw new Error('User not found in database');
+            }
+
+            // Check if user is active
+            if (!data.is_active) {
+                throw new Error('Your account has been deactivated. Please contact an administrator.');
+            }
+
+            const userRole = data.role as UserRole;
+
+            // Cache role in user metadata for faster subsequent loads
+            try {
+                await supabase.auth.updateUser({
+                    data: { role: userRole }
+                });
+                console.log('Cached role in metadata:', userRole);
+            } catch (metadataError) {
+                console.warn('Failed to cache role in metadata:', metadataError);
+                // Non-critical error, continue
+            }
+
+            return userRole;
+        } catch (error: any) {
+            console.error('Error in fetchUserRole:', error);
+            throw error;
         }
     };
 
@@ -49,12 +79,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const { data: { session } } = await supabase.auth.getSession();
 
                 if (session?.user) {
-                    setUser(session.user);
-                    const userRole = await fetchUserRole(session.user.id);
-                    setRole(userRole);
+                    try {
+                        const userRole = await fetchUserRole(session.user);
+
+                        if (!userRole) {
+                            throw new Error('Invalid user role');
+                        }
+
+                        setUser(session.user);
+                        setRole(userRole);
+                    } catch (roleError: any) {
+                        console.error('Role fetch error:', roleError);
+                        // Clear session if role fetch fails
+                        await supabase.auth.signOut();
+                        setUser(null);
+                        setRole(null);
+                    }
                 }
             } catch (error) {
                 console.error('Error initializing auth:', error);
+                setUser(null);
+                setRole(null);
             } finally {
                 setLoading(false);
             }
@@ -65,10 +110,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
+                console.log('Auth state changed:', event);
+
                 if (session?.user) {
-                    setUser(session.user);
-                    const userRole = await fetchUserRole(session.user.id);
-                    setRole(userRole);
+                    try {
+                        const userRole = await fetchUserRole(session.user);
+
+                        if (!userRole) {
+                            throw new Error('Invalid user role');
+                        }
+
+                        setUser(session.user);
+                        setRole(userRole);
+                    } catch (roleError: any) {
+                        console.error('Role fetch error on auth change:', roleError);
+                        setUser(null);
+                        setRole(null);
+                    }
                 } else {
                     setUser(null);
                     setRole(null);
@@ -85,6 +143,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Login function with role-based redirect
     const login = async (email: string, password: string) => {
         try {
+            setLoading(true);
+
             const { data, error } = await supabase.auth.signInWithPassword({
                 email,
                 password,
@@ -93,7 +153,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (error) throw error;
 
             if (data.user) {
-                const userRole = await fetchUserRole(data.user.id);
+                const userRole = await fetchUserRole(data.user);
+
+                if (!userRole) {
+                    throw new Error('Invalid user role');
+                }
+
                 setUser(data.user);
                 setRole(userRole);
 
@@ -101,28 +166,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (userRole === 'admin') {
                     navigate('/admin');
                 } else if (userRole === 'driver') {
-                    navigate('/driver/start-route');
+                    navigate('/driver/dashboard');
                 } else {
-                    // Default fallback
-                    navigate('/');
+                    throw new Error('Invalid user role');
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Login error:', error);
+            // Clear any partial state
+            setUser(null);
+            setRole(null);
             throw error;
+        } finally {
+            setLoading(false);
         }
     };
 
-    // Logout function
+    // Logout function with complete state clearing
     const logout = async () => {
         try {
+            // Sign out from Supabase Auth
             await supabase.auth.signOut();
+
+            // Clear all state
             setUser(null);
             setRole(null);
-            navigate('/login');
+
+            // Clear any cached data
+            localStorage.clear();
+            sessionStorage.clear();
+
+            // Redirect to login
+            navigate('/login', { replace: true });
         } catch (error) {
             console.error('Logout error:', error);
-            throw error;
+            // Force clear state and redirect even on error
+            setUser(null);
+            setRole(null);
+            navigate('/login', { replace: true });
         }
     };
 

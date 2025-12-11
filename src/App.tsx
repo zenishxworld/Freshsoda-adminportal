@@ -26,14 +26,11 @@ import ShopBilling from './pages/driver/ShopBilling';
 import Summary from './pages/driver/Summary';
 import BillHistory from './pages/driver/BillHistory';
 
-// Root redirect component - TEMPORARY: Direct to admin for testing
+// Root redirect component - Role-based redirect after authentication
 const RootRedirect: React.FC = () => {
-  // Skip authentication, go directly to admin portal
-  return <Navigate to="/admin" replace />;
+  const { role, loading, user } = useAuth();
 
-  /*
-  const { role, loading } = useAuth();
-
+  // STEP 1: Wait for auth to load
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-body">
@@ -45,14 +42,20 @@ const RootRedirect: React.FC = () => {
     );
   }
 
+  // STEP 2: Redirect to login if not authenticated
+  if (!user || !role) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // STEP 3: Role-based redirect
   if (role === 'admin') {
     return <Navigate to="/admin" replace />;
   } else if (role === 'driver') {
-    return <Navigate to="/driver/start-route" replace />;
+    return <Navigate to="/driver/dashboard" replace />;
   }
 
+  // STEP 4: Fallback for invalid role
   return <Navigate to="/login" replace />;
-  */
 };
 
 function AppRoutes() {
