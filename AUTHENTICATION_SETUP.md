@@ -44,8 +44,21 @@ This will:
 
 ## Step 3: Insert Users into Public Users Table
 
+## Step 3: Link Auth Users to Public Users Table
+
+> [!IMPORTANT]
+> Your users table has a `password_hash` column. We need to handle this properly.
+
+### Option A: If password_hash can be NULL
+
 1. Go back to **SQL Editor**
-2. Run the following SQL (replace the IDs with the actual IDs from step 2):
+2. First, make password_hash nullable:
+
+```sql
+ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+```
+
+3. Then insert the users:
 
 ```sql
 -- Insert admin user
@@ -56,6 +69,22 @@ INSERT INTO users (auth_user_id, name, role, phone, is_active) VALUES
 INSERT INTO users (auth_user_id, name, role, phone, is_active) VALUES
   ('PASTE_DRIVER_USER_ID_HERE', 'Driver User', 'driver', '+91-9876543210', true);
 ```
+
+### Option B: If you want to keep password_hash NOT NULL
+
+Use a placeholder value for password_hash (since actual password is in auth.users):
+
+```sql
+-- Insert admin user
+INSERT INTO users (auth_user_id, name, role, phone, is_active, password_hash) VALUES
+  ('PASTE_ADMIN_USER_ID_HERE', 'Admin User', 'admin', '+91-1234567890', true, 'managed_by_supabase_auth');
+
+-- Insert driver user
+INSERT INTO users (auth_user_id, name, role, phone, is_active, password_hash) VALUES
+  ('PASTE_DRIVER_USER_ID_HERE', 'Driver User', 'driver', '+91-9876543210', true, 'managed_by_supabase_auth');
+```
+
+**Recommended**: Use Option A to make password_hash nullable, since passwords are managed by Supabase Auth.
 
 3. Click **Run**
 

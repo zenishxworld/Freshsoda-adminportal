@@ -30,7 +30,12 @@ import BillHistory from './pages/driver/BillHistory';
 const RootRedirect: React.FC = () => {
   const { role, loading, user } = useAuth();
 
-  // STEP 1: Wait for auth to load
+  // If not authenticated, redirect to login immediately (no loading spinner)
+  if (!user && !loading) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // If authenticated but still loading role, show spinner
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-body">
@@ -42,19 +47,19 @@ const RootRedirect: React.FC = () => {
     );
   }
 
-  // STEP 2: Redirect to login if not authenticated
-  if (!user || !role) {
+  // If authenticated but no role, redirect to login
+  if (!role) {
     return <Navigate to="/login" replace />;
   }
 
-  // STEP 3: Role-based redirect
+  // Role-based redirect for authenticated users
   if (role === 'admin') {
     return <Navigate to="/admin" replace />;
   } else if (role === 'driver') {
     return <Navigate to="/driver/dashboard" replace />;
   }
 
-  // STEP 4: Fallback for invalid role
+  // Fallback for invalid role
   return <Navigate to="/login" replace />;
 };
 

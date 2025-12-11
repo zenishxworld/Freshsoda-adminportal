@@ -75,10 +75,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Initialize auth state
     useEffect(() => {
         const initAuth = async () => {
+            console.log('[AuthContext] Initializing auth...');
             try {
-                const { data: { session } } = await supabase.auth.getSession();
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+                if (sessionError) {
+                    console.error('[AuthContext] Session error:', sessionError);
+                    throw sessionError;
+                }
+
+                console.log('[AuthContext] Session:', session ? 'exists' : 'null');
 
                 if (session?.user) {
+                    console.log('[AuthContext] User found, fetching role...');
                     try {
                         const userRole = await fetchUserRole(session.user);
 
@@ -86,21 +95,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                             throw new Error('Invalid user role');
                         }
 
+                        console.log('[AuthContext] Role fetched successfully:', userRole);
                         setUser(session.user);
                         setRole(userRole);
                     } catch (roleError: any) {
-                        console.error('Role fetch error:', roleError);
+                        console.error('[AuthContext] Role fetch error:', roleError);
+                        console.error('[AuthContext] Error message:', roleError.message);
                         // Clear session if role fetch fails
                         await supabase.auth.signOut();
                         setUser(null);
                         setRole(null);
                     }
+                } else {
+                    console.log('[AuthContext] No user session');
                 }
             } catch (error) {
                 console.error('Error initializing auth:', error);
                 setUser(null);
                 setRole(null);
             } finally {
+                console.log('[AuthContext] Setting loading to false');
                 setLoading(false);
             }
         };
