@@ -46,6 +46,7 @@ export type Sale = {
     products_sold: any;
     total_amount?: number;
     created_at?: string;
+    invoice_no?: string;
 };
 
 export type WarehouseStock = {
@@ -1911,6 +1912,70 @@ export const saveSale = async (salePayload: {
     }
 
     return data;
+};
+
+export const saveSaleWithInvoice = async (salePayload: {
+    route_id: string;
+    truck_id: string | null;
+    shop_name: string;
+    date: string;
+    products_sold: any;
+    total_amount: number;
+    route_code: string;
+}): Promise<Sale> => {
+    const { data: session } = await supabase.auth.getSession();
+    const uid = session?.session?.user?.id || null;
+    const yymmdd = (() => {
+        const [y, m, d] = salePayload.date.split('-');
+        return `${y.slice(-2)}${m}${d}`;
+    })();
+    const prefix = `FS-${salePayload.route_code}-${yymmdd}-`;
+    let attempt = 0;
+    while (attempt < 5) {
+        attempt += 1;
+        const { data: latestRows, error: latestErr } = await supabase
+            .from('sales')
+            .select('invoice_no')
+            .ilike('invoice_no', `${prefix}%`)
+            .order('invoice_no', { ascending: false })
+            .limit(1);
+        if (latestErr) {
+            console.error('Error checking latest invoice:', latestErr);
+            throw new Error('Failed to generate invoice number');
+        }
+        const latest = (latestRows || [])[0]?.invoice_no as string | undefined;
+        const nextSeq = (() => {
+            const last = latest ? latest.split('-').pop() || '' : '';
+            const n = Number(last) || 0;
+            const next = n + 1;
+            return String(next).padStart(4, '0');
+        })();
+        const invoice_no = `${prefix}${nextSeq}`;
+        const payload = {
+            route_id: salePayload.route_id,
+            truck_id: salePayload.truck_id,
+            shop_name: salePayload.shop_name,
+            date: salePayload.date,
+            products_sold: salePayload.products_sold,
+            total_amount: salePayload.total_amount,
+            auth_user_id: uid,
+            invoice_no,
+        } as any;
+        const { data, error } = await supabase
+            .from('sales')
+            .insert(payload)
+            .select()
+            .single();
+        if (error && error.code === '23505') {
+            continue;
+        }
+        if (error) {
+            console.error('Error saving sale with invoice:', error);
+            throw new Error('Failed to save sale. Please try again.');
+        }
+        return data;
+    }
+    throw new Error('Failed to generate unique invoice after retries');
 };
 
 /**
