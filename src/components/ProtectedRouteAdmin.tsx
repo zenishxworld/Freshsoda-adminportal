@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LoadingSpinner } from './LoadingSpinner';
 import { UnauthorizedPage } from './UnauthorizedPage';
+import { isWithinAuthGracePeriod } from '@/lib/utils';
 
 interface ProtectedRouteAdminProps {
     children: React.ReactNode;
@@ -18,6 +19,10 @@ export const ProtectedRouteAdmin: React.FC<ProtectedRouteAdminProps> = ({ childr
 
     // STEP 2: Redirect to login if not authenticated
     if (!user || !role) {
+        const localRole = isWithinAuthGracePeriod() ? (localStorage.getItem('fs_role') as 'admin' | 'driver' | null) : null;
+        if (localRole === 'admin') {
+            return <>{children}</>;
+        }
         return <Navigate to="/login" replace />;
     }
 

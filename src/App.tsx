@@ -5,6 +5,7 @@ import { ProtectedRouteAdmin } from './components/ProtectedRouteAdmin';
 import { ProtectedRouteDriver } from './components/ProtectedRouteDriver';
 import { DashboardLayout } from './layouts/DashboardLayout';
 import { DriverLayout } from './layouts/DriverLayout';
+import { isWithinAuthGracePeriod } from './lib/utils';
 
 // Admin Pages
 import { LoginPage } from './pages/tailadmin/LoginPage';
@@ -29,9 +30,12 @@ import BillHistory from './pages/driver/BillHistory';
 // Root redirect component - Role-based redirect after authentication
 const RootRedirect: React.FC = () => {
   const { role, loading, user } = useAuth();
+  const gracefulRole = isWithinAuthGracePeriod() ? (localStorage.getItem('fs_role') as 'admin' | 'driver' | null) : null;
 
   // If not authenticated, redirect to login immediately (no loading spinner)
   if (!user && !loading) {
+    if (gracefulRole === 'admin') return <Navigate to="/admin" replace />;
+    if (gracefulRole === 'driver') return <Navigate to="/driver/dashboard" replace />;
     return <Navigate to="/login" replace />;
   }
 
@@ -49,6 +53,8 @@ const RootRedirect: React.FC = () => {
 
   // If authenticated but no role, redirect to login
   if (!role) {
+    if (gracefulRole === 'admin') return <Navigate to="/admin" replace />;
+    if (gracefulRole === 'driver') return <Navigate to="/driver/dashboard" replace />;
     return <Navigate to="/login" replace />;
   }
 

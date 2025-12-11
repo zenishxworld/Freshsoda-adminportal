@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
+import { isWithinAuthGracePeriod } from '@/lib/utils';
 
 type UserRole = 'admin' | 'driver' | null;
 
@@ -107,7 +108,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         setRole(null);
                     }
                 } else {
-                    console.log('[AuthContext] No user session');
+                    const localRole = isWithinAuthGracePeriod() ? (localStorage.getItem('fs_role') as UserRole | null) : null;
+                    if (localRole === 'admin' || localRole === 'driver') {
+                        setUser(null);
+                        setRole(localRole);
+                    } else {
+                        console.log('[AuthContext] No user session');
+                    }
                 }
             } catch (error) {
                 console.error('Error initializing auth:', error);
@@ -175,6 +182,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 setUser(data.user);
                 setRole(userRole);
+                try {
+                    localStorage.setItem('lastLoginAt', Date.now().toString());
+                    localStorage.setItem('fs_role', userRole || '');
+                } catch {}
 
                 // Role-based redirect
                 if (userRole === 'admin') {
