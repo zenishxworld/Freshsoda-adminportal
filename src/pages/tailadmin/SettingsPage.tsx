@@ -9,8 +9,6 @@ export const SettingsPage: React.FC = () => {
     const tabs = [
         { id: 'profile', label: 'Profile' },
         { id: 'password', label: 'Change Password' },
-        { id: 'config', label: 'App Configuration' },
-        { id: 'billing', label: 'Billing Address' },
     ];
 
     return (
@@ -93,35 +91,7 @@ export const SettingsPage: React.FC = () => {
                         </div>
                     )}
 
-                    {activeTab === 'config' && (
-                        <div className="space-y-6 max-w-2xl">
-                            <Input label="Company Name" placeholder="FreshSoda Distributors" defaultValue="FreshSoda" />
-                            <Input label="GST Number" placeholder="Enter GST number" />
-                            <Input label="Currency" placeholder="INR" defaultValue="INR" />
-
-                            <div className="flex justify-end">
-                                <Button variant="primary">Save Configuration</Button>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'billing' && (
-                        <div className="space-y-6 max-w-2xl">
-                            <Input label="Business Name" placeholder="Enter business name" />
-                            <Input label="Address Line 1" placeholder="Enter address" />
-                            <Input label="Address Line 2" placeholder="Enter address (optional)" />
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <Input label="City" placeholder="Enter city" />
-                                <Input label="State" placeholder="Enter state" />
-                                <Input label="PIN Code" placeholder="Enter PIN code" />
-                            </div>
-
-                            <div className="flex justify-end">
-                                <Button variant="primary">Save Billing Address</Button>
-                            </div>
-                        </div>
-                    )}
+                    
                 </div>
             </Card>
         </div>
