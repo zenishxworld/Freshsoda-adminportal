@@ -1,10 +1,42 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card } from '../../components/tailadmin/Card';
 import { Button } from '../../components/tailadmin/Button';
 import { Input } from '../../components/tailadmin/Input';
+import { useAuth } from '../../contexts/AuthContext';
+import { getUserProfile, updateUserProfile, type UserProfile } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
 
 export const SettingsPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState('profile');
+    const { user } = useAuth();
+    const { toast } = useToast();
+    const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [profile, setProfile] = useState<{ firstName: string; lastName: string; email: string; phone: string }>({ firstName: '', lastName: '', email: '', phone: '' });
+
+    useEffect(() => {
+        const load = async () => {
+            if (!user?.id) return;
+            setLoading(true);
+            try {
+                const p = await getUserProfile(user.id);
+                const fullName = (p?.name || '').trim();
+                const [firstName, ...rest] = fullName.split(' ');
+                const lastName = rest.join(' ');
+                setProfile({
+                    firstName: firstName || '',
+                    lastName: lastName || '',
+                    email: p?.email || user.email || '',
+                    phone: p?.phone || '',
+                });
+            } catch (e: unknown) {
+                // Silent fail, keep defaults
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, [user?.id, user?.email]);
 
     const tabs = [
         { id: 'profile', label: 'Profile' },
@@ -55,26 +87,44 @@ export const SettingsPage: React.FC = () => {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Input label="First Name" placeholder="Enter first name" defaultValue="Admin" />
-                                <Input label="Last Name" placeholder="Enter last name" defaultValue="User" />
+                                <Input label="First Name" placeholder="Enter first name" value={profile.firstName} onChange={(e) => setProfile(p => ({ ...p, firstName: e.target.value }))} />
+                                <Input label="Last Name" placeholder="Enter last name" value={profile.lastName} onChange={(e) => setProfile(p => ({ ...p, lastName: e.target.value }))} />
                             </div>
 
                             <Input
                                 label="Email Address"
                                 type="email"
-                                placeholder="admin@freshsoda.com"
-                                defaultValue="admin@freshsoda.com"
+                                placeholder="email"
+                                value={profile.email}
+                                onChange={(e) => setProfile(p => ({ ...p, email: e.target.value }))}
+                                disabled
                             />
 
                             <Input
                                 label="Phone Number"
                                 type="tel"
-                                placeholder="+91 98765 43210"
-                                defaultValue="+91 98765 43210"
+                                placeholder="Phone number"
+                                value={profile.phone}
+                                onChange={(e) => setProfile(p => ({ ...p, phone: e.target.value }))}
                             />
 
                             <div className="flex justify-end">
-                                <Button variant="primary">Save Changes</Button>
+                                <Button variant="primary" onClick={async () => {
+                                    if (!user?.id) return;
+                                    setSaving(true);
+                                    try {
+                                        const name = [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim();
+                                        await updateUserProfile(user.id, { name, phone: profile.phone || null });
+                                        toast({ title: 'Saved', description: 'Profile updated successfully' });
+                                    } catch (e: unknown) {
+                                        const msg = e instanceof Error ? e.message : 'Failed to save profile';
+                                        toast({ title: 'Error', description: msg, variant: 'destructive' });
+                                    } finally {
+                                        setSaving(false);
+                                    }
+                                }} disabled={saving || loading}>
+                                    {saving ? 'Saving...' : 'Save Changes'}
+                                </Button>
                             </div>
                         </div>
                     )}

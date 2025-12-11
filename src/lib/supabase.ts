@@ -71,6 +71,55 @@ export type WarehouseMovement = {
     created_at: string;
 };
 
+// User Profile
+export interface UserProfile {
+    id: string;
+    name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    role?: string | null;
+}
+
+export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
+    const { data, error } = await supabase
+        .from('users')
+        .select('id, name, phone, email, role')
+        .eq('id', userId)
+        .maybeSingle();
+    if (error) {
+        console.error('Error fetching user profile:', error);
+        throw new Error('Failed to load profile');
+    }
+    if (!data) return null;
+    return {
+        id: data.id,
+        name: data.name || null,
+        phone: data.phone || null,
+        email: data.email || null,
+        role: data.role || null,
+    };
+};
+
+export const updateUserProfile = async (userId: string, payload: { name?: string | null; phone?: string | null }): Promise<UserProfile> => {
+    const { data, error } = await supabase
+        .from('users')
+        .update({ name: payload.name ?? null, phone: payload.phone ?? null })
+        .eq('id', userId)
+        .select('id, name, phone, email, role')
+        .maybeSingle();
+    if (error) {
+        console.error('Error updating user profile:', error);
+        throw new Error('Failed to save profile');
+    }
+    return {
+        id: data.id,
+        name: data.name || null,
+        phone: data.phone || null,
+        email: data.email || null,
+        role: data.role || null,
+    };
+};
+
 export type AssignedStockRow = {
     product_id: string;
     product_name: string;
