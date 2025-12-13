@@ -2610,12 +2610,24 @@ export const updateStockAfterSaleRouteRPC = async (
     saleItems: Array<{ productId: string; qty_pcs: number }>
 ): Promise<unknown> => {
     const items = saleItems.map(it => ({ productId: it.productId, qty_pcs: it.qty_pcs }));
+    console.log('RPC CALL fn_update_stock_after_sale_route', {
+        p_route_id: routeId,
+        p_work_date: date,
+        sale_items: items,
+    });
     const { data, error } = await supabase.rpc('fn_update_stock_after_sale_route', {
         p_route_id: routeId,
         p_work_date: date,
         sale_items: items,
     });
     if (error) {
+        console.error('RPC ERROR fn_update_stock_after_sale_route', {
+            message: error.message,
+            details: error,
+            p_route_id: routeId,
+            p_work_date: date,
+            sale_items: items,
+        });
         throw new Error(error.message || 'Failed to update stock after sale');
     }
     return data as unknown;

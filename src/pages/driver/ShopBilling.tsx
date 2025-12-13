@@ -12,8 +12,8 @@ import {
   searchAssignedProductsInStock,
   createOrGetShop,
   saveSale,
-  updateStockAfterSaleRPC,
   updateStockAfterSaleRouteRPC,
+  getRouteAssignedStock,
   getProducts,
   getActiveRoutes,
   getTrucks,
@@ -500,7 +500,6 @@ const ShopBilling = () => {
             date: selectedDate,
             products_sold: items,
             total_amount: totalAmount,
-            auth_user_id: user?.id ?? null,
           },
           null,
           2
@@ -516,17 +515,16 @@ const ShopBilling = () => {
         const perBox = p?.pcs_per_box || 24;
         return { productId: item.productId, qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0) };
       });
-      for (const item of saleItems) {
-        const soldPcs = item.qty_pcs;
-        console.log("RPC CALL:", { route_id: selectedRoute, date: selectedDate, product_id: item.productId, sold_pcs: soldPcs });
+      const assignedRows = await getRouteAssignedStock(selectedRoute, selectedDate);
+      const assignedIds = new Set(assignedRows.map(r => r.product_id));
+      for (const si of saleItems) {
+        if (!assignedIds.has(si.productId)) {
+          console.error("Assigned stock missing", { route_id: selectedRoute, date: selectedDate, productId: si.productId });
+          throw new Error("Assigned stock missing for this product/route/date");
+        }
       }
-      let rpcResult: unknown;
-      if (user?.id) {
-        rpcResult = await updateStockAfterSaleRPC(user.id, selectedRoute, selectedDate, saleItems);
-      } else {
-        console.log("RPC PAYLOAD:", saleItems);
-        rpcResult = await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
-      }
+      console.log("RPC PAYLOAD (route-based):", { route_id: selectedRoute, work_date: selectedDate, sale_items: saleItems });
+      const rpcResult = await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
       console.log("RPC RESULT:", rpcResult);
 
       // Refresh stock and reset quantities
@@ -626,11 +624,15 @@ const ShopBilling = () => {
         const perBox = p?.pcs_per_box || 24;
         return { productId: item.productId, qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0) };
       });
-      if (user?.id) {
-        await updateStockAfterSaleRPC(user.id, selectedRoute, selectedDate, saleItems);
-      } else {
-        await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
+      const assignedRows = await getRouteAssignedStock(selectedRoute, selectedDate);
+      const assignedIds = new Set(assignedRows.map(r => r.product_id));
+      for (const si of saleItems) {
+        if (!assignedIds.has(si.productId)) {
+          console.error("Assigned stock missing", { route_id: selectedRoute, date: selectedDate, productId: si.productId });
+          throw new Error("Assigned stock missing for this product/route/date");
+        }
       }
+      await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
       console.log("Reloading assigned stock after save...");
       await loadAssignedStock();
       console.log("Assigned stock reloaded");
