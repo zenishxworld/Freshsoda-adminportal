@@ -12,11 +12,6 @@ import {
   searchAssignedProductsInStock,
   createOrGetShop,
   saveSale,
-<<<<<<< HEAD
-  saveSaleWithInvoice,
-  updateStockAfterSaleRPC,
-=======
->>>>>>> recover-work
   updateStockAfterSaleRouteRPC,
   getRouteAssignedStock,
   getProducts,
@@ -97,7 +92,6 @@ const ShopBilling = () => {
     shopAddress: string;
     shopPhone: string;
     routeName: string;
-    invoiceNo?: string;
     items: Array<{ productId: string; productName: string; boxQty: number; pcsQty: number; price: number; total: number; }>;
     total: number;
   }>(null);
@@ -419,8 +413,11 @@ const ShopBilling = () => {
 
   // Handle print bill - saves and prints
   const handlePrintBill = async () => {
+    // Make printing synchronous with the user click to fix mobile blank preview
     setLoading(true);
+
     const soldItems = getSoldItems();
+    // Build snapshot for print content
     const snapshot = {
       shopName: shopName.trim(),
       shopAddress: shopAddress.trim(),
@@ -436,7 +433,14 @@ const ShopBilling = () => {
       })),
       total: totals.totalAmount,
     };
+    setPrintSnapshot(snapshot);
+
+    // 1) Trigger print immediately (synchronously) to preserve mobile gesture context
+    window.print();
+
+    // 2) After print dialog opens, persist the sale
     try {
+      // Prepare bill items for stock deduction
       const billItems: ShopBillItem[] = soldItems.map(item => ({
         productId: item.productId,
         productName: item.productName,
@@ -446,6 +450,8 @@ const ShopBilling = () => {
         pricePerPcs: item.pcsQty > 0 ? item.price : 0,
         amount: item.total,
       }));
+
+      // Build products_sold payload in old-portal shape
       const items = Object.values(cartItems)
         .filter(ci => (ci.boxQty > 0 || ci.pcsQty > 0))
         .flatMap(ci => {
@@ -472,24 +478,16 @@ const ShopBilling = () => {
         shop_address: shopAddress.trim() || undefined,
         shop_phone: shopPhone.trim() || undefined,
       };
+
       const truckId = selectedTruck && /^[0-9a-fA-F-]{36}$/.test(selectedTruck) ? selectedTruck : null;
-      const route_code = (() => {
-        const m = (routeName || '').match(/Route\s*(\d+)/i);
-        return m ? `R${m[1]}` : 'R';
-      })();
-      const savedSale = await saveSaleWithInvoice({
-        route_id: selectedRoute,
+      const routeId = selectedRoute;
+      const totalAmount = totals.totalAmount;
+      const salePayload = {
+        route_id: routeId,
         truck_id: truckId,
         shop_name: shopName.trim(),
         date: selectedDate,
         products_sold,
-<<<<<<< HEAD
-        total_amount: totals.totalAmount,
-        route_code,
-      });
-      setPrintSnapshot({ ...snapshot, invoiceNo: savedSale.invoice_no });
-      window.print();
-=======
         total_amount: totalAmount,
       };
       console.log(
@@ -511,21 +509,12 @@ const ShopBilling = () => {
       console.log("Sale saved:", savedSale);
 
       // Update stock after sale
->>>>>>> recover-work
       const products = await getProducts();
       const saleItems = billItems.map(item => {
         const p = products.find(pp => pp.id === item.productId);
         const perBox = p?.pcs_per_box || 24;
         return { productId: item.productId, qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0) };
       });
-<<<<<<< HEAD
-      let rpcResult: unknown;
-      if (user?.id) {
-        rpcResult = await updateStockAfterSaleRPC(user.id, selectedRoute, selectedDate, saleItems);
-      } else {
-        rpcResult = await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
-      }
-=======
       const assignedRows = await getRouteAssignedStock(selectedRoute, selectedDate);
       const assignedIds = new Set(assignedRows.map(r => r.product_id));
       const strictValidation = import.meta.env.VITE_STRICT_ASSIGNED_STOCK_VALIDATION === 'true' || import.meta.env.DEV;
@@ -543,8 +532,8 @@ const ShopBilling = () => {
 
       // Refresh stock and reset quantities
       console.log("Reloading assigned stock after sale...");
->>>>>>> recover-work
       await loadAssignedStock();
+      console.log("Assigned stock reloaded");
       setCartItems(prev => {
         const updated: Record<string, CartItem> = {};
         Object.keys(prev).forEach(key => {
@@ -555,10 +544,13 @@ const ShopBilling = () => {
       setShopName("");
       setShopAddress("");
       setShopPhone("");
+      console.log("Cleared cart quantities and reset shop details");
+
       setLoading(false);
-      toast({ title: "Saved", description: `Bill saved. Invoice ${savedSale.invoice_no}` });
+      toast({ title: "Saved", description: "Bill saved successfully." });
       setShowBillPreviewUI(false);
     } catch (error: unknown) {
+      console.error("Error during print+save flow:", error);
       const msg = (error as { message?: string }).message || "Failed to save bill";
       toast({ title: "Error", description: msg, variant: "destructive" });
       setLoading(false);
@@ -627,11 +619,7 @@ const ShopBilling = () => {
         total_amount: totals.totalAmount,
       };
       console.log("saveSale payload:", { route_id: salePayload.route_id, truck_id: salePayload.truck_id, date: salePayload.date, shop_name: salePayload.shop_name, items: products_sold.items, total_amount: salePayload.total_amount });
-      const route_code = (() => {
-        const m = (routeName || '').match(/Route\s*(\\d+)/i);
-        return m ? `R${m[1]}` : 'R';
-      })();
-      const savedSale = await saveSaleWithInvoice({ ...salePayload, route_code });
+      const savedSale = await saveSale(salePayload);
       console.log("Sale saved:", savedSale);
       const products = await getProducts();
       const saleItems = billItems.map(item => {
@@ -1203,7 +1191,6 @@ const ShopBilling = () => {
               <div style={{ marginTop: '2px', fontSize: '8px' }}>
                 <p style={{ margin: '0' }}>Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                 {routeName && <p style={{ margin: '0', fontWeight: 'bold' }}>Route: {routeName}</p>}
-                {printSnapshot?.invoiceNo && <p style={{ margin: '0', fontWeight: 'bold' }}>Invoice: {printSnapshot.invoiceNo}</p>}
               </div>
             </div>
             {/* Shop Details */}
@@ -1300,3 +1287,7 @@ const ShopBilling = () => {
 };
 
 export default ShopBilling;
+
+
+
+
