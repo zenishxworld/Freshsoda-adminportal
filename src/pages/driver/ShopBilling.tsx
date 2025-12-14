@@ -12,9 +12,13 @@ import {
   searchAssignedProductsInStock,
   createOrGetShop,
   saveSale,
+<<<<<<< HEAD
   saveSaleWithInvoice,
   updateStockAfterSaleRPC,
+=======
+>>>>>>> recover-work
   updateStockAfterSaleRouteRPC,
+  getRouteAssignedStock,
   getProducts,
   getActiveRoutes,
   getTrucks,
@@ -479,23 +483,67 @@ const ShopBilling = () => {
         shop_name: shopName.trim(),
         date: selectedDate,
         products_sold,
+<<<<<<< HEAD
         total_amount: totals.totalAmount,
         route_code,
       });
       setPrintSnapshot({ ...snapshot, invoiceNo: savedSale.invoice_no });
       window.print();
+=======
+        total_amount: totalAmount,
+      };
+      console.log(
+        "saveSale payload JSON:",
+        JSON.stringify(
+          {
+            route_id: routeId,
+            truck_id: truckId,
+            shop_name: shopName,
+            date: selectedDate,
+            products_sold: items,
+            total_amount: totalAmount,
+          },
+          null,
+          2
+        )
+      );
+      const savedSale = await saveSale(salePayload);
+      console.log("Sale saved:", savedSale);
+
+      // Update stock after sale
+>>>>>>> recover-work
       const products = await getProducts();
       const saleItems = billItems.map(item => {
         const p = products.find(pp => pp.id === item.productId);
         const perBox = p?.pcs_per_box || 24;
         return { productId: item.productId, qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0) };
       });
+<<<<<<< HEAD
       let rpcResult: unknown;
       if (user?.id) {
         rpcResult = await updateStockAfterSaleRPC(user.id, selectedRoute, selectedDate, saleItems);
       } else {
         rpcResult = await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
       }
+=======
+      const assignedRows = await getRouteAssignedStock(selectedRoute, selectedDate);
+      const assignedIds = new Set(assignedRows.map(r => r.product_id));
+      const strictValidation = import.meta.env.VITE_STRICT_ASSIGNED_STOCK_VALIDATION === 'true' || import.meta.env.DEV;
+      for (const si of saleItems) {
+        if (!assignedIds.has(si.productId)) {
+          console.error("Assigned stock missing", { route_id: selectedRoute, date: selectedDate, productId: si.productId });
+          if (strictValidation) {
+            throw new Error("Assigned stock missing for this product/route/date");
+          }
+        }
+      }
+      console.log("RPC PAYLOAD (route-based):", { route_id: selectedRoute, work_date: selectedDate, sale_items: saleItems });
+      const rpcResult = await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
+      console.log("RPC RESULT:", rpcResult);
+
+      // Refresh stock and reset quantities
+      console.log("Reloading assigned stock after sale...");
+>>>>>>> recover-work
       await loadAssignedStock();
       setCartItems(prev => {
         const updated: Record<string, CartItem> = {};
@@ -591,11 +639,18 @@ const ShopBilling = () => {
         const perBox = p?.pcs_per_box || 24;
         return { productId: item.productId, qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0) };
       });
-      if (user?.id) {
-        await updateStockAfterSaleRPC(user.id, selectedRoute, selectedDate, saleItems);
-      } else {
-        await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
+      const assignedRows = await getRouteAssignedStock(selectedRoute, selectedDate);
+      const assignedIds = new Set(assignedRows.map(r => r.product_id));
+      const strictValidation = import.meta.env.VITE_STRICT_ASSIGNED_STOCK_VALIDATION === 'true' || import.meta.env.DEV;
+      for (const si of saleItems) {
+        if (!assignedIds.has(si.productId)) {
+          console.error("Assigned stock missing", { route_id: selectedRoute, date: selectedDate, productId: si.productId });
+          if (strictValidation) {
+            throw new Error("Assigned stock missing for this product/route/date");
+          }
+        }
       }
+      await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
       console.log("Reloading assigned stock after save...");
       await loadAssignedStock();
       console.log("Assigned stock reloaded");
