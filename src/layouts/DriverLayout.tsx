@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { LogOut, User, Route } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DriverLayoutProps {
     children: React.ReactNode;
@@ -9,13 +10,11 @@ interface DriverLayoutProps {
 
 export const DriverLayout: React.FC<DriverLayoutProps> = ({ children }) => {
     const navigate = useNavigate();
+    const { logout } = useAuth();
     const user = null; // TODO: Get from auth context if needed
 
-    const handleLogout = () => {
-        try {
-            localStorage.removeItem('lastLoginAt');
-        } catch { }
-        navigate('/login');
+    const handleLogout = async () => {
+        await logout();
     };
 
     return (

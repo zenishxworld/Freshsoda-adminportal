@@ -207,25 +207,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
-    // Logout function with complete state clearing
+    // Logout function preserving 12-hour grace period keys
     const logout = async () => {
         try {
-            // Sign out from Supabase Auth
             await supabase.auth.signOut();
-
-            // Clear all state
             setUser(null);
             setRole(null);
-
-            // Clear any cached data
-            localStorage.clear();
-            sessionStorage.clear();
-
-            // Redirect to login
+            try {
+                const lastLoginAt = localStorage.getItem('lastLoginAt');
+                const fsRole = localStorage.getItem('fs_role');
+                localStorage.clear();
+                sessionStorage.clear();
+                if (lastLoginAt) localStorage.setItem('lastLoginAt', lastLoginAt);
+                if (fsRole) localStorage.setItem('fs_role', fsRole);
+            } catch {}
             navigate('/login', { replace: true });
         } catch (error) {
             console.error('Logout error:', error);
-            // Force clear state and redirect even on error
             setUser(null);
             setRole(null);
             navigate('/login', { replace: true });

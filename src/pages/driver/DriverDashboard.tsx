@@ -12,18 +12,18 @@ import {
   Package
 } from "lucide-react";
 import { isWithinAuthGracePeriod } from "../../lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const DriverDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [user, setUser] = useState<any>(null);
+  const { user, logout } = useAuth();
   const [loading, setLoading] = useState(false);
 
   useEffect(() => { }, [navigate]);
 
   const handleLogout = async () => {
-    try { localStorage.removeItem('lastLoginAt'); } catch { }
-    toast({ title: "Logged Out", description: "You have been logged out successfully" });
+    await logout();
   };
 
   if (loading) {
