@@ -76,7 +76,34 @@ export const AssignStockPage: React.FC = () => {
 
     // Load existing stock when selections change
     useEffect(() => {
-        setAssignments(new Map());
+        const loadExistingStock = async () => {
+            setAssignments(new Map());
+            if (!selectedRoute || !selectedDate) return;
+
+            try {
+                // Fetch existing assigned stock from daily_stock (which is the source of truth for current assignment)
+                // Passing null for driverId as we are admin assigning to route
+                const existingStock = await getDailyStockForDriverRouteDate(null, selectedRoute, null, selectedDate);
+                
+                if (existingStock && existingStock.length > 0) {
+                    const newAssignments = new Map<string, AssignmentQuantity>();
+                    existingStock.forEach(item => {
+                        if (item.boxQty > 0 || item.pcsQty > 0) {
+                            newAssignments.set(item.productId, {
+                                boxQty: item.boxQty,
+                                pcsQty: item.pcsQty
+                            });
+                        }
+                    });
+                    setAssignments(newAssignments);
+                }
+            } catch (err) {
+                console.error('Error loading existing stock:', err);
+                // Non-blocking error, just log it
+            }
+        };
+
+        loadExistingStock();
     }, [selectedRoute, selectedDate]);
 
     useEffect(() => {

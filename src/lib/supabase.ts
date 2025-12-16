@@ -1522,23 +1522,67 @@ export const saveAssignedStock = async (
         ])
     );
 
-    // Step 3: Validate stock availability
+    // Step 2.5: Fetch existing daily_stock to calculate delta
+    let existingItems: DailyStockPayload = [];
+    let query = supabase.from('daily_stock').select('stock').eq('date', date);
+    
+    if (routeId) query = query.eq('route_id', routeId);
+    
+    if (driverId) {
+        query = query.eq('auth_user_id', driverId);
+    } else {
+        query = query.is('auth_user_id', null);
+    }
+
+    if (truckId) {
+        query = query.eq('truck_id', truckId);
+    } else {
+        query = query.is('truck_id', null);
+    }
+
+    const { data: existingStockData, error: existingStockError } = await query.maybeSingle();
+    
+    if (!existingStockError && existingStockData) {
+        existingItems = existingStockData.stock as DailyStockPayload;
+    }
+
+    // Step 3: Validate stock availability and calculate deltas
+    const deltaMap = new Map<string, { deltaBox: number; deltaPcs: number; deltaTotalPcs: number }>();
+
     for (const item of validItems) {
         const warehouse = warehouseMap.get(item.productId);
         if (!warehouse) {
             throw new Error(`Product not found in warehouse`);
         }
 
-        // Convert to PCS for comparison
-        const requestedTotalPcs = item.boxQty * warehouse.pcs_per_box + item.pcsQty;
-        const availableTotalPcs = warehouse.boxes * warehouse.pcs_per_box + warehouse.pcs;
+        // Find existing quantity
+        const existingItem = existingItems.find(e => e.productId === item.productId);
+        const oldBox = existingItem ? (existingItem.boxQty || 0) : 0;
+        const oldPcs = existingItem ? (existingItem.pcsQty || 0) : 0;
 
-        if (requestedTotalPcs > availableTotalPcs) {
-            throw new Error(
-                `Not enough warehouse stock for ${warehouse.product_name}. ` +
-                `Available: ${warehouse.boxes} boxes + ${warehouse.pcs} pcs. ` +
-                `Requested: ${item.boxQty} boxes + ${item.pcsQty} pcs.`
-            );
+        // Calculate totals
+        const oldTotalPcs = oldBox * warehouse.pcs_per_box + oldPcs;
+        const newTotalPcs = item.boxQty * warehouse.pcs_per_box + item.pcsQty;
+        const deltaTotalPcs = newTotalPcs - oldTotalPcs;
+
+        // Store delta
+        // We approximate deltaBox/deltaPcs for logging, but use deltaTotalPcs for logic
+        const deltaBox = item.boxQty - oldBox;
+        const deltaPcs = item.pcsQty - oldPcs;
+
+        deltaMap.set(item.productId, { deltaBox, deltaPcs, deltaTotalPcs });
+
+        // Only check availability if we are INCREASING stock (delta > 0)
+        if (deltaTotalPcs > 0) {
+            const availableTotalPcs = warehouse.boxes * warehouse.pcs_per_box + warehouse.pcs;
+            
+            if (deltaTotalPcs > availableTotalPcs) {
+                throw new Error(
+                    `Not enough warehouse stock for ${warehouse.product_name}. ` +
+                    `Available: ${warehouse.boxes} boxes + ${warehouse.pcs} pcs. ` +
+                    `Additional required: ${Math.floor(deltaTotalPcs / warehouse.pcs_per_box)} boxes + ${deltaTotalPcs % warehouse.pcs_per_box} pcs.`
+                );
+            }
         }
     }
 
@@ -1562,18 +1606,21 @@ export const saveAssignedStock = async (
         throw new Error('Failed to save stock assignment. Please try again.');
     }
 
-    // Step 5: Reduce warehouse stock for each product
+    // Step 5: Update warehouse stock based on DELTA
     for (const item of validItems) {
         const warehouse = warehouseMap.get(item.productId)!;
+        const delta = deltaMap.get(item.productId);
+        
+        if (!delta || delta.deltaTotalPcs === 0) continue;
 
         // Calculate new warehouse stock
-        const totalWarehousePcs = warehouse.boxes * warehouse.pcs_per_box + warehouse.pcs;
-        const assignedPcs = item.boxQty * warehouse.pcs_per_box + item.pcsQty;
-        const remainingPcs = totalWarehousePcs - assignedPcs;
+        // Deduct delta (if delta is positive, we subtract. If negative, we add).
+        const currentWarehouseTotalPcs = warehouse.boxes * warehouse.pcs_per_box + warehouse.pcs;
+        const newWarehouseTotalPcs = currentWarehouseTotalPcs - delta.deltaTotalPcs;
 
         // Convert back to boxes and pcs
-        const newBoxes = Math.floor(remainingPcs / warehouse.pcs_per_box);
-        const newPcs = remainingPcs % warehouse.pcs_per_box;
+        const newBoxes = Math.floor(newWarehouseTotalPcs / warehouse.pcs_per_box);
+        const newPcs = newWarehouseTotalPcs % warehouse.pcs_per_box;
 
         // Update warehouse stock
         const { error: updateError } = await supabase
@@ -1589,20 +1636,23 @@ export const saveAssignedStock = async (
             throw new Error(`Failed to update warehouse stock for ${warehouse.product_name}`);
         }
 
-        // Step 6: Log the movement
-        const { error: movementError } = await supabase
-            .from('warehouse_movements')
-            .insert({
-                product_id: item.productId,
-                movement_type: 'ASSIGN',
-                boxes: item.boxQty,
-                pcs: item.pcsQty,
-                note: `Assigned to driver for route on ${date}`,
-            });
+        // Step 6: Log the movement (Delta only)
+        // Only log if there is a change
+        if (delta.deltaTotalPcs !== 0) {
+            const { error: movementError } = await supabase
+                .from('warehouse_movements')
+                .insert({
+                    product_id: item.productId,
+                    movement_type: delta.deltaTotalPcs > 0 ? 'ASSIGN' : 'RETURN', // ASSIGN = Out, RETURN = In
+                    boxes: Math.abs(delta.deltaBox), // Log absolute values
+                    pcs: Math.abs(delta.deltaPcs),
+                    note: `Stock update for route on ${date}: ${delta.deltaTotalPcs > 0 ? 'Assigned' : 'Returned'} (Delta)`,
+                });
 
-        if (movementError) {
-            console.error('Error logging warehouse movement:', movementError);
-            // Don't throw here - stock was updated successfully
+            if (movementError) {
+                console.error('Error logging warehouse movement:', movementError);
+                // Don't throw here - stock was updated successfully
+            }
         }
     }
 };
