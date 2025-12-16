@@ -1735,6 +1735,18 @@ export const createShop = async (shopData: {
         return existing[0] as Shop;
     }
 
+    // Check if phone exists (Primary Unique Identifier)
+    if (shopData.phone?.trim()) {
+        const { data: existingPhone, error: phoneErr } = await supabase
+            .from('shops')
+            .select('*')
+            .eq('phone', shopData.phone.trim())
+            .limit(1);
+        if (!phoneErr && existingPhone && existingPhone.length > 0) {
+            throw new Error('Shop with this phone number already exists');
+        }
+    }
+
     const now = new Date().toISOString();
     const payload = {
         name,
@@ -1788,6 +1800,19 @@ export const updateShop = async (
     if (typeof updateData.village !== 'undefined') payload.village = updateData.village ? String(updateData.village).trim() : null;
     if (typeof updateData.address !== 'undefined') payload.address = updateData.address ? String(updateData.address).trim() : null;
     if (typeof updateData.route_id !== 'undefined') payload.route_id = updateData.route_id ? String(updateData.route_id).trim() : null;
+
+    // Check if phone exists (Primary Unique Identifier)
+    if (payload.phone) {
+        const { data: existingPhone, error: phoneErr } = await supabase
+            .from('shops')
+            .select('id')
+            .eq('phone', payload.phone)
+            .neq('id', id)
+            .limit(1);
+        if (!phoneErr && existingPhone && existingPhone.length > 0) {
+            throw new Error('Shop with this phone number already exists');
+        }
+    }
 
     const { data, error } = await supabase
         .from('shops')
@@ -1923,6 +1948,79 @@ export const insertShopIfNotExists = async (name: string, phone?: string, villag
     }
 };
 
+export const ensureShopExists = async (
+    name: string,
+    phone?: string,
+    address?: string,
+    routeId?: string
+): Promise<string> => {
+    const trimmedName = name.trim();
+    const trimmedPhone = phone?.trim();
+    
+    // 1. Check by PHONE first (Primary Unique Identifier)
+    if (trimmedPhone) {
+        const { data: existingByPhone, error: phoneError } = await supabase
+            .from('shops')
+            .select('id')
+            .eq('phone', trimmedPhone)
+            .limit(1);
+            
+        if (!phoneError && existingByPhone && existingByPhone.length > 0) {
+            return existingByPhone[0].id;
+        }
+    }
+
+    // 2. Fallback: If no phone provided, check by NAME
+    if (!trimmedPhone) {
+        const { data: existingByName, error: nameError } = await supabase
+            .from('shops')
+            .select('id')
+            .ilike('name', trimmedName)
+            .limit(1);
+
+        if (!nameError && existingByName && existingByName.length > 0) {
+            return existingByName[0].id;
+        }
+    }
+
+    // 3. Create new shop
+    // We bypass createShop helper to ensure we follow the logic above and avoid double-checks
+    const now = new Date().toISOString();
+    const payload = {
+        name: trimmedName,
+        phone: trimmedPhone || null,
+        village: address?.trim() || null, // Map address to village
+        address: address?.trim() || null,
+        route_id: routeId || null,
+        created_at: now,
+        updated_at: now,
+    };
+
+    const { data, error } = await supabase
+        .from('shops')
+        .insert(payload)
+        .select('id')
+        .single();
+
+    if (error) {
+        // Handle potential column missing error for 'village' as seen in createShop
+        if (error.code === '42703' || /column\s+shops\.village\s+does\s+not\s+exist/i.test(error.message || '')) {
+            const { village, ...withoutVillage } = payload;
+            const { data: data2, error: err2 } = await supabase
+                .from('shops')
+                .insert(withoutVillage)
+                .select('id')
+                .single();
+            if (err2) throw new Error('Failed to create shop (fallback)');
+            return data2!.id;
+        }
+        console.error('Error creating shop in ensureShopExists:', error);
+        throw new Error('Failed to create shop');
+    }
+
+    return data!.id;
+};
+
 /**
  * Save sale with products_sold format: [{ productId, boxQty, pcsQty, totalAmount }]
  */
@@ -1936,6 +2034,30 @@ export const saveSale = async (salePayload: {
 }): Promise<Sale> => {
     const { data: session } = await supabase.auth.getSession();
     const uid = session?.session?.user?.id || null;
+
+    // Extract shop details from products_sold if available
+    // products_sold can be array or object { items, shop_address, shop_phone }
+    let shopPhone: string | undefined;
+    let shopAddress: string | undefined;
+
+    if (salePayload.products_sold && !Array.isArray(salePayload.products_sold)) {
+        shopPhone = salePayload.products_sold.shop_phone;
+        shopAddress = salePayload.products_sold.shop_address;
+    }
+
+    // Ensure shop exists and get ID
+    let shopId: string | null = null;
+    try {
+        shopId = await ensureShopExists(
+            salePayload.shop_name,
+            shopPhone,
+            shopAddress,
+            salePayload.route_id
+        );
+    } catch (e) {
+        console.error("Failed to ensure shop exists, proceeding without shop_id:", e);
+    }
+
     const payload = {
         route_id: salePayload.route_id,
         truck_id: salePayload.truck_id,
@@ -1944,6 +2066,7 @@ export const saveSale = async (salePayload: {
         products_sold: salePayload.products_sold,
         total_amount: salePayload.total_amount,
         auth_user_id: uid,
+        shop_id: shopId, // Link to shops table
     } as any;
     console.log(
         "saveSale insert payload:",
@@ -1975,6 +2098,29 @@ export const saveSaleWithInvoice = async (salePayload: {
 }): Promise<Sale> => {
     const { data: session } = await supabase.auth.getSession();
     const uid = session?.session?.user?.id || null;
+
+    // Extract shop details from products_sold if available
+    let shopPhone: string | undefined;
+    let shopAddress: string | undefined;
+
+    if (salePayload.products_sold && !Array.isArray(salePayload.products_sold)) {
+        shopPhone = salePayload.products_sold.shop_phone;
+        shopAddress = salePayload.products_sold.shop_address;
+    }
+
+    // Ensure shop exists and get ID
+    let shopId: string | null = null;
+    try {
+        shopId = await ensureShopExists(
+            salePayload.shop_name,
+            shopPhone,
+            shopAddress,
+            salePayload.route_id
+        );
+    } catch (e) {
+        console.error("Failed to ensure shop exists, proceeding without shop_id:", e);
+    }
+
     const yymmdd = (() => {
         const [y, m, d] = salePayload.date.split('-');
         return `${y.slice(-2)}${m}${d}`;
@@ -2010,6 +2156,7 @@ export const saveSaleWithInvoice = async (salePayload: {
             total_amount: salePayload.total_amount,
             auth_user_id: uid,
             invoice_no,
+            shop_id: shopId,
         } as any;
         const { data, error } = await supabase
             .from('sales')
@@ -2180,40 +2327,6 @@ export const searchAssignedProductsInStock = async (
     return all.filter(({ product }) => product.name.toLowerCase().includes(q));
 };
 
-/**
- * Create or get shop
- */
-export const createOrGetShop = async (
-    name: string,
-    address?: string,
-    phone?: string,
-    routeId?: string
-): Promise<Shop> => {
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-        throw new Error('Shop name is required');
-    }
-
-    // Check if shop exists
-    const { data: existing, error: searchError } = await supabase
-        .from('shops')
-        .select('*')
-        .ilike('name', trimmedName)
-        .limit(1);
-
-    if (!searchError && existing && existing.length > 0) {
-        return existing[0] as Shop;
-    }
-
-    // Create new shop
-    return await createShop({
-        name: trimmedName,
-        address: address?.trim(),
-        phone: phone?.trim(),
-        village: address?.trim(), // Use address as village if needed
-        route_id: routeId,
-    });
-};
 
 /**
  * Save bill to bills table
