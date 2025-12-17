@@ -12,12 +12,12 @@ export const ReportsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
-        <p className="text-gray-600 mt-1">View and analyze business reports</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Reports</h1>
+        <p className="text-sm sm:text-base text-gray-600 mt-1">View and analyze business reports</p>
       </div>
       <Card>
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid grid-cols-5 w-full">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 w-full gap-1">
             <TabsTrigger value="daily">Daily Summary</TabsTrigger>
             <TabsTrigger value="route">Route Summary</TabsTrigger>
             <TabsTrigger value="driver">Driver Summary</TabsTrigger>

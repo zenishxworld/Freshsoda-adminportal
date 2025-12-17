@@ -176,14 +176,14 @@ export const ExpensesPage: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Expense Management</h1>
-                    <p className="text-gray-600 mt-1">Track and manage business expenses</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Expense Management</h1>
+                    <p className="text-sm sm:text-base text-gray-600 mt-1">Track and manage business expenses</p>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => { loadExpenses(); loadSummary(); }} className="flex items-center gap-2"><RefreshCw className="w-4 h-4" />Refresh</Button>
-                    <Button variant="primary" onClick={() => { setIsAddOpen(true); setForm({ category: '', amount: '', date: new Date().toISOString().split('T')[0], note: '' }); }} className="flex items-center gap-2"><Plus className="w-4 h-4" />Add Expense</Button>
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <Button variant="outline" onClick={() => { loadExpenses(); loadSummary(); }} className="flex items-center justify-center gap-2 w-full sm:w-auto"><RefreshCw className="w-4 h-4" />Refresh</Button>
+                    <Button variant="primary" onClick={() => { setIsAddOpen(true); setForm({ category: '', amount: '', date: new Date().toISOString().split('T')[0], note: '' }); }} className="flex items-center justify-center gap-2 w-full sm:w-auto"><Plus className="w-4 h-4" />Add Expense</Button>
                 </div>
             </div>
 
@@ -231,14 +231,16 @@ export const ExpensesPage: React.FC = () => {
             </div>
 
             <Card>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <Input label="Date From" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                    <Input label="Date To" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-                    <Select label="Category" value={category} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCategory(e.target.value)} options={[{ value: '', label: 'All Categories' }, ...categories.map(c => ({ value: c, label: c }))]} />
-                    <Input label="Search" placeholder="Search note/category" value={search} onChange={(e) => setSearch(e.target.value)} />
-                    <div className="flex items-end gap-2">
-                        <Button variant="outline" onClick={resetFilters}>Reset Filters</Button>
-                        <Button variant="secondary" onClick={exportCsv} className="flex items-center gap-2"><Download className="w-4 h-4" />Export CSV</Button>
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <Input label="Date From" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                        <Input label="Date To" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                        <Select label="Category" value={category} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCategory(e.target.value)} options={[{ value: '', label: 'All Categories' }, ...categories.map(c => ({ value: c, label: c }))]} />
+                        <Input label="Search" placeholder="Search note/category" value={search} onChange={(e) => setSearch(e.target.value)} />
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                        <Button variant="outline" onClick={resetFilters} className="w-full sm:w-auto">Reset Filters</Button>
+                        <Button variant="secondary" onClick={exportCsv} className="flex items-center justify-center gap-2 w-full sm:w-auto"><Download className="w-4 h-4" />Export CSV</Button>
                     </div>
                 </div>
             </Card>
