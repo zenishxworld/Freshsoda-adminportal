@@ -71,15 +71,21 @@ export const DashboardPage: React.FC = () => {
     type LowRow = { name: string; boxes: number; pcs: number; threshold: number };
     const lowStockColumns = [
         { key: 'name', header: 'Product Name' },
-        { key: 'available', header: 'Available (boxes/pcs)', render: (_: unknown, row: LowRow) => (
-            <span>{row.boxes} boxes / {row.pcs} pcs</span>
-        ) },
-        { key: 'threshold', header: 'Threshold', render: (_: unknown, row: LowRow) => (
-            <span>{row.threshold} pcs</span>
-        ) },
-        { key: 'status', header: 'Status', render: () => (
-            <Badge variant="danger">Low Stock</Badge>
-        ) },
+        {
+            key: 'available', header: 'Available (boxes/pcs)', render: (_: unknown, row: LowRow) => (
+                <span>{row.boxes} boxes / {row.pcs} pcs</span>
+            )
+        },
+        {
+            key: 'threshold', header: 'Threshold', render: (_: unknown, row: LowRow) => (
+                <span>{row.threshold} pcs</span>
+            )
+        },
+        {
+            key: 'status', header: 'Status', render: () => (
+                <Badge variant="danger">Low Stock</Badge>
+            )
+        },
     ];
 
     useEffect(() => {
@@ -102,12 +108,12 @@ export const DashboardPage: React.FC = () => {
         <div className="space-y-6">
             {/* Page Header */}
             <div>
-                <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-                <p className="text-gray-600 mt-1">Welcome back! Here's what's happening today.</p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
+                <p className="text-sm sm:text-base text-gray-600 mt-1">Welcome back! Here's what's happening today.</p>
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 <StatCard
                     title="Total Warehouse Stock"
                     value="12,458"
@@ -138,7 +144,7 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             {/* Recent Activity */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                 <Card header={<h3 className="text-lg font-semibold text-gray-900">Recent Stock Assignments</h3>}>
                     <div className="space-y-4">
                         {loadingAssignments && recent.length === 0 ? (

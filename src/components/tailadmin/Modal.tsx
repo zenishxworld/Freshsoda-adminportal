@@ -39,7 +39,7 @@ export const Modal: React.FC<ModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4">
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-black bg-opacity-50 transition-opacity"
@@ -48,15 +48,16 @@ export const Modal: React.FC<ModalProps> = ({
 
             {/* Modal */}
             <div
-                className={`relative bg-white rounded-lg shadow-6 w-full ${sizeStyles[size]} max-h-[90vh] flex flex-col`}
+                className={`relative bg-white sm:rounded-lg shadow-6 w-full h-full sm:h-auto ${sizeStyles[size]} sm:max-h-[90vh] flex flex-col`}
             >
                 {/* Header */}
                 {title && (
-                    <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                        <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
+                    <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+                        <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{title}</h3>
                         <button
                             onClick={onClose}
-                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                            className="text-gray-400 hover:text-gray-600 transition-colors p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                            aria-label="Close modal"
                         >
                             <X className="w-5 h-5" />
                         </button>
@@ -64,11 +65,11 @@ export const Modal: React.FC<ModalProps> = ({
                 )}
 
                 {/* Body */}
-                <div className="p-6 overflow-y-auto flex-1">{children}</div>
+                <div className="p-4 sm:p-6 overflow-y-auto flex-1">{children}</div>
 
                 {/* Footer */}
                 {footer && (
-                    <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+                    <div className="p-4 sm:p-6 border-t border-gray-200 flex flex-col sm:flex-row justify-end gap-3">
                         {footer}
                     </div>
                 )}

@@ -43,6 +43,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     const location = useLocation();
     const { user, logout } = useAuth();
 
+    // Auto-close sidebar on navigation for mobile
+    React.useEffect(() => {
+        if (isOpen && window.innerWidth < 1024) {
+            onToggle();
+        }
+    }, [location.pathname]);
+
     return (
         <>
             {/* Mobile Overlay */}
@@ -55,7 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
             {/* Sidebar */}
             <aside
-                className={`fixed top-0 left-0 z-50 h-screen bg-sidebar transition-all duration-300 ${isOpen ? 'w-64' : 'w-0 lg:w-20'
+                className={`fixed top-0 left-0 z-50 h-screen bg-sidebar transition-all duration-300 ${isOpen ? 'w-64' : '-translate-x-full lg:translate-x-0 lg:w-20'
                     } overflow-hidden`}
             >
                 <div className="flex flex-col h-full">
@@ -84,7 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                                     <li key={item.path}>
                                         <Link
                                             to={item.path}
-                                            className={`flex items-center gap-3 px-3 py-3 rounded-md transition-colors group ${isActive
+                                            className={`flex items-center gap-3 px-3 py-3.5 rounded-md transition-colors group min-h-[44px] ${isActive
                                                 ? 'bg-primary text-white'
                                                 : 'text-gray-300 hover:bg-sidebar-light hover:text-white'
                                                 }`}
@@ -122,7 +129,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                             </div>
                             <button
                                 onClick={logout}
-                                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-gray-300 hover:bg-sidebar-light hover:text-white transition-colors"
+                                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-md text-gray-300 hover:bg-sidebar-light hover:text-white transition-colors min-h-[44px]"
                             >
                                 <LogOut className="w-4 h-4" />
                                 <span className="text-sm">Logout</span>

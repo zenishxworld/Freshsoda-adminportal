@@ -9,7 +9,6 @@ import {
     getActiveRoutes,
     getAssignableProducts,
     getDailyStockForDriverRouteDate,
-    assignStockRPC,
     saveAssignedStock,
     type DriverOption,
     type RouteOption,
@@ -84,7 +83,7 @@ export const AssignStockPage: React.FC = () => {
                 // Fetch existing assigned stock from daily_stock (which is the source of truth for current assignment)
                 // Passing null for driverId as we are admin assigning to route
                 const existingStock = await getDailyStockForDriverRouteDate(null, selectedRoute, null, selectedDate);
-                
+
                 if (existingStock && existingStock.length > 0) {
                     const newAssignments = new Map<string, AssignmentQuantity>();
                     existingStock.forEach(item => {
@@ -129,7 +128,7 @@ export const AssignStockPage: React.FC = () => {
         };
     }, [selectedDate]);
 
-    
+
 
     // Update assignment quantity
     const updateAssignment = (productId: string, field: 'boxQty' | 'pcsQty', value: number) => {
@@ -209,14 +208,9 @@ export const AssignStockPage: React.FC = () => {
             setSaving(true);
             setError('');
 
-            await assignStockRPC(
-                null,
-                selectedRoute,
-                selectedDate,
-                payload
-            );
-
-            // Reduce warehouse stock and persist legacy daily_stock for logs
+            // Save assignment with delta-based warehouse deduction
+            // This function handles: fetching existing assignments, calculating deltas,
+            // upserting daily_stock, and updating warehouse stock based on delta only
             await saveAssignedStock(
                 null,
                 selectedRoute,
@@ -259,8 +253,8 @@ export const AssignStockPage: React.FC = () => {
         <div className="space-y-6">
             {/* Page Header */}
             <div>
-                <h1 className="text-3xl font-bold text-gray-900">Assign Stock</h1>
-                <p className="text-gray-600 mt-1">Assign warehouse stock to a route (driver and truck not required)</p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Assign Stock</h1>
+                <p className="text-sm sm:text-base text-gray-600 mt-1">Assign warehouse stock to a route (driver and truck not required)</p>
             </div>
 
             {/* Error Alert */}
@@ -274,9 +268,53 @@ export const AssignStockPage: React.FC = () => {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="flex flex-col lg:grid lg:grid-cols-3 gap-6">
+                {/* Summary Sidebar - Show first on mobile */}
+                <div className="lg:order-2">
+                    <Card>
+                        <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-900">Assignment Summary</h3>
+                        </div>
+                        <div className="p-4 sm:p-6 space-y-4">
+                            {/* Selection Info */}
+                            <div className="space-y-2 pb-4 border-b border-gray-200">
+                                <div>
+                                    <span className="text-xs text-gray-500">Route:</span>
+                                    <p className="text-sm font-medium text-gray-900">{selectedRouteName}</p>
+                                </div>
+                                <div>
+                                    <span className="text-xs text-gray-500">Date:</span>
+                                    <p className="text-sm font-medium text-gray-900">
+                                        {selectedDate || 'Not selected'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Summary Stats */}
+                            <div className="flex justify-between py-2 border-b border-gray-200">
+                                <span className="text-gray-600">Total Items:</span>
+                                <span className="font-semibold text-gray-900">{summary.totalItems}</span>
+                            </div>
+                            <div className="flex justify-between py-2 border-b border-gray-200">
+                                <span className="text-gray-600">Total Boxes:</span>
+                                <span className="font-semibold text-gray-900">{summary.totalBoxes}</span>
+                            </div>
+                            <div className="flex justify-between py-2 border-b border-gray-200">
+                                <span className="text-gray-600">Total PCS:</span>
+                                <span className="font-semibold text-gray-900">{summary.totalPcs}</span>
+                            </div>
+                            <div className="flex justify-between py-2 pt-2">
+                                <span className="text-base sm:text-lg font-semibold text-gray-900">Total Value:</span>
+                                <span className="text-base sm:text-lg font-bold text-primary">
+                                    ₹{summary.totalValue.toFixed(2)}
+                                </span>
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+
                 {/* Main Form */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className="lg:col-span-2 lg:order-1 space-y-6">
                     {/* Selection Card */}
                     <Card>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -319,7 +357,7 @@ export const AssignStockPage: React.FC = () => {
                             </div>
                         </div>
                     </Card>
-                    
+
 
                     {/* Stock Assignment Table */}
                     <Card>
@@ -433,98 +471,55 @@ export const AssignStockPage: React.FC = () => {
                             size="lg"
                             onClick={handleAssignStock}
                             disabled={saving || loading || !selectedRoute || !selectedDate}
+                            className="w-full sm:w-auto"
                         >
                             {saving ? 'Assigning...' : 'Assign Stock'}
                         </Button>
                     </div>
-                    
-                    {/* Assignment Log moved to bottom */}
-                    <Card>
-                        <div className="px-6 py-4 border-b border-gray-200">
-                            <h3 className="text-lg font-semibold text-gray-900">Assignment Log</h3>
-                            <p className="text-sm text-gray-600 mt-1">Live updates for {selectedDate}</p>
-                        </div>
-                        <div className="p-6">
-                            {logLoading ? (
-                                <div className="text-gray-500">Loading log...</div>
-                            ) : assignmentLog.length === 0 ? (
-                                <div className="text-gray-500">No assignments recorded for this date.</div>
-                            ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead className="bg-gray-50 border-b border-gray-200">
-                                            <tr>
-                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
-                                                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Boxes</th>
-                                                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">PCS</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-gray-200">
-                                            {assignmentLog.map((entry) => (
-                                                <tr key={entry.id} className="hover:bg-gray-50">
-                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">
-                                                        {entry.created_at ? new Date(entry.created_at).toLocaleTimeString() : '-'}
-                                                    </td>
-                                                    <td className="px-4 py-2 whitespace-nowrap">
-                                                        <div className="text-sm font-medium text-gray-900">{entry.route_name || '-'}</div>
-                                                    </td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-semibold text-gray-900">{entry.total_boxes}</td>
-                                                    <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-semibold text-gray-900">{entry.total_pcs}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-                    </Card>
-                </div>
-
-                {/* Summary Sidebar */}
-                <div>
-                    <Card>
-                        <div className="px-6 py-4 border-b border-gray-200">
-                            <h3 className="text-lg font-semibold text-gray-900">Assignment Summary</h3>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            {/* Selection Info */}
-                            <div className="space-y-2 pb-4 border-b border-gray-200">
-                                <div>
-                                    <span className="text-xs text-gray-500">Route:</span>
-                                    <p className="text-sm font-medium text-gray-900">{selectedRouteName}</p>
-                                </div>
-                                <div>
-                                    <span className="text-xs text-gray-500">Date:</span>
-                                    <p className="text-sm font-medium text-gray-900">
-                                        {selectedDate || 'Not selected'}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Summary Stats */}
-                            <div className="flex justify-between py-2 border-b border-gray-200">
-                                <span className="text-gray-600">Total Items:</span>
-                                <span className="font-semibold text-gray-900">{summary.totalItems}</span>
-                            </div>
-                            <div className="flex justify-between py-2 border-b border-gray-200">
-                                <span className="text-gray-600">Total Boxes:</span>
-                                <span className="font-semibold text-gray-900">{summary.totalBoxes}</span>
-                            </div>
-                            <div className="flex justify-between py-2 border-b border-gray-200">
-                                <span className="text-gray-600">Total PCS:</span>
-                                <span className="font-semibold text-gray-900">{summary.totalPcs}</span>
-                            </div>
-                            <div className="flex justify-between py-2 pt-2">
-                                <span className="text-lg font-semibold text-gray-900">Total Value:</span>
-                                <span className="text-lg font-bold text-primary">
-                                    ₹{summary.totalValue.toFixed(2)}
-                                </span>
-                            </div>
-                        </div>
-                    </Card>
                 </div>
             </div>
+
+            {/* Assignment Log moved to bottom */}
+            <Card>
+                <div className="px-6 py-4 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900">Assignment Log</h3>
+                    <p className="text-sm text-gray-600 mt-1">Live updates for {selectedDate}</p>
+                </div>
+                <div className="p-6">
+                    {logLoading ? (
+                        <div className="text-gray-500">Loading log...</div>
+                    ) : assignmentLog.length === 0 ? (
+                        <div className="text-gray-500">No assignments recorded for this date.</div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50 border-b border-gray-200">
+                                    <tr>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Boxes</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">PCS</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {assignmentLog.map((entry) => (
+                                        <tr key={entry.id} className="hover:bg-gray-50">
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">
+                                                {entry.created_at ? new Date(entry.created_at).toLocaleTimeString() : '-'}
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap">
+                                                <div className="text-sm font-medium text-gray-900">{entry.route_name || '-'}</div>
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-semibold text-gray-900">{entry.total_boxes}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-semibold text-gray-900">{entry.total_pcs}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </Card>
         </div>
     );
 };

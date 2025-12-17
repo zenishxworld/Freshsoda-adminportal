@@ -865,7 +865,7 @@ export const subscribeAssignmentsForDate = (
             table: 'daily_stock',
             filter: `date=eq.${date}`,
         }, () => {
-            try { onChange(); } catch {}
+            try { onChange(); } catch { }
         })
         .subscribe();
 
@@ -981,7 +981,7 @@ export const getLowStockProducts = async (): Promise<LowStockItem[]> => {
             threshold,
         };
     }).filter((it) => it.total_pcs < it.threshold)
-      .sort((a, b) => a.total_pcs - b.total_pcs);
+        .sort((a, b) => a.total_pcs - b.total_pcs);
 
     return low;
 };
@@ -1525,9 +1525,9 @@ export const saveAssignedStock = async (
     // Step 2.5: Fetch existing daily_stock to calculate delta
     let existingItems: DailyStockPayload = [];
     let query = supabase.from('daily_stock').select('stock').eq('date', date);
-    
+
     if (routeId) query = query.eq('route_id', routeId);
-    
+
     if (driverId) {
         query = query.eq('auth_user_id', driverId);
     } else {
@@ -1541,46 +1541,64 @@ export const saveAssignedStock = async (
     }
 
     const { data: existingStockData, error: existingStockError } = await query.maybeSingle();
-    
+
     if (!existingStockError && existingStockData) {
         existingItems = existingStockData.stock as DailyStockPayload;
     }
 
     // Step 3: Validate stock availability and calculate deltas
-    const deltaMap = new Map<string, { deltaBox: number; deltaPcs: number; deltaTotalPcs: number }>();
+    // CRITICAL FIX: Fetch fresh warehouse data for delta calculations
+    // The cached warehouseMap has stale pcs_per_box values
+    const deltaMap = new Map<string, { deltaBox: number; deltaPcs: number; deltaTotalPcs: number; pcsPerBox: number }>();
 
     for (const item of validItems) {
-        const warehouse = warehouseMap.get(item.productId);
-        if (!warehouse) {
+        // Fetch FRESH warehouse stock for accurate pcs_per_box
+        const { data: freshWarehouse, error: fetchError } = await supabase
+            .from('warehouse_stock')
+            .select(`
+                product_id,
+                boxes,
+                pcs,
+                products (
+                    name,
+                    pcs_per_box
+                )
+            `)
+            .eq('product_id', item.productId)
+            .single();
+
+        if (fetchError || !freshWarehouse) {
             throw new Error(`Product not found in warehouse`);
         }
+
+        const pcsPerBox = (freshWarehouse.products as any)?.pcs_per_box || 24;
+        const productName = (freshWarehouse.products as any)?.name || 'Unknown Product';
 
         // Find existing quantity
         const existingItem = existingItems.find(e => e.productId === item.productId);
         const oldBox = existingItem ? (existingItem.boxQty || 0) : 0;
         const oldPcs = existingItem ? (existingItem.pcsQty || 0) : 0;
 
-        // Calculate totals
-        const oldTotalPcs = oldBox * warehouse.pcs_per_box + oldPcs;
-        const newTotalPcs = item.boxQty * warehouse.pcs_per_box + item.pcsQty;
+        // Calculate totals using FRESH pcs_per_box
+        const oldTotalPcs = oldBox * pcsPerBox + oldPcs;
+        const newTotalPcs = item.boxQty * pcsPerBox + item.pcsQty;
         const deltaTotalPcs = newTotalPcs - oldTotalPcs;
 
-        // Store delta
-        // We approximate deltaBox/deltaPcs for logging, but use deltaTotalPcs for logic
+        // Store delta with pcsPerBox for later use
         const deltaBox = item.boxQty - oldBox;
         const deltaPcs = item.pcsQty - oldPcs;
 
-        deltaMap.set(item.productId, { deltaBox, deltaPcs, deltaTotalPcs });
+        deltaMap.set(item.productId, { deltaBox, deltaPcs, deltaTotalPcs, pcsPerBox });
 
         // Only check availability if we are INCREASING stock (delta > 0)
         if (deltaTotalPcs > 0) {
-            const availableTotalPcs = warehouse.boxes * warehouse.pcs_per_box + warehouse.pcs;
-            
+            const availableTotalPcs = freshWarehouse.boxes * pcsPerBox + freshWarehouse.pcs;
+
             if (deltaTotalPcs > availableTotalPcs) {
                 throw new Error(
-                    `Not enough warehouse stock for ${warehouse.product_name}. ` +
-                    `Available: ${warehouse.boxes} boxes + ${warehouse.pcs} pcs. ` +
-                    `Additional required: ${Math.floor(deltaTotalPcs / warehouse.pcs_per_box)} boxes + ${deltaTotalPcs % warehouse.pcs_per_box} pcs.`
+                    `Not enough warehouse stock for ${productName}. ` +
+                    `Available: ${freshWarehouse.boxes} boxes + ${freshWarehouse.pcs} pcs. ` +
+                    `Additional required: ${Math.floor(deltaTotalPcs / pcsPerBox)} boxes + ${deltaTotalPcs % pcsPerBox} pcs.`
                 );
             }
         }
@@ -1608,19 +1626,32 @@ export const saveAssignedStock = async (
 
     // Step 5: Update warehouse stock based on DELTA
     for (const item of validItems) {
-        const warehouse = warehouseMap.get(item.productId)!;
         const delta = deltaMap.get(item.productId);
-        
+
         if (!delta || delta.deltaTotalPcs === 0) continue;
 
-        // Calculate new warehouse stock
-        // Deduct delta (if delta is positive, we subtract. If negative, we add).
-        const currentWarehouseTotalPcs = warehouse.boxes * warehouse.pcs_per_box + warehouse.pcs;
+        // Fetch FRESH warehouse stock for the update
+        // We need current values since they may have changed since delta calculation
+        const { data: freshWarehouse, error: fetchError } = await supabase
+            .from('warehouse_stock')
+            .select('product_id, boxes, pcs')
+            .eq('product_id', item.productId)
+            .single();
+
+        if (fetchError || !freshWarehouse) {
+            throw new Error(`Failed to fetch warehouse stock for product`);
+        }
+
+        // Use pcsPerBox from delta calculation for consistency
+        const pcsPerBox = delta.pcsPerBox;
+
+        // Calculate new warehouse stock using FRESH current values
+        const currentWarehouseTotalPcs = freshWarehouse.boxes * pcsPerBox + freshWarehouse.pcs;
         const newWarehouseTotalPcs = currentWarehouseTotalPcs - delta.deltaTotalPcs;
 
         // Convert back to boxes and pcs
-        const newBoxes = Math.floor(newWarehouseTotalPcs / warehouse.pcs_per_box);
-        const newPcs = newWarehouseTotalPcs % warehouse.pcs_per_box;
+        const newBoxes = Math.floor(newWarehouseTotalPcs / pcsPerBox);
+        const newPcs = newWarehouseTotalPcs % pcsPerBox;
 
         // Update warehouse stock
         const { error: updateError } = await supabase
@@ -1633,7 +1664,7 @@ export const saveAssignedStock = async (
 
         if (updateError) {
             console.error('Error updating warehouse stock:', updateError);
-            throw new Error(`Failed to update warehouse stock for ${warehouse.product_name}`);
+            throw new Error(`Failed to update warehouse stock`);
         }
 
         // Step 6: Log the movement (Delta only)
@@ -1956,7 +1987,7 @@ export const ensureShopExists = async (
 ): Promise<string> => {
     const trimmedName = name.trim();
     const trimmedPhone = phone?.trim();
-    
+
     // 1. Check by PHONE first (Primary Unique Identifier)
     if (trimmedPhone) {
         const { data: existingByPhone, error: phoneError } = await supabase
@@ -1964,7 +1995,7 @@ export const ensureShopExists = async (
             .select('id')
             .eq('phone', trimmedPhone)
             .limit(1);
-            
+
         if (!phoneError && existingByPhone && existingByPhone.length > 0) {
             return existingByPhone[0].id;
         }
@@ -2187,7 +2218,7 @@ export const updateDailyStockAfterSale = async (
 ): Promise<void> => {
     // Get current stock
     const currentStock = await getDailyStockForRouteTruckDate(routeId, truckId, date);
-    
+
     if (!currentStock || currentStock.length === 0) {
         throw new Error('No stock found for this route/truck/date');
     }
@@ -2210,12 +2241,12 @@ export const updateDailyStockAfterSale = async (
         if (current) {
             // Get pcs_per_box for this product
             const pcsPerBox = productMap.get(sold.productId) || 24;
-            
+
             // Convert to total PCS, deduct, then convert back
             const currentTotalPcs = (current.boxQty * pcsPerBox) + current.pcsQty;
             const soldTotalPcs = (sold.boxQty * pcsPerBox) + sold.pcsQty;
             const remainingTotalPcs = Math.max(0, currentTotalPcs - soldTotalPcs);
-            
+
             stockMap.set(sold.productId, {
                 productId: sold.productId,
                 boxQty: Math.floor(remainingTotalPcs / pcsPerBox),
@@ -2238,11 +2269,11 @@ export const getDriverRoute = async (): Promise<{ routeId: string; truckId: stri
     const routeId = localStorage.getItem('currentRoute') || localStorage.getItem('fs_last_route');
     const truckId = localStorage.getItem('currentTruck') || localStorage.getItem('fs_last_truck');
     const date = localStorage.getItem('currentDate') || localStorage.getItem('fs_last_date') || format(new Date(), "yyyy-MM-dd");
-    
+
     if (!routeId || !truckId) {
         return null;
     }
-    
+
     return { routeId, truckId, date };
 };
 
@@ -2289,7 +2320,7 @@ export const searchProductsInStock = async (
     }
 
     const q = query.toLowerCase();
-    return allStock.filter(({ product }) => 
+    return allStock.filter(({ product }) =>
         product.name.toLowerCase().includes(q)
     );
 };
@@ -2299,19 +2330,60 @@ export const getAssignedStockForBilling = async (
     routeId: string,
     date: string
 ): Promise<Array<{ product: Product; stock: DailyStockItem }>> => {
-    const rows = driverId
-        ? await getDriverAssignedStock(driverId, routeId, date)
-        : await getRouteAssignedStock(routeId, date);
-    if (!rows || rows.length === 0) return [];
+    // CRITICAL FIX: When driverId is null (driver portal), query daily_stock directly
+    // to get admin-assigned stock (where auth_user_id IS NULL)
+    let stockData: DailyStockPayload | null = null;
+
+    if (driverId === null) {
+        // Driver portal: query admin-assigned stock (auth_user_id IS NULL)
+        const { data, error } = await supabase
+            .from('daily_stock')
+            .select('stock')
+            .eq('route_id', routeId)
+            .eq('date', date)
+            .is('auth_user_id', null)
+            .maybeSingle();
+
+        if (error) {
+            console.error('Error fetching admin-assigned stock:', error);
+            return [];
+        }
+
+        stockData = data?.stock as DailyStockPayload || null;
+    } else {
+        // Admin portal: query driver-specific stock
+        const { data, error } = await supabase
+            .from('daily_stock')
+            .select('stock')
+            .eq('route_id', routeId)
+            .eq('date', date)
+            .eq('auth_user_id', driverId)
+            .maybeSingle();
+
+        if (error) {
+            console.error('Error fetching driver-assigned stock:', error);
+            return [];
+        }
+
+        stockData = data?.stock as DailyStockPayload || null;
+    }
+
+    if (!stockData || stockData.length === 0) return [];
+
     const products = await getProducts();
     const pmap = new Map(products.map(p => [p.id, p]));
-    return rows.map(r => {
-        const p = pmap.get(r.product_id);
+
+    return stockData.map(item => {
+        const p = pmap.get(item.productId);
         if (!p) return null as any;
-        const perBox = p.pcs_per_box || 24;
-        const boxQty = Math.floor((r.qty_remaining || 0) / perBox);
-        const pcsQty = (r.qty_remaining || 0) % perBox;
-        return { product: p, stock: { productId: r.product_id, boxQty, pcsQty } };
+        return {
+            product: p,
+            stock: {
+                productId: item.productId,
+                boxQty: item.boxQty || 0,
+                pcsQty: item.pcsQty || 0
+            }
+        };
     }).filter(Boolean);
 };
 

@@ -204,24 +204,25 @@ export const WarehouseStockPage: React.FC = () => {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Warehouse Stock</h1>
-                    <p className="text-sm text-gray-600 mt-1">Manage master inventory in your warehouse</p>
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Warehouse Stock</h1>
+                    <p className="text-xs sm:text-sm text-gray-600 mt-1">Manage master inventory in your warehouse</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                     <Button
                         onClick={() => {
                             resetForm();
                             setShowNewProductModal(true);
                         }}
                         variant="primary"
-                        className="flex items-center gap-2"
+                        className="flex items-center justify-center gap-2 w-full sm:w-auto"
                     >
                         <Plus className="w-4 h-4" />
-                        Add Product to Warehouse
+                        <span className="hidden sm:inline">Add Product to Warehouse</span>
+                        <span className="sm:hidden">Add Product</span>
                     </Button>
-                    <Button onClick={loadWarehouseStock} variant="outline" className="flex items-center gap-2">
+                    <Button onClick={loadWarehouseStock} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto">
                         <RefreshCw className="w-4 h-4" />
                         Refresh
                     </Button>
