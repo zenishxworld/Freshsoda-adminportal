@@ -7,7 +7,7 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useToast } from "../../hooks/use-toast";
-import { getActiveRoutes, getRouteAssignedStock, subscribeAssignedStockForRouteDate, getProducts, type AssignedStockRow, type Product } from "../../lib/supabase";
+import { getActiveRoutes, getProducts, getAssignedStockForBilling, subscribeAssignmentsForDate, type Product, type DailyStockItem } from "../../lib/supabase";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { mapRouteName } from "../../lib/routeUtils";
 import { ArrowLeft, Route as RouteIcon, RefreshCw, Package } from "lucide-react";
@@ -18,7 +18,7 @@ const StartRouteAssigned = () => {
   const [routes, setRoutes] = useState<Array<{ id: string; name: string; displayName?: string }>>([]);
   const [selectedRoute, setSelectedRoute] = useState("");
   const [selectedDate, setSelectedDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
-  const [assigned, setAssigned] = useState<AssignedStockRow[]>([]);
+  const [assigned, setAssigned] = useState<Array<{ product: Product; stock: DailyStockItem }>>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const subRef = useRef<RealtimeChannel | null>(null);
@@ -44,7 +44,7 @@ const StartRouteAssigned = () => {
   const loadAssigned = useCallback(async () => {
     try {
       if (!selectedRoute || !selectedDate) { setAssigned([]); return; }
-      const rows = await getRouteAssignedStock(selectedRoute, selectedDate);
+      const rows = await getAssignedStockForBilling(null, selectedRoute, selectedDate);
       setAssigned(rows);
     } catch (e: unknown) {
       const msg = (e as { message?: string })?.message || "Failed to load assigned stock";
@@ -59,27 +59,26 @@ const StartRouteAssigned = () => {
     const sub = async () => {
       if (!selectedRoute || !selectedDate || !mounted) return;
       subRef.current?.unsubscribe?.();
-      subRef.current = subscribeAssignedStockForRouteDate(selectedRoute, selectedDate, loadAssigned);
+      subRef.current = subscribeAssignmentsForDate(selectedDate, loadAssigned);
     };
     sub();
     return () => { mounted = false; subRef.current?.unsubscribe?.(); };
   }, [selectedRoute, selectedDate, loadAssigned]);
 
   const totals = useMemo(() => {
-    const pmap = new Map(products.map(p => [p.id, p]));
     let assignedBoxes = 0, assignedPcs = 0, remainingBoxes = 0, remainingPcs = 0;
-    assigned.forEach(r => {
-      const p = pmap.get(r.product_id);
-      const per = p?.pcs_per_box || 24;
-      const a = r.qty_assigned || 0;
-      const rem = r.qty_remaining || 0;
-      assignedBoxes += Math.floor(a / per);
-      assignedPcs += a % per;
-      remainingBoxes += Math.floor(rem / per);
-      remainingPcs += rem % per;
+    assigned.forEach(({ product, stock }) => {
+      const per = product?.pcs_per_box || 24;
+      const a = (stock.boxQty || 0) * per + (stock.pcsQty || 0);
+      const boxAssigned = Math.floor(a / per);
+      const pcsAssigned = a % per;
+      assignedBoxes += boxAssigned;
+      assignedPcs += pcsAssigned;
+      remainingBoxes += boxAssigned;
+      remainingPcs += pcsAssigned;
     });
     return { assignedBoxes, assignedPcs, remainingBoxes, remainingPcs };
-  }, [assigned, products]);
+  }, [assigned]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-primary-light/10">
@@ -149,16 +148,15 @@ const StartRouteAssigned = () => {
                       {assigned.length === 0 ? (
                         <tr><td colSpan={3} className="px-4 py-6 text-center text-muted-foreground">No assigned stock</td></tr>
                       ) : (
-                        assigned.map(row => (
-                          <tr key={row.product_id} className="border-t">
+                        assigned.map(({ product, stock }) => (
+                          <tr key={product.id} className="border-t">
                             <td className="px-4 py-3">
-                              <div className="font-medium">{row.product_name}</div>
+                              <div className="font-medium">{product.name}</div>
                             </td>
                             <td className="px-4 py-3 text-center">
                               {(() => {
-                                const p = products.find(pp => pp.id === row.product_id);
-                                const per = p?.pcs_per_box || 24;
-                                const a = row.qty_assigned || 0;
+                                const per = product?.pcs_per_box || 24;
+                                const a = (stock.boxQty || 0) * per + (stock.pcsQty || 0);
                                 const box = Math.floor(a / per);
                                 const pcs = a % per;
                                 return `${box} Box | ${pcs} pcs`;
@@ -166,11 +164,10 @@ const StartRouteAssigned = () => {
                             </td>
                             <td className="px-4 py-3 text-center">
                               {(() => {
-                                const p = products.find(pp => pp.id === row.product_id);
-                                const per = p?.pcs_per_box || 24;
-                                const r = row.qty_remaining || 0;
-                                const box = Math.floor(r / per);
-                                const pcs = r % per;
+                                const per = product?.pcs_per_box || 24;
+                                const a = (stock.boxQty || 0) * per + (stock.pcsQty || 0);
+                                const box = Math.floor(a / per);
+                                const pcs = a % per;
                                 return `${box} Box | ${pcs} pcs`;
                               })()}
                             </td>
