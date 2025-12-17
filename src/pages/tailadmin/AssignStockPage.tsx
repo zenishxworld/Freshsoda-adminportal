@@ -10,6 +10,7 @@ import {
     getAssignableProducts,
     getDailyStockForDriverRouteDate,
     saveAssignedStock,
+    isRouteStarted,
     type DriverOption,
     type RouteOption,
     type AssignableProductRow,
@@ -45,6 +46,7 @@ export const AssignStockPage: React.FC = () => {
     const [error, setError] = useState<string>('');
     const [logLoading, setLogLoading] = useState(false);
     const [assignmentLog, setAssignmentLog] = useState<AssignmentLogEntry[]>([]);
+    const [isCurrentRouteStarted, setIsCurrentRouteStarted] = useState(false);
     const subscriptionRef = useRef<RealtimeChannel | null>(null);
 
     // Load initial data
@@ -128,6 +130,24 @@ export const AssignStockPage: React.FC = () => {
         };
     }, [selectedDate]);
 
+    // Check if selected route has been started
+    useEffect(() => {
+        const checkRouteStatus = async () => {
+            if (!selectedRoute || !selectedDate) {
+                setIsCurrentRouteStarted(false);
+                return;
+            }
+            try {
+                const started = await isRouteStarted(selectedRoute, selectedDate);
+                setIsCurrentRouteStarted(started);
+            } catch (err) {
+                console.error('Error checking route status:', err);
+                setIsCurrentRouteStarted(false);
+            }
+        };
+        checkRouteStatus();
+    }, [selectedRoute, selectedDate, assignmentLog]);
+
 
 
     // Update assignment quantity
@@ -184,6 +204,12 @@ export const AssignStockPage: React.FC = () => {
             // Validate selections - need route and date
             if (!selectedRoute || !selectedDate) {
                 alert('Please select a route and a date');
+                return;
+            }
+
+            // Check if route has been started
+            if (isCurrentRouteStarted) {
+                alert('Cannot assign stock to a route that has already been started by the driver.');
                 return;
             }
 
@@ -470,7 +496,7 @@ export const AssignStockPage: React.FC = () => {
                             variant="primary"
                             size="lg"
                             onClick={handleAssignStock}
-                            disabled={saving || loading || !selectedRoute || !selectedDate}
+                            disabled={saving || loading || !selectedRoute || !selectedDate || isCurrentRouteStarted}
                             className="w-full sm:w-auto"
                         >
                             {saving ? 'Assigning...' : 'Assign Stock'}
@@ -497,6 +523,7 @@ export const AssignStockPage: React.FC = () => {
                                     <tr>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route Status</th>
                                         <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Boxes</th>
                                         <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">PCS</th>
                                     </tr>
@@ -509,6 +536,20 @@ export const AssignStockPage: React.FC = () => {
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900">{entry.route_name || '-'}</div>
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap">
+                                                {entry.route_status === 'started' ? (
+                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                        </svg>
+                                                        Route Started
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                                        Not Started
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-semibold text-gray-900">{entry.total_boxes}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-semibold text-gray-900">{entry.total_pcs}</td>

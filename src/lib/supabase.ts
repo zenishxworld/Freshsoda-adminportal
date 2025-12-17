@@ -181,8 +181,28 @@ export interface AssignmentLogEntry {
     updated_at?: string;
     total_boxes: number;
     total_pcs: number;
+    route_status?: 'not_started' | 'started';
 }
 
+
+/**
+ * Check if a route has been started by a driver for a specific date
+ * A route is considered started if there's a daily_stock record with truck_id NOT NULL
+ */
+export const isRouteStarted = async (
+    routeId: string,
+    date: string
+): Promise<boolean> => {
+    const { data } = await supabase
+        .from('daily_stock')
+        .select('truck_id')
+        .eq('route_id', routeId)
+        .eq('date', date)
+        .not('truck_id', 'is', null)
+        .maybeSingle();
+
+    return data !== null;
+};
 
 // Products
 export const getProducts = async (): Promise<Product[]> => {
@@ -816,6 +836,7 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
                 updated_at: row.updated_at,
                 total_boxes: totals.boxes,
                 total_pcs: totals.pcs,
+                route_status: row.truck_id ? 'started' : 'not_started',
             } as AssignmentLogEntry;
         });
 
@@ -847,6 +868,7 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
             updated_at: row.updated_at,
             total_boxes: totals.boxes,
             total_pcs: totals.pcs,
+            route_status: row.truck_id ? 'started' : 'not_started',
         } as AssignmentLogEntry;
     });
 
