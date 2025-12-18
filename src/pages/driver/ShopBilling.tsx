@@ -516,15 +516,22 @@ const ShopBilling = () => {
       });
       const assignedRows = await getRouteAssignedStock(selectedRoute, selectedDate);
       const assignedIds = new Set(assignedRows.map(r => r.product_id));
-      const strictValidation = import.meta.env.VITE_STRICT_ASSIGNED_STOCK_VALIDATION === 'true' || import.meta.env.DEV;
+      // Relaxed validation: Log warning instead of throwing error
+      // This allows sales even if assigned_stock table is out of sync with daily_stock
       for (const si of saleItems) {
         if (!assignedIds.has(si.productId)) {
-          console.error("Assigned stock missing", { route_id: selectedRoute, date: selectedDate, productId: si.productId });
-          if (strictValidation) {
-            throw new Error("Assigned stock missing for this product/route/date");
-          }
+          console.warn("Assigned stock missing in assigned_stock table (but present in daily_stock)", { route_id: selectedRoute, date: selectedDate, productId: si.productId });
         }
       }
+      // const strictValidation = import.meta.env.VITE_STRICT_ASSIGNED_STOCK_VALIDATION === 'true' || import.meta.env.DEV;
+      // for (const si of saleItems) {
+      //   if (!assignedIds.has(si.productId)) {
+      //     console.error("Assigned stock missing", { route_id: selectedRoute, date: selectedDate, productId: si.productId });
+      //     if (strictValidation) {
+      //       throw new Error("Assigned stock missing for this product/route/date");
+      //     }
+      //   }
+      // }
       console.log("RPC PAYLOAD (route-based):", { route_id: selectedRoute, work_date: selectedDate, sale_items: saleItems });
       const rpcResult = await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
       console.log("RPC RESULT:", rpcResult);

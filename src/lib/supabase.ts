@@ -2037,36 +2037,44 @@ export const ensureShopExists = async (
     }
 
     // 3. Create new shop
-    // We bypass createShop helper to ensure we follow the logic above and avoid double-checks
-    const now = new Date().toISOString();
-    const payload = {
+    // Only include fields that exist in the shops table schema
+    const payload: any = {
         name: trimmedName,
         phone: trimmedPhone || null,
-        village: address?.trim() || null, // Map address to village
         address: address?.trim() || null,
-        route_id: routeId || null,
-        created_at: now,
-        updated_at: now,
     };
 
-    const { data, error } = await supabase
+    // Try to include village if it exists in schema
+    const payloadWithVillage = {
+        ...payload,
+        village: address?.trim() || null,
+    };
+
+    let data, error;
+
+    // First try with village field
+    const result1 = await supabase
         .from('shops')
-        .insert(payload)
+        .insert(payloadWithVillage)
         .select('id')
         .single();
 
+    data = result1.data;
+    error = result1.error;
+
+    // If village column doesn't exist, try without it
+    if (error && (error.code === '42703' || /column.*village.*does\s+not\s+exist/i.test(error.message || ''))) {
+        const result2 = await supabase
+            .from('shops')
+            .insert(payload)
+            .select('id')
+            .single();
+
+        data = result2.data;
+        error = result2.error;
+    }
+
     if (error) {
-        // Handle potential column missing error for 'village' as seen in createShop
-        if (error.code === '42703' || /column\s+shops\.village\s+does\s+not\s+exist/i.test(error.message || '')) {
-            const { village, ...withoutVillage } = payload;
-            const { data: data2, error: err2 } = await supabase
-                .from('shops')
-                .insert(withoutVillage)
-                .select('id')
-                .single();
-            if (err2) throw new Error('Failed to create shop (fallback)');
-            return data2!.id;
-        }
         console.error('Error creating shop in ensureShopExists:', error);
         throw new Error('Failed to create shop');
     }
@@ -2353,11 +2361,13 @@ export const getAssignedStockForBilling = async (
     date: string
 ): Promise<Array<{ product: Product; stock: DailyStockItem }>> => {
     // CRITICAL FIX: When driverId is null (driver portal), query daily_stock directly
-    // to get admin-assigned stock (where auth_user_id IS NULL)
+    // to get stock for the route (regardless of whether it was admin-assigned or driver-started)
     let stockData: DailyStockPayload | null = null;
 
     if (driverId === null) {
-        // Driver portal: query admin-assigned stock (auth_user_id IS NULL)
+        // Driver portal: query stock for route (admin-assigned OR driver-started)
+        // Don't filter by truck_id - we want to find stock whether admin assigned (truck_id NULL)
+        // or driver started (truck_id NOT NULL)
         const { data, error } = await supabase
             .from('daily_stock')
             .select('stock')
@@ -2367,7 +2377,7 @@ export const getAssignedStockForBilling = async (
             .maybeSingle();
 
         if (error) {
-            console.error('Error fetching admin-assigned stock:', error);
+            console.error('Error fetching assigned stock:', error);
             return [];
         }
 
