@@ -1511,6 +1511,14 @@ export const saveAssignedStock = async (
         throw new Error('Please assign at least some stock');
     }
 
+    // Step 1.5: Check if route has been started (if routeId is provided)
+    if (routeId) {
+        const routeStarted = await isRouteStarted(routeId, date);
+        if (routeStarted) {
+            throw new Error('Route is already started. Cannot assign stock to a route that has been started by the driver.');
+        }
+    }
+
     // Step 2: Fetch warehouse stock for all involved products
     const productIds = validItems.map(item => item.productId);
     const { data: warehouseData, error: warehouseError } = await supabase
@@ -2360,14 +2368,15 @@ export const getAssignedStockForBilling = async (
     routeId: string,
     date: string
 ): Promise<Array<{ product: Product; stock: DailyStockItem }>> => {
-    // CRITICAL FIX: When driverId is null (driver portal), query daily_stock directly
-    // to get stock for the route (regardless of whether it was admin-assigned or driver-started)
+    // Get stock for the route regardless of whether it's been started or not
+    // When driverId is null (driver portal), we query for route-based stock
+    // This should work both before route start (truck_id NULL) and after (truck_id NOT NULL)
     let stockData: DailyStockPayload | null = null;
 
     if (driverId === null) {
-        // Driver portal: query stock for route (admin-assigned OR driver-started)
-        // Don't filter by truck_id - we want to find stock whether admin assigned (truck_id NULL)
-        // or driver started (truck_id NOT NULL)
+        // Driver portal: query stock for route
+        // We filter by route_id and date, and auth_user_id IS NULL (admin-assigned)
+        // We do NOT filter by truck_id so it works both before and after route start
         const { data, error } = await supabase
             .from('daily_stock')
             .select('stock')
