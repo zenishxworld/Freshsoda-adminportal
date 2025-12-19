@@ -11,7 +11,10 @@ import {
   getAssignedStockForBilling,
   searchAssignedProductsInStock,
   saveSale,
+  updateStockAfterSaleRPC,
   updateStockAfterSaleRouteRPC,
+  updateDailyStockAfterSale,
+  updateDriverStockAfterSale,
   getRouteAssignedStock,
   getProducts,
   getActiveRoutes,
@@ -532,9 +535,23 @@ const ShopBilling = () => {
       //     }
       //   }
       // }
-      console.log("RPC PAYLOAD (route-based):", { route_id: selectedRoute, work_date: selectedDate, sale_items: saleItems });
-      const rpcResult = await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
-      console.log("RPC RESULT:", rpcResult);
+      console.log("Updating daily stock (client-side)...");
+      const stockUpdateItems = billItems.map(item => ({
+        productId: item.productId,
+        boxQty: item.boxQty || 0,
+        pcsQty: item.pcsQty || 0
+      }));
+
+      // Use driver-aware stock update (handles missing truckId if driver is logged in)
+      await updateDriverStockAfterSale(
+          user?.id || null,
+          selectedRoute, 
+          truckId, 
+          selectedDate, 
+          stockUpdateItems, 
+          products
+      );
+      console.log("Daily stock updated successfully");
 
       // Refresh stock and reset quantities
       console.log("Reloading assigned stock after sale...");
@@ -635,16 +652,37 @@ const ShopBilling = () => {
       });
       const assignedRows = await getRouteAssignedStock(selectedRoute, selectedDate);
       const assignedIds = new Set(assignedRows.map(r => r.product_id));
-      const strictValidation = import.meta.env.VITE_STRICT_ASSIGNED_STOCK_VALIDATION === 'true' || import.meta.env.DEV;
+      // Relaxed validation for Save Bill as well
       for (const si of saleItems) {
         if (!assignedIds.has(si.productId)) {
-          console.error("Assigned stock missing", { route_id: selectedRoute, date: selectedDate, productId: si.productId });
-          if (strictValidation) {
-            throw new Error("Assigned stock missing for this product/route/date");
-          }
+          console.warn("Assigned stock missing in assigned_stock table (but present in daily_stock)", { route_id: selectedRoute, date: selectedDate, productId: si.productId });
         }
       }
-      await updateStockAfterSaleRouteRPC(selectedRoute, selectedDate, saleItems);
+      // const strictValidation = import.meta.env.VITE_STRICT_ASSIGNED_STOCK_VALIDATION === 'true' || import.meta.env.DEV;
+      // for (const si of saleItems) {
+      //   if (!assignedIds.has(si.productId)) {
+      //     console.error("Assigned stock missing", { route_id: selectedRoute, date: selectedDate, productId: si.productId });
+      //     if (strictValidation) {
+      //       throw new Error("Assigned stock missing for this product/route/date");
+      //     }
+      //   }
+      // }
+      if (!truckId) {
+        console.error("No truck ID found, cannot update stock");
+        throw new Error("Cannot update stock: No Truck ID selected.");
+      }
+      await updateDailyStockAfterSale(
+          selectedRoute, 
+          truckId, 
+          selectedDate, 
+          billItems.map(item => ({
+            productId: item.productId,
+            boxQty: item.boxQty || 0,
+            pcsQty: item.pcsQty || 0
+          })), 
+          products
+      );
+      console.log("Daily stock updated successfully (client-side)");
       console.log("Reloading assigned stock after save...");
       await loadAssignedStock();
       console.log("Assigned stock reloaded");

@@ -2378,6 +2378,125 @@ export const updateDailyStockAfterSale = async (
 };
 
 /**
+ * Update daily stock for a specific driver (or truck if driver not present)
+ */
+export const updateDriverStockAfterSale = async (
+    driverId: string | null,
+    routeId: string,
+    truckId: string | null,
+    date: string,
+    soldItems: Array<{ productId: string; boxQty: number; pcsQty: number }>,
+    products: Product[]
+): Promise<void> => {
+    console.log("updateDriverStockAfterSale", { driverId, routeId, truckId, date });
+
+    // 1. Find the stock record
+    let query = supabase
+        .from('daily_stock')
+        .select('*')
+        .eq('route_id', routeId)
+        .eq('date', date);
+    
+    if (driverId) {
+        query = query.eq('auth_user_id', driverId);
+    } else if (truckId) {
+        query = query.eq('truck_id', truckId).is('auth_user_id', null);
+    } else {
+        throw new Error("Cannot identify stock record: missing driverId and truckId");
+    }
+
+    const { data: stockRows, error: fetchError } = await query;
+    
+    if (fetchError) {
+        console.error("Error fetching stock for update:", fetchError);
+        throw new Error("Failed to fetch stock for update");
+    }
+
+    if (!stockRows || stockRows.length === 0) {
+        // Fallback: If we have driverId but no driver-specific row found, 
+        // maybe the stock is still unassigned (auth_user_id IS NULL)?
+        // But the driver should have claimed it. 
+        // If we are here, it means we can't find the row.
+        // Let's try to find ANY row for this route/date if we have truckId?
+        if (driverId && truckId) {
+             console.log("No driver-specific stock found, checking for unassigned stock with truckId...");
+             const { data: unassignedRows } = await supabase
+                .from('daily_stock')
+                .select('*')
+                .eq('route_id', routeId)
+                .eq('date', date)
+                .eq('truck_id', truckId)
+                .is('auth_user_id', null);
+             
+             if (unassignedRows && unassignedRows.length > 0) {
+                 // We found unassigned stock. We should probably update THIS row.
+                 // Note: Ideally we should also claim it (set auth_user_id), but for now just update stock.
+                 // We will proceed with this row.
+                 stockRows?.push(unassignedRows[0]);
+             } else {
+                 console.error("No stock record found for update (checked driver and unassigned)", { driverId, routeId, truckId, date });
+                 throw new Error("No stock record found to update");
+             }
+        } else {
+            console.error("No stock record found for update", { driverId, routeId, truckId, date });
+            throw new Error("No stock record found to update");
+        }
+    }
+
+    // Assuming we update the first matching row (should be unique per driver/route/date)
+    // If we pushed a fallback row, stockRows now has length 1.
+    if (!stockRows || stockRows.length === 0) { // Double check
+         throw new Error("No stock record found to update");
+    }
+
+    const stockRow = stockRows[0];
+    const currentStock = Array.isArray(stockRow.stock) ? stockRow.stock : [];
+
+    // 2. Calculate new stock
+    // Create product map for pcs_per_box lookup
+    const productMap = new Map<string, number>();
+    products.forEach(p => {
+        productMap.set(p.id, p.pcs_per_box || 24);
+    });
+
+    // Create a map of current stock
+    const stockMap = new Map<string, DailyStockItem>();
+    currentStock.forEach((item: any) => {
+        stockMap.set(item.productId, { ...item });
+    });
+
+    // Deduct sold items
+    soldItems.forEach(sold => {
+        const current = stockMap.get(sold.productId);
+        if (current) {
+            const pcsPerBox = productMap.get(sold.productId) || 24;
+            const currentTotalPcs = (current.boxQty * pcsPerBox) + current.pcsQty;
+            const soldTotalPcs = (sold.boxQty * pcsPerBox) + sold.pcsQty;
+            const remainingTotalPcs = Math.max(0, currentTotalPcs - soldTotalPcs);
+
+            stockMap.set(sold.productId, {
+                productId: sold.productId,
+                boxQty: Math.floor(remainingTotalPcs / pcsPerBox),
+                pcsQty: remainingTotalPcs % pcsPerBox,
+            });
+        }
+    });
+
+    const updatedStock = Array.from(stockMap.values());
+
+    // 3. Update the record
+    const { error: updateError } = await supabase
+        .from('daily_stock')
+        .update({ stock: updatedStock })
+        .eq('id', stockRow.id);
+
+    if (updateError) {
+        console.error("Error updating stock record:", updateError);
+        throw new Error("Failed to update stock record");
+    }
+};
+
+/**
  * Get driver's active route for today (from localStorage or default)
  */
 export const getDriverRoute = async (): Promise<{ routeId: string; truckId: string; date: string } | null> => {
