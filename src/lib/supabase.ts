@@ -181,7 +181,7 @@ export interface AssignmentLogEntry {
     updated_at?: string;
     total_boxes: number;
     total_pcs: number;
-    route_status?: 'not_started' | 'started';
+    route_status?: 'not_started' | 'started' | 'route is ended';
 }
 
 
@@ -189,6 +189,7 @@ export interface AssignmentLogEntry {
  * Check if a route has been started by a driver for a specific date
  * A route is considered started if there's a daily_stock record with auth_user_id NOT NULL
  * (meaning a driver has claimed the stock/route)
+ * AND the route has active stock (not returned/ended)
  */
 export const isRouteStarted = async (
     routeId: string,
@@ -196,13 +197,21 @@ export const isRouteStarted = async (
 ): Promise<boolean> => {
     const { data } = await supabase
         .from('daily_stock')
-        .select('auth_user_id')
+        .select('auth_user_id, stock')
         .eq('route_id', routeId)
         .eq('date', date)
-        .not('auth_user_id', 'is', null)
         .maybeSingle();
 
-    return data !== null;
+    if (!data) return false;
+
+    // Check if stock is effectively empty (route ended/returned)
+    // If total items are 0, we consider the route ended/available for new assignment
+    const stock = Array.isArray(data.stock) ? data.stock : [];
+    const totalItems = stock.reduce((sum: number, item: any) => sum + (item.boxQty || 0) + (item.pcsQty || 0), 0);
+    
+    if (totalItems === 0) return false;
+
+    return !!data.auth_user_id;
 };
 
 // Products
@@ -904,7 +913,7 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
                 updated_at: row.updated_at,
                 total_boxes: totals.boxes,
                 total_pcs: totals.pcs,
-                route_status: (row.truck_id || row.auth_user_id) ? 'started' : 'not_started',
+                route_status: (totals.boxes === 0 && totals.pcs === 0) ? 'route is ended' : ((row.truck_id || row.auth_user_id) ? 'started' : 'not_started'),
             } as AssignmentLogEntry;
         });
 
@@ -936,7 +945,7 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
             updated_at: row.updated_at,
             total_boxes: totals.boxes,
             total_pcs: totals.pcs,
-            route_status: (row.truck_id || row.auth_user_id) ? 'started' : 'not_started',
+            route_status: (totals.boxes === 0 && totals.pcs === 0) ? 'route is ended' : ((row.truck_id || row.auth_user_id) ? 'started' : 'not_started'),
         } as AssignmentLogEntry;
     });
 
