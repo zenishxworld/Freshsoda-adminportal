@@ -34,7 +34,10 @@ export const AssignStockPage: React.FC = () => {
     // Default date to today (YYYY-MM-DD format)
     const [selectedDate, setSelectedDate] = useState<string>(() => {
         const today = new Date();
-        return today.toISOString().split('T')[0];
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     });
 
     // Assignments: Map<productId, {boxQty, pcsQty}>
