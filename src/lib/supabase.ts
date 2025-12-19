@@ -1583,7 +1583,7 @@ export const saveAssignedStock = async (
     if (routeId) {
         const routeStarted = await isRouteStarted(routeId, date);
         if (routeStarted) {
-            throw new Error('Route is already started');
+            throw new Error("Route is already started you can't assign stock now");
         }
     }
 

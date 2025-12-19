@@ -212,7 +212,7 @@ export const AssignStockPage: React.FC = () => {
 
             // Check if route has been started
             if (isCurrentRouteStarted) {
-                alert('Cannot assign stock to a route that has already been started by the driver.');
+                alert("Route is already started you can't assign stock now");
                 return;
             }
 
