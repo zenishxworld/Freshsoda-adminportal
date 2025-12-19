@@ -187,7 +187,8 @@ export interface AssignmentLogEntry {
 
 /**
  * Check if a route has been started by a driver for a specific date
- * A route is considered started if there's a daily_stock record with truck_id NOT NULL
+ * A route is considered started if there's a daily_stock record with auth_user_id NOT NULL
+ * (meaning a driver has claimed the stock/route)
  */
 export const isRouteStarted = async (
     routeId: string,
@@ -195,10 +196,10 @@ export const isRouteStarted = async (
 ): Promise<boolean> => {
     const { data } = await supabase
         .from('daily_stock')
-        .select('truck_id')
+        .select('auth_user_id')
         .eq('route_id', routeId)
         .eq('date', date)
-        .not('truck_id', 'is', null)
+        .not('auth_user_id', 'is', null)
         .maybeSingle();
 
     return data !== null;
@@ -620,6 +621,73 @@ export const saveDailyStock = async (
 };
 
 // Sales
+export const startRouteForDriver = async (
+    driverId: string,
+    routeId: string,
+    date: string
+): Promise<void> => {
+    // 1. Check if already started/claimed by this driver
+    const { data: existing } = await supabase
+        .from('daily_stock')
+        .select('id')
+        .eq('route_id', routeId)
+        .eq('date', date)
+        .eq('auth_user_id', driverId)
+        .maybeSingle();
+
+    if (existing) {
+        // Already started.
+        return;
+    }
+
+    // 2. Find the Admin's assigned stock (auth_user_id IS NULL)
+    const { data: adminStock, error: fetchError } = await supabase
+        .from('daily_stock')
+        .select('*')
+        .eq('route_id', routeId)
+        .eq('date', date)
+        .is('auth_user_id', null)
+        .maybeSingle();
+
+    if (fetchError) {
+        console.error('Error checking assigned stock:', fetchError);
+        throw new Error('Failed to check assigned stock');
+    }
+
+    if (!adminStock) {
+        // No stock assigned by admin.
+        // Create an empty record so route is marked as started
+        const { error: insertError } = await supabase
+            .from('daily_stock')
+            .insert({
+                route_id: routeId,
+                date: date,
+                auth_user_id: driverId,
+                stock: [],
+                truck_id: null
+            });
+            
+        if (insertError) {
+            console.error('Error starting route (empty):', insertError);
+            throw new Error('Failed to start route');
+        }
+        return;
+    }
+
+    // 3. Claim the stock: Update the record to set auth_user_id = driverId
+    const { error: updateError } = await supabase
+        .from('daily_stock')
+        .update({
+            auth_user_id: driverId
+        })
+        .eq('id', adminStock.id);
+
+    if (updateError) {
+        console.error('Error claiming stock:', updateError);
+        throw new Error('Failed to claim stock');
+    }
+};
+
 export const getSalesFor = async (
     date: string,
     routeId?: string
@@ -1515,7 +1583,7 @@ export const saveAssignedStock = async (
     if (routeId) {
         const routeStarted = await isRouteStarted(routeId, date);
         if (routeStarted) {
-            throw new Error('Route is already started. Cannot assign stock to a route that has been started by the driver.');
+            throw new Error('Route is already started');
         }
     }
 
@@ -2368,6 +2436,7 @@ export const getAssignedStockForBilling = async (
     routeId: string,
     date: string
 ): Promise<Array<{ product: Product; stock: DailyStockItem }>> => {
+    console.log(`DEBUG: getAssignedStockForBilling called with driverId=${driverId}, routeId=${routeId}, date=${date}`);
     // Get stock for the route regardless of whether it's been started or not
     // When driverId is null (driver portal), we query for route-based stock
     // This should work both before route start (truck_id NULL) and after (truck_id NOT NULL)
@@ -2375,22 +2444,48 @@ export const getAssignedStockForBilling = async (
 
     if (driverId === null) {
         // Driver portal: query stock for route
-        // We filter by route_id and date, and auth_user_id IS NULL (admin-assigned)
-        // We do NOT filter by truck_id so it works both before and after route start
+        // We filter by route_id and date. 
+        // We do NOT filter by auth_user_id IS NULL because we want to see the stock
+        // even after the driver has claimed it (when auth_user_id becomes the driver's ID).
         const { data, error } = await supabase
             .from('daily_stock')
-            .select('stock')
+            .select('stock, truck_id, auth_user_id')
             .eq('route_id', routeId)
-            .eq('date', date)
-            .is('auth_user_id', null)
-            .maybeSingle();
+            .eq('date', date);
 
         if (error) {
             console.error('Error fetching assigned stock:', error);
             return [];
         }
-
-        stockData = data?.stock as DailyStockPayload || null;
+        
+        console.log(`DEBUG: getAssignedStockForBilling found ${data?.length || 0} rows`);
+        if (data && data.length > 0) {
+            console.log('DEBUG: rows:', data);
+            // Aggregate stock from all rows (e.g. different trucks or null truck)
+            // If multiple rows exist, we merge their stock items
+            const allItems: DailyStockItem[] = [];
+            data.forEach(row => {
+                if (Array.isArray(row.stock)) {
+                    allItems.push(...(row.stock as DailyStockItem[]));
+                }
+            });
+            
+            // Consolidate items by productId
+            const mergedMap = new Map<string, DailyStockItem>();
+            allItems.forEach(item => {
+                const existing = mergedMap.get(item.productId);
+                if (existing) {
+                    existing.boxQty += (item.boxQty || 0);
+                    existing.pcsQty += (item.pcsQty || 0);
+                } else {
+                    mergedMap.set(item.productId, { ...item });
+                }
+            });
+            
+            stockData = Array.from(mergedMap.values());
+        } else {
+            stockData = [];
+        }
     } else {
         // Admin portal: query driver-specific stock
         const { data, error } = await supabase
@@ -2409,7 +2504,10 @@ export const getAssignedStockForBilling = async (
         stockData = data?.stock as DailyStockPayload || null;
     }
 
-    if (!stockData || stockData.length === 0) return [];
+    if (!stockData || stockData.length === 0) {
+        console.log('DEBUG: No stock data found or empty');
+        return [];
+    }
 
     const products = await getProducts();
     const pmap = new Map(products.map(p => [p.id, p]));

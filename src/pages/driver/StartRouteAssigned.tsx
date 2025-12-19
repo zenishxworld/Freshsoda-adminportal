@@ -7,7 +7,8 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useToast } from "../../hooks/use-toast";
-import { getActiveRoutes, getProducts, getAssignedStockForBilling, subscribeAssignmentsForDate, type Product, type DailyStockItem } from "../../lib/supabase";
+import { getActiveRoutes, getProducts, getAssignedStockForBilling, subscribeAssignmentsForDate, startRouteForDriver, type Product, type DailyStockItem } from "../../lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { mapRouteName } from "../../lib/routeUtils";
 import { ArrowLeft, Route as RouteIcon, RefreshCw, Package } from "lucide-react";
@@ -44,9 +45,12 @@ const StartRouteAssigned = () => {
   const loadAssigned = useCallback(async () => {
     try {
       if (!selectedRoute || !selectedDate) { setAssigned([]); return; }
+      console.log('DEBUG: loadAssigned calling getAssignedStockForBilling');
       const rows = await getAssignedStockForBilling(null, selectedRoute, selectedDate);
+      console.log('DEBUG: loadAssigned received rows:', rows);
       setAssigned(rows);
     } catch (e: unknown) {
+      console.error('DEBUG: loadAssigned error:', e);
       const msg = (e as { message?: string })?.message || "Failed to load assigned stock";
       toast({ title: "Error", description: msg, variant: "destructive" });
     }
@@ -80,6 +84,35 @@ const StartRouteAssigned = () => {
     return { assignedBoxes, assignedPcs, remainingBoxes, remainingPcs };
   }, [assigned]);
 
+  const handleStartRoute = async () => {
+    if (!selectedRoute || !selectedDate) {
+      toast({ title: "Error", description: "Please select route and date", variant: "destructive" });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({ title: "Error", description: "User not authenticated", variant: "destructive" });
+        return;
+      }
+
+      // Start route (claim stock)
+      await startRouteForDriver(user.id, selectedRoute, selectedDate);
+      
+      // Navigate
+      localStorage.setItem('currentRoute', selectedRoute);
+      localStorage.setItem('currentDate', selectedDate);
+      navigate('/driver/shop-billing');
+    } catch (e: any) {
+      console.error('Error starting route:', e);
+      toast({ title: "Error", description: e.message || "Failed to start route", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-primary-light/10">
       <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
@@ -182,7 +215,9 @@ const StartRouteAssigned = () => {
           </CardContent>
         </Card>
         <div className="mt-6 flex justify-end">
-          <Button onClick={() => { localStorage.setItem('currentRoute', selectedRoute); localStorage.setItem('currentDate', selectedDate); navigate('/driver/shop-billing'); }}>Start Route</Button>
+          <Button onClick={handleStartRoute} disabled={loading || !selectedRoute}>
+            {loading ? "Starting..." : "Start Route"}
+          </Button>
         </div>
       </main>
     </div>
