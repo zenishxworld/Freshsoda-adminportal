@@ -904,7 +904,7 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
                 updated_at: row.updated_at,
                 total_boxes: totals.boxes,
                 total_pcs: totals.pcs,
-                route_status: row.truck_id ? 'started' : 'not_started',
+                route_status: (row.truck_id || row.auth_user_id) ? 'started' : 'not_started',
             } as AssignmentLogEntry;
         });
 
@@ -936,7 +936,7 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
             updated_at: row.updated_at,
             total_boxes: totals.boxes,
             total_pcs: totals.pcs,
-            route_status: row.truck_id ? 'started' : 'not_started',
+            route_status: (row.truck_id || row.auth_user_id) ? 'started' : 'not_started',
         } as AssignmentLogEntry;
     });
 
