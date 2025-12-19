@@ -6,9 +6,10 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useToast } from "../../hooks/use-toast";
-import { getActiveRoutes, getProducts, getRouteAssignedStock, getSalesFor, endRouteReturnStockRouteRPC, getWarehouseMovements } from "../../lib/supabase";
+import { getActiveRoutes, getProducts, getRouteAssignedStock, getSalesFor, endRouteReturnStockRouteRPC, getWarehouseMovements, getAssignedStockForBilling, getDriverRoute, type Product, type DailyStockItem } from "../../lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
 import { ArrowLeft, BarChart3, Printer, Calendar, TrendingUp, Package, DollarSign } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext";
 
 
 
@@ -64,6 +65,7 @@ function getPcsPerBoxFromProduct(product: any): number {
 const Summary = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedRoute, setSelectedRoute] = useState("");
@@ -95,6 +97,24 @@ const Summary = () => {
 
   useEffect(() => {
     fetchRoutes();
+    
+    // Auto-select route and date
+    const loadDefaults = async () => {
+      // 1. Try to get active route for driver
+      const driverRoute = await getDriverRoute();
+      if (driverRoute) {
+        setSelectedRoute(driverRoute.routeId);
+        setSelectedDate(driverRoute.date);
+        return;
+      }
+
+      // 2. Fallback to localStorage (only for route, date should default to today)
+      const savedRoute = localStorage.getItem('currentRoute');
+      // const savedDate = localStorage.getItem('currentDate'); 
+      if (savedRoute) setSelectedRoute(savedRoute);
+      // if (savedDate) setSelectedDate(savedDate);
+    };
+    loadDefaults();
   }, []);
 
 
@@ -131,9 +151,47 @@ const Summary = () => {
     setLoading(true);
     try {
       const products = await getProducts();
-      const assignedRows = await getRouteAssignedStock(selectedRoute, selectedDate);
-      setHasAssignedStock((assignedRows || []).length > 0);
-      const sales = await getSalesFor(selectedDate, selectedRoute);
+      const allSales = await getSalesFor(selectedDate, selectedRoute);
+      // Filter sales by current driver if logged in
+      const sales = user?.id 
+        ? allSales.filter((s: any) => s.auth_user_id === user.id)
+        : allSales;
+
+      // Load assigned stock (both driver-specific and route-generic)
+      const driverId = user?.id || null;
+      const stockPromises: Promise<Array<{ product: Product; stock: DailyStockItem }>>[] = [];
+      
+      // Try driver-assigned stock first if we have a driver ID
+      if (driverId) {
+        stockPromises.push(getAssignedStockForBilling(driverId, selectedRoute, selectedDate));
+      }
+      // Also get route-only stock (driver_id IS NULL)
+      stockPromises.push(getAssignedStockForBilling(null, selectedRoute, selectedDate));
+      
+      const stockResults = await Promise.all(stockPromises);
+      
+      // Combine and deduplicate by product ID (prefer driver-assigned over route-only)
+      const stockMap = new Map<string, DailyStockItem>();
+      let hasStock = false;
+
+      stockResults.forEach((stockArray, index) => {
+        stockArray.forEach(({ product, stock: stockItem }) => {
+          // If we have a driver ID, the first result is driver-assigned stock
+          const isDriverStock = driverId && index === 0;
+          
+          const existing = stockMap.get(product.id);
+          // Prefer driver-assigned stock if both exist, otherwise add new
+          // Also if we haven't seen this product yet, add it
+          if (!existing || isDriverStock) {
+            stockMap.set(product.id, stockItem);
+          }
+          if ((stockItem.boxQty || 0) > 0 || (stockItem.pcsQty || 0) > 0) {
+            hasStock = true;
+          }
+        });
+      });
+
+      setHasAssignedStock(hasStock);
 
       // Calculate summary with separate box and pcs units
       const summary: SummaryItem[] = [];
@@ -141,13 +199,14 @@ const Summary = () => {
       if (products) {
         products.forEach(product => {
           const ppb = getPcsPerBoxFromProduct(product);
-          const asRow = assignedRows.find(r => r.product_id === product.id);
-          const startTotalPcsFromAssigned = asRow ? (asRow.qty_assigned || 0) : 0;
-          const remainingTotalPcsFromAssigned = asRow ? (asRow.qty_remaining || 0) : 0;
-          const startBox = Math.floor(startTotalPcsFromAssigned / ppb);
-          const startPcs = startTotalPcsFromAssigned % ppb;
+          
+          // Current Remaining Stock from database
+          const stockItem = stockMap.get(product.id);
+          const remainingBox = stockItem ? (stockItem.boxQty || 0) : 0;
+          const remainingPcs = stockItem ? (stockItem.pcsQty || 0) : 0;
+          const remainingTotalPcs = (remainingBox * ppb) + remainingPcs;
 
-          // Sold per unit and revenue
+          // Sold per unit and revenue from sales
           let soldBox = 0;
           let soldPcs = 0;
           let totalRevenue = 0;
@@ -171,11 +230,16 @@ const Summary = () => {
               });
             });
           }
-          const remainingBox = Math.max(0, Math.floor(remainingTotalPcsFromAssigned / ppb));
-          const remainingPcs = Math.max(0, remainingTotalPcsFromAssigned % ppb);
+
+          const soldTotalPcs = (soldBox * ppb) + soldPcs;
+          
+          // Calculate Start Stock = Remaining + Sold
+          const startTotalPcs = remainingTotalPcs + soldTotalPcs;
+          const startBox = Math.floor(startTotalPcs / ppb);
+          const startPcs = startTotalPcs % ppb;
 
           // Only include products that were assigned or sold
-          if ((startBox + startPcs) > 0 || (soldBox + soldPcs) > 0) {
+          if (startTotalPcs > 0 || soldTotalPcs > 0) {
             summary.push({
               productId: product.id,
               productName: product.name,
@@ -204,6 +268,7 @@ const Summary = () => {
         });
       }
     } catch (error: any) {
+      console.error("Summary Generation Error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to generate summary",
