@@ -3228,6 +3228,28 @@ export const endRouteReturnStockRouteRPC = async (
     }
 };
 
+export const clearDailyStock = async (
+    driverId: string | null,
+    routeId: string,
+    date: string
+): Promise<void> => {
+    let query = supabase
+        .from('daily_stock')
+        .update({ stock: [] })
+        .eq('route_id', routeId)
+        .eq('date', date);
+
+    if (driverId) {
+        query = query.eq('auth_user_id', driverId);
+    }
+
+    const { error } = await query;
+    if (error) {
+        console.error('Error clearing daily stock:', error);
+        throw new Error('Failed to update route status');
+    }
+};
+
 export const subscribeAssignedStockForDate = (
     driverId: string,
     routeId: string,

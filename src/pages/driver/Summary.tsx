@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useToast } from "../../hooks/use-toast";
-import { getActiveRoutes, getProducts, getRouteAssignedStock, getSalesFor, endRouteReturnStockRouteRPC, getWarehouseMovements, getAssignedStockForBilling, getDriverRoute, type Product, type DailyStockItem } from "../../lib/supabase";
+import { getActiveRoutes, getProducts, getRouteAssignedStock, getSalesFor, endRouteReturnStockRouteRPC, endRouteReturnStockRPC, clearDailyStock, getWarehouseMovements, getAssignedStockForBilling, getDriverRoute, type Product, type DailyStockItem } from "../../lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
 import { ArrowLeft, BarChart3, Printer, Calendar, TrendingUp, Package, DollarSign } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
@@ -104,7 +104,7 @@ const Summary = () => {
       const driverRoute = await getDriverRoute();
       if (driverRoute) {
         setSelectedRoute(driverRoute.routeId);
-        setSelectedDate(driverRoute.date);
+        // setSelectedDate(driverRoute.date);
         return;
       }
 
@@ -291,8 +291,21 @@ const Summary = () => {
       const beforeRemaining = (beforeAssigned || []).reduce((sum, r) => sum + (r.qty_remaining || 0), 0);
       console.log("LoadOut -> Before Assigned Remaining (pcs)", beforeRemaining, beforeAssigned);
 
-      const result = await endRouteReturnStockRouteRPC(selectedRoute, selectedDate);
-      console.log("LoadOut -> RPC Result", result);
+      // Use driver-specific RPC if user is logged in, otherwise fallback to route RPC
+      const driverId = user?.id || null;
+      if (driverId) {
+        console.log("LoadOut -> Using Driver RPC", driverId);
+        await endRouteReturnStockRPC(driverId, selectedRoute, selectedDate);
+      } else {
+        console.log("LoadOut -> Using Route RPC (No driver)");
+        await endRouteReturnStockRouteRPC(selectedRoute, selectedDate);
+      }
+      
+      // Update route status by clearing daily stock
+      console.log("LoadOut -> Clearing Daily Stock to update status");
+      await clearDailyStock(driverId, selectedRoute, selectedDate);
+      
+      console.log("LoadOut -> RPC Success");
 
       // Post-check: assigned stock should be zero
       const afterAssigned = await getRouteAssignedStock(selectedRoute, selectedDate);
