@@ -1,6 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { useToast } from "../../hooks/use-toast";
 import {
@@ -9,7 +15,7 @@ import {
   BarChart3,
   LogOut,
   User,
-  Package
+  Package,
 } from "lucide-react";
 import { isWithinAuthGracePeriod } from "../../lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,7 +26,7 @@ const DriverDashboard = () => {
   const { user, logout } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { }, [navigate]);
+  useEffect(() => {}, [navigate]);
 
   const handleLogout = async () => {
     await logout();
@@ -36,7 +42,6 @@ const DriverDashboard = () => {
       </div>
     );
   }
-
 
   const quickActions = [
     {
@@ -72,7 +77,7 @@ const DriverDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-accent-light/10">
       {/* Header */}
-      <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
+      <header className="bg-white backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3">
@@ -80,17 +85,28 @@ const DriverDashboard = () => {
                 <Route className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-base sm:text-xl font-bold text-foreground">Fresh Soda</h1>
-                <p className="text-xs sm:text-sm text-muted-foreground">Driver Dashboard</p>
+                <h1 className="text-base sm:text-xl font-bold text-foreground">
+                  Fresh Soda
+                </h1>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  Driver Dashboard
+                </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="hidden sm:flex items-center gap-2 text-sm">
                 <User className="w-4 h-4" />
-                <span className="font-medium">{user?.email?.split('@')[0] || 'Driver'}</span>
+                <span className="font-medium">
+                  {user?.email?.split("@")[0] || "Driver"}
+                </span>
               </div>
-              <Button variant="ghost" size="sm" onClick={handleLogout} className="h-9 w-9 p-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                className="h-9 w-9 p-0"
+              >
                 <LogOut className="w-4 h-4" />
               </Button>
             </div>
@@ -102,13 +118,19 @@ const DriverDashboard = () => {
       <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-safe">
         {/* Welcome Section */}
         <div className="mb-6 sm:mb-8">
-          <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-1 sm:mb-2">Welcome Back!</h2>
-          <p className="text-muted-foreground text-sm sm:text-base">Ready to start your delivery route today?</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-1 sm:mb-2">
+            Welcome Back!
+          </h2>
+          <p className="text-muted-foreground text-sm sm:text-base">
+            Ready to start your delivery route today?
+          </p>
         </div>
 
         {/* Quick Actions */}
         <div>
-          <h3 className="text-xl sm:text-2xl font-bold text-foreground mb-3 sm:mb-4">Quick Actions</h3>
+          <h3 className="text-xl sm:text-2xl font-bold text-foreground mb-3 sm:mb-4">
+            Quick Actions
+          </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             {quickActions.map((action, index) => (
               <div
@@ -120,8 +142,12 @@ const DriverDashboard = () => {
                   <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
                     <action.icon className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-bold mb-2">{action.title}</h3>
-                  <p className="text-white text-sm sm:text-base mb-4 font-medium">{action.description}</p>
+                  <h3 className="text-xl sm:text-2xl font-bold mb-2">
+                    {action.title}
+                  </h3>
+                  <p className="text-white text-sm sm:text-base mb-4 font-medium">
+                    {action.description}
+                  </p>
                   <Button
                     variant="secondary"
                     className="w-full bg-white text-gray-900 hover:bg-gray-50 font-semibold border-2 border-white/20"

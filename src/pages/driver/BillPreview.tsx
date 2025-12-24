@@ -1,5 +1,11 @@
 import { Button } from "../../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "../../components/ui/card";
 import { Printer, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -33,11 +39,16 @@ const BillPreview = ({ bill, onBack }: BillPreviewProps) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-success-green-light/10">
       {/* Header - Hidden when printing */}
-      <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10 print:hidden">
+      <header className="bg-white backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10 print:hidden">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 sm:gap-3">
-              <Button variant="ghost" size="sm" onClick={onBack} className="h-9 w-9 p-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onBack}
+                className="h-9 w-9 p-0"
+              >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div className="flex items-center gap-2 sm:gap-3">
@@ -45,8 +56,12 @@ const BillPreview = ({ bill, onBack }: BillPreviewProps) => {
                   <Printer className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-lg sm:text-xl font-bold text-foreground">Bill Preview</h1>
-                  <p className="text-xs sm:text-sm text-muted-foreground hidden xs:block">Review and print the bill</p>
+                  <h1 className="text-lg sm:text-xl font-bold text-foreground">
+                    Bill Preview
+                  </h1>
+                  <p className="text-xs sm:text-sm text-muted-foreground hidden xs:block">
+                    Review and print the bill
+                  </p>
                 </div>
               </div>
             </div>
@@ -57,7 +72,9 @@ const BillPreview = ({ bill, onBack }: BillPreviewProps) => {
       <main className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-safe">
         <Card className="border-0 shadow-strong print:shadow-none print:border-0">
           <CardHeader className="text-center pb-4 sm:pb-6 px-4 sm:px-6 print:hidden">
-            <CardTitle className="text-xl sm:text-2xl font-bold text-success-green-dark">Bill Generated!</CardTitle>
+            <CardTitle className="text-xl sm:text-2xl font-bold text-success-green-dark">
+              Bill Generated!
+            </CardTitle>
             <CardDescription className="text-sm sm:text-base text-gray-700">
               Review and print the bill
             </CardDescription>
@@ -95,15 +112,30 @@ const BillPreview = ({ bill, onBack }: BillPreviewProps) => {
 
               {/* Shop Details */}
               <div className="border-t border-b py-4 mb-6 print:mb-4">
-                <p className="font-semibold text-base mb-1">Shop: {bill.shopName}</p>
+                <p className="font-semibold text-base mb-1">
+                  Shop: {bill.shopName}
+                </p>
                 {bill.shopAddress && (
-                  <p className="text-sm text-gray-600">Address: {bill.shopAddress}</p>
+                  <p className="text-sm text-gray-600">
+                    Address: {bill.shopAddress}
+                  </p>
                 )}
                 {bill.shopPhone && (
-                  <p className="text-sm text-gray-600">Phone: {bill.shopPhone}</p>
+                  <p className="text-sm text-gray-600">
+                    Phone: {bill.shopPhone}
+                  </p>
                 )}
-                <p className="text-sm text-gray-600 mt-1">Route: {bill.routeName}</p>
-                <p className="text-sm text-gray-600">Date: {new Date(bill.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Route: {bill.routeName}
+                </p>
+                <p className="text-sm text-gray-600">
+                  Date:{" "}
+                  {new Date(bill.date).toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </p>
               </div>
 
               {/* Items Table */}
@@ -126,8 +158,12 @@ const BillPreview = ({ bill, onBack }: BillPreviewProps) => {
                           {item.boxQty > 0 && item.pcsQty > 0 && ", "}
                           {item.pcsQty > 0 && `${item.pcsQty} pcs`}
                         </td>
-                        <td className="text-right py-2">₹{item.rate.toFixed(2)}</td>
-                        <td className="text-right py-2 font-semibold">₹{item.amount.toFixed(2)}</td>
+                        <td className="text-right py-2">
+                          ₹{item.rate.toFixed(2)}
+                        </td>
+                        <td className="text-right py-2 font-semibold">
+                          ₹{item.amount.toFixed(2)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -137,8 +173,12 @@ const BillPreview = ({ bill, onBack }: BillPreviewProps) => {
               {/* Total */}
               <div className="border-t pt-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-lg font-bold text-gray-900">TOTAL:</span>
-                  <span className="text-2xl font-bold text-success-green-dark">₹{bill.totalAmount.toFixed(2)}</span>
+                  <span className="text-lg font-bold text-gray-900">
+                    TOTAL:
+                  </span>
+                  <span className="text-2xl font-bold text-success-green-dark">
+                    ₹{bill.totalAmount.toFixed(2)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -163,4 +203,3 @@ const BillPreview = ({ bill, onBack }: BillPreviewProps) => {
 };
 
 export default BillPreview;
-

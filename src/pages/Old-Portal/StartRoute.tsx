@@ -1,28 +1,74 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { getProducts, getRoutes, setDailyStock, getDailyStock, addRoute, deactivateRoute, type Product, type Route, type DailyStock, type StockItem } from "@/lib/supabase";
+import {
+  getProducts,
+  getRoutes,
+  setDailyStock,
+  getDailyStock,
+  addRoute,
+  deactivateRoute,
+  type Product,
+  type Route,
+  type DailyStock,
+  type StockItem,
+} from "@/lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "@/lib/routeUtils";
-import { ArrowLeft, Route as RouteIcon, Package, Plus, Minus, Trash2, RefreshCw } from "lucide-react";
-import { isWithinAuthGracePeriod, nameMatchesQueryByWordPrefix } from "@/lib/utils";
-
-
+import {
+  ArrowLeft,
+  Route as RouteIcon,
+  Package,
+  Plus,
+  Minus,
+  Trash2,
+  RefreshCw,
+} from "lucide-react";
+import {
+  isWithinAuthGracePeriod,
+  nameMatchesQueryByWordPrefix,
+} from "@/lib/utils";
 
 interface RouteOption {
   id: string;
   name: string;
   displayName?: string;
 }
-
-
-
 
 const StartRoute = () => {
   const navigate = useNavigate();
@@ -42,9 +88,11 @@ const StartRoute = () => {
   const [showAddProductDialog, setShowAddProductDialog] = useState(false);
   const [productQuery, setProductQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [unitMode, setUnitMode] = useState<'box' | 'pcs'>('box');
+  const [unitMode, setUnitMode] = useState<"box" | "pcs">("box");
   const [tempQuantity, setTempQuantity] = useState<number>(0);
-  const [itemUnitModes, setItemUnitModes] = useState<Record<string, 'box' | 'pcs'>>({});
+  const [itemUnitModes, setItemUnitModes] = useState<
+    Record<string, "box" | "pcs">
+  >({});
 
   useEffect(() => {
     setUser(null);
@@ -56,8 +104,6 @@ const StartRoute = () => {
       fetchData();
     }
   }, [user]);
-
-
 
   useEffect(() => {
     if (selectedRoute) {
@@ -71,7 +117,9 @@ const StartRoute = () => {
       const productsRes = await getProducts();
       const routesRes = await getRoutes();
 
-      const activeProducts = productsRes.filter((p) => (p.status || 'active') === 'active');
+      const activeProducts = productsRes.filter(
+        (p) => (p.status || "active") === "active"
+      );
       const activeRoutes = routesRes.filter((r) => r.is_active !== false);
 
       if (activeProducts) {
@@ -83,10 +131,10 @@ const StartRoute = () => {
       if (activeRoutes) {
         // Map old route names to new Route 1, 2, 3 format and filter out hidden routes
         const mappedRoutes = activeRoutes
-          .filter(route => shouldDisplayRoute(route.name))
-          .map(route => ({
+          .filter((route) => shouldDisplayRoute(route.name))
+          .map((route) => ({
             ...route,
-            displayName: mapRouteName(route.name)
+            displayName: mapRouteName(route.name),
           }));
 
         setRoutes(mappedRoutes);
@@ -102,23 +150,26 @@ const StartRoute = () => {
 
   const checkExistingStock = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toISOString().split("T")[0];
       const data = await getDailyStock(selectedRoute, today);
       if (data) {
         // Stock already exists for today
         toast({
           title: "Stock Already Set",
-          description: "Initial stock for this route has already been set today. Loading existing stock...",
+          description:
+            "Initial stock for this route has already been set today. Loading existing stock...",
         });
 
         // Load existing stock
         if (data && Array.isArray(data.stock)) {
           const items = data.stock;
-          setStock(items.map((s) => ({
-            productId: s.productId,
-            unit: s.unit ?? 'pcs',
-            quantity: s.quantity || 0,
-          })));
+          setStock(
+            items.map((s) => ({
+              productId: s.productId,
+              unit: s.unit ?? "pcs",
+              quantity: s.quantity || 0,
+            }))
+          );
         }
       }
     } catch (error: any) {
@@ -126,9 +177,13 @@ const StartRoute = () => {
     }
   };
 
-  const updateStock = (productId: string, unit: 'box' | 'pcs', change: number) => {
-    setStock(prev =>
-      prev.map(item =>
+  const updateStock = (
+    productId: string,
+    unit: "box" | "pcs",
+    change: number
+  ) => {
+    setStock((prev) =>
+      prev.map((item) =>
         item.productId === productId && item.unit === unit
           ? { ...item, quantity: Math.max(0, item.quantity + change) }
           : item
@@ -151,7 +206,10 @@ const StartRoute = () => {
       // Prevent duplicate route names (case-insensitive)
       const nameToCheck = newRouteName.trim();
       const allRoutes = await getRoutes();
-      const existing = allRoutes.find((r) => String(r.name).toLowerCase() === String(nameToCheck).toLowerCase());
+      const existing = allRoutes.find(
+        (r) =>
+          String(r.name).toLowerCase() === String(nameToCheck).toLowerCase()
+      );
       if (existing) {
         toast({
           title: "Route name already exists",
@@ -178,7 +236,10 @@ const StartRoute = () => {
       });
     } catch (error: unknown) {
       const err = error as { message?: string; code?: string };
-      const message = err?.code === "23505" ? "A route with this name already exists. Please choose a different name." : err?.message || "Failed to create route";
+      const message =
+        err?.code === "23505"
+          ? "A route with this name already exists. Please choose a different name."
+          : err?.message || "Failed to create route";
       toast({
         title: "Error",
         description: message,
@@ -196,7 +257,7 @@ const StartRoute = () => {
       await deactivateRoute(routeId);
 
       // Remove the route from local state
-      setRoutes(prev => prev.filter(route => route.id !== routeId));
+      setRoutes((prev) => prev.filter((route) => route.id !== routeId));
 
       // If the deleted route was selected, clear selection
       if (selectedRoute === routeId) {
@@ -210,7 +271,9 @@ const StartRoute = () => {
     } catch (error: unknown) {
       toast({
         title: "Error",
-        description: (error as { message?: string }).message || "Failed to deactivate route",
+        description:
+          (error as { message?: string }).message ||
+          "Failed to deactivate route",
         variant: "destructive",
       });
     } finally {
@@ -221,13 +284,11 @@ const StartRoute = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-
-
     setLoading(true);
 
     try {
       // Filter out products with 0 quantity
-      const nonZeroStock = stock.filter(item => item.quantity > 0);
+      const nonZeroStock = stock.filter((item) => item.quantity > 0);
 
       if (nonZeroStock.length === 0) {
         toast({
@@ -238,12 +299,12 @@ const StartRoute = () => {
         return;
       }
 
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toISOString().split("T")[0];
       await setDailyStock(selectedRoute, today, nonZeroStock);
 
       // Store route in localStorage for use in other pages
-      localStorage.setItem('currentRoute', selectedRoute);
-      localStorage.setItem('currentDate', today);
+      localStorage.setItem("currentRoute", selectedRoute);
+      localStorage.setItem("currentDate", today);
 
       toast({
         title: "Route Started!",
@@ -254,7 +315,8 @@ const StartRoute = () => {
     } catch (error: unknown) {
       toast({
         title: "Error",
-        description: (error as { message?: string }).message || "Failed to start route",
+        description:
+          (error as { message?: string }).message || "Failed to start route",
         variant: "destructive",
       });
     } finally {
@@ -263,24 +325,24 @@ const StartRoute = () => {
   };
 
   const totalBoxes = stock
-    .filter((item) => item.unit === 'box')
+    .filter((item) => item.unit === "box")
     .reduce((sum, item) => sum + item.quantity, 0);
   const totalPcs = stock
-    .filter((item) => item.unit === 'pcs')
+    .filter((item) => item.unit === "pcs")
     .reduce((sum, item) => sum + item.quantity, 0);
   const totalProducts = totalBoxes + totalPcs;
 
   const resetAddProductState = () => {
     setProductQuery("");
     setSelectedProduct(null);
-    setUnitMode('box');
+    setUnitMode("box");
     setTempQuantity(0);
   };
 
   const toggleUnitMode = () => {
     setUnitMode((prev) => {
-      const next = prev === 'box' ? 'pcs' : 'box';
-      if (next === 'pcs' && tempQuantity === 0) {
+      const next = prev === "box" ? "pcs" : "box";
+      if (next === "pcs" && tempQuantity === 0) {
         setTempQuantity(1);
       }
       return next;
@@ -295,11 +357,16 @@ const StartRoute = () => {
     if (!selectedProduct) return;
     const quantity = Math.max(0, tempQuantity);
     setStock((prev) => {
-      const idx = prev.findIndex(si => si.productId === selectedProduct.id && si.unit === unitMode);
+      const idx = prev.findIndex(
+        (si) => si.productId === selectedProduct.id && si.unit === unitMode
+      );
       if (idx >= 0) {
-        return prev.map((si, i) => i === idx ? { ...si, quantity } : si);
+        return prev.map((si, i) => (i === idx ? { ...si, quantity } : si));
       }
-      return [...prev, { productId: selectedProduct.id, unit: unitMode, quantity }];
+      return [
+        ...prev,
+        { productId: selectedProduct.id, unit: unitMode, quantity },
+      ];
     });
     setShowAddProductDialog(false);
     resetAddProductState();
@@ -319,10 +386,15 @@ const StartRoute = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-primary-light/10">
       {/* Header */}
-      <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
+      <header className="bg-white backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center gap-2 sm:gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")} className="h-9 w-9 p-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/dashboard")}
+              className="h-9 w-9 p-0"
+            >
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="flex items-center gap-2 sm:gap-3">
@@ -330,8 +402,12 @@ const StartRoute = () => {
                 <RouteIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-lg sm:text-xl font-bold text-foreground">Start Route</h1>
-                <p className="text-xs sm:text-sm text-muted-foreground hidden xs:block">Setup your daily inventory</p>
+                <h1 className="text-lg sm:text-xl font-bold text-foreground">
+                  Start Route
+                </h1>
+                <p className="text-xs sm:text-sm text-muted-foreground hidden xs:block">
+                  Setup your daily inventory
+                </p>
               </div>
             </div>
             <Button
@@ -350,7 +426,9 @@ const StartRoute = () => {
       <main className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-safe">
         <Card className="border-0 shadow-strong">
           <CardHeader className="text-center pb-4 sm:pb-6 px-4 sm:px-6">
-            <CardTitle className="text-xl sm:text-2xl font-bold">Route Configuration</CardTitle>
+            <CardTitle className="text-xl sm:text-2xl font-bold">
+              Route Configuration
+            </CardTitle>
             <CardDescription className="text-sm sm:text-base">
               Select your route and set initial stock levels
             </CardDescription>
@@ -365,17 +443,33 @@ const StartRoute = () => {
                   Select Route
                 </Label>
                 <div className="flex gap-2 flex-wrap">
-                  <Select value={selectedRoute} onValueChange={setSelectedRoute} required>
-                    <SelectTrigger className="h-11 sm:h-10 text-base flex-1">
+                  <Select
+                    value={selectedRoute}
+                    onValueChange={setSelectedRoute}
+                    required
+                  >
+                    <SelectTrigger className="h-11 sm:h-10 text-base flex-1  bg-white">
                       <SelectValue placeholder="Choose your route" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-white">
                       {routes.map((route) => {
-                        const isCustomRoute = !['Route 1', 'Route 2', 'Route 3'].includes(route.displayName || route.name);
+                        const isCustomRoute = ![
+                          "Route 1",
+                          "Route 2",
+                          "Route 3",
+                        ].includes(route.displayName || route.name);
                         return (
-                          <div key={route.id} className="flex items-center justify-between group">
-                            <SelectItem value={route.id} className="text-base py-3 flex-1 min-w-0">
-                              <span className="block truncate">{route.displayName || route.name}</span>
+                          <div
+                            key={route.id}
+                            className="flex items-center justify-between group"
+                          >
+                            <SelectItem
+                              value={route.id}
+                              className="text-base py-3 flex-1 min-w-0"
+                            >
+                              <span className="block truncate">
+                                {route.displayName || route.name}
+                              </span>
                             </SelectItem>
                             {isCustomRoute && (
                               <AlertDialog>
@@ -392,13 +486,19 @@ const StartRoute = () => {
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                   <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Route</AlertDialogTitle>
+                                    <AlertDialogTitle>
+                                      Delete Route
+                                    </AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Are you sure you want to delete "{route.displayName || route.name}"? This action cannot be undone.
+                                      Are you sure you want to delete "
+                                      {route.displayName || route.name}"? This
+                                      action cannot be undone.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogCancel>
+                                      Cancel
+                                    </AlertDialogCancel>
                                     <AlertDialogAction
                                       onClick={() => deleteRoute(route.id)}
                                       disabled={deletingRoute}
@@ -416,7 +516,10 @@ const StartRoute = () => {
                     </SelectContent>
                   </Select>
 
-                  <Dialog open={showNewRouteDialog} onOpenChange={setShowNewRouteDialog}>
+                  <Dialog
+                    open={showNewRouteDialog}
+                    onOpenChange={setShowNewRouteDialog}
+                  >
                     <DialogTrigger asChild>
                       <Button
                         type="button"
@@ -431,7 +534,8 @@ const StartRoute = () => {
                       <DialogHeader>
                         <DialogTitle>Create New Route</DialogTitle>
                         <DialogDescription>
-                          Add a new route to your system. It will be available for immediate use.
+                          Add a new route to your system. It will be available
+                          for immediate use.
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4">
@@ -443,7 +547,7 @@ const StartRoute = () => {
                             value={newRouteName}
                             onChange={(e) => setNewRouteName(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
+                              if (e.key === "Enter") {
                                 e.preventDefault();
                                 createNewRoute();
                               }
@@ -484,9 +588,15 @@ const StartRoute = () => {
                     Initial Stock
                   </Label>
                   <div className="text-xs sm:text-sm text-muted-foreground">
-                    Boxes: <span className="font-semibold text-primary">{totalBoxes}</span>
+                    Boxes:{" "}
+                    <span className="font-semibold text-primary">
+                      {totalBoxes}
+                    </span>
                     <span className="mx-1">|</span>
-                    Pcs: <span className="font-semibold text-primary">{totalPcs}</span>
+                    Pcs:{" "}
+                    <span className="font-semibold text-primary">
+                      {totalPcs}
+                    </span>
                   </div>
                 </div>
 
@@ -497,18 +607,29 @@ const StartRoute = () => {
                       variant="default"
                       size="icon"
                       className="h-12 w-12 rounded-full"
-                      onClick={() => { resetAddProductState(); setShowAddProductDialog(true); }}
+                      onClick={() => {
+                        resetAddProductState();
+                        setShowAddProductDialog(true);
+                      }}
                       title="Add product to route"
                     >
                       <Plus className="w-6 h-6" />
                     </Button>
                   </div>
 
-                  <Dialog open={showAddProductDialog} onOpenChange={(open) => { setShowAddProductDialog(open); if (!open) resetAddProductState(); }}>
+                  <Dialog
+                    open={showAddProductDialog}
+                    onOpenChange={(open) => {
+                      setShowAddProductDialog(open);
+                      if (!open) resetAddProductState();
+                    }}
+                  >
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
                         <DialogTitle>Add Product to Route</DialogTitle>
-                        <DialogDescription>Search product and set quantity.</DialogDescription>
+                        <DialogDescription>
+                          Search product and set quantity.
+                        </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4">
                         <div className="space-y-2">
@@ -524,7 +645,12 @@ const StartRoute = () => {
                           {productQuery && (
                             <div className="max-h-40 overflow-auto border rounded-md">
                               {products
-                                .filter((p) => nameMatchesQueryByWordPrefix(p.name, productQuery))
+                                .filter((p) =>
+                                  nameMatchesQueryByWordPrefix(
+                                    p.name,
+                                    productQuery
+                                  )
+                                )
                                 .slice(0, 8)
                                 .map((p) => (
                                   <button
@@ -536,11 +662,21 @@ const StartRoute = () => {
                                       setProductQuery(p.name);
                                     }}
                                   >
-                                    {p.name} <span className="text-muted-foreground">₹{p.price.toFixed(2)}</span>
+                                    {p.name}{" "}
+                                    <span className="text-muted-foreground">
+                                      ₹{p.price.toFixed(2)}
+                                    </span>
                                   </button>
                                 ))}
-                              {products.filter(p => nameMatchesQueryByWordPrefix(p.name, productQuery)).length === 0 && (
-                                <div className="px-3 py-2 text-muted-foreground text-sm">No matches</div>
+                              {products.filter((p) =>
+                                nameMatchesQueryByWordPrefix(
+                                  p.name,
+                                  productQuery
+                                )
+                              ).length === 0 && (
+                                <div className="px-3 py-2 text-muted-foreground text-sm">
+                                  No matches
+                                </div>
                               )}
                             </div>
                           )}
@@ -549,9 +685,16 @@ const StartRoute = () => {
                         {selectedProduct && (
                           <div className="space-y-3">
                             <div className="flex items-center justify-between">
-                              <div className="font-medium">{selectedProduct.name}</div>
-                              <Button type="button" variant="secondary" size="sm" onClick={toggleUnitMode}>
-                                Unit: {unitMode === 'box' ? 'Box' : '1 pcs'}
+                              <div className="font-medium">
+                                {selectedProduct.name}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={toggleUnitMode}
+                              >
+                                Unit: {unitMode === "box" ? "Box" : "1 pcs"}
                               </Button>
                             </div>
                             <div className="flex items-center gap-2">
@@ -571,10 +714,19 @@ const StartRoute = () => {
                                 className="w-20 text-center"
                                 value={String(tempQuantity)}
                                 onChange={(e) => {
-                                  const raw = (e.target.value || '').replace(/\D+/g, '');
+                                  const raw = (e.target.value || "").replace(
+                                    /\D+/g,
+                                    ""
+                                  );
                                   // Strip leading zeros but keep single zero
-                                  const sanitized = raw.replace(/^0+(?=\d)/, '');
-                                  const v = Math.max(0, parseInt(sanitized || '0', 10));
+                                  const sanitized = raw.replace(
+                                    /^0+(?=\d)/,
+                                    ""
+                                  );
+                                  const v = Math.max(
+                                    0,
+                                    parseInt(sanitized || "0", 10)
+                                  );
                                   setTempQuantity(v);
                                 }}
                               />
@@ -588,7 +740,11 @@ const StartRoute = () => {
                               </Button>
                             </div>
                             <div className="flex justify-end">
-                              <Button type="button" onClick={handleAddProductToStock} disabled={!selectedProduct}>
+                              <Button
+                                type="button"
+                                onClick={handleAddProductToStock}
+                                disabled={!selectedProduct}
+                              >
                                 Add to Route
                               </Button>
                             </div>
@@ -601,12 +757,16 @@ const StartRoute = () => {
                   {/* Added Stock List */}
                   {stock.filter((item) => item.quantity > 0).length > 0 && (
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold">Added Stock</Label>
+                      <Label className="text-sm font-semibold">
+                        Added Stock
+                      </Label>
                       <div className="space-y-2">
                         {stock
                           .filter((item) => item.quantity > 0)
                           .map((item) => {
-                            const product = products.find((p) => p.id === item.productId);
+                            const product = products.find(
+                              (p) => p.id === item.productId
+                            );
                             if (!product) return null;
                             return (
                               <div
@@ -615,9 +775,11 @@ const StartRoute = () => {
                               >
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <div className="font-medium truncate">{product.name}</div>
+                                    <div className="font-medium truncate">
+                                      {product.name}
+                                    </div>
                                     <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground flex-shrink-0">
-                                      {item.unit === 'pcs' ? '1 pcs' : 'Box'}
+                                      {item.unit === "pcs" ? "1 pcs" : "Box"}
                                     </span>
                                   </div>
                                 </div>
@@ -626,7 +788,9 @@ const StartRoute = () => {
                                     type="button"
                                     variant="outline"
                                     size="icon"
-                                    onClick={() => updateStock(item.productId, item.unit, -5)}
+                                    onClick={() =>
+                                      updateStock(item.productId, item.unit, -5)
+                                    }
                                     disabled={item.quantity <= 0}
                                     title="Decrease"
                                   >
@@ -638,10 +802,16 @@ const StartRoute = () => {
                                     value={item.quantity}
                                     min={0}
                                     onChange={(e) => {
-                                      const v = Math.max(0, parseInt(e.target.value || "0"));
+                                      const v = Math.max(
+                                        0,
+                                        parseInt(e.target.value || "0")
+                                      );
                                       setStock((prev) =>
                                         prev.map((si) =>
-                                          si.productId === item.productId && si.unit === item.unit ? { ...si, quantity: v } : si
+                                          si.productId === item.productId &&
+                                          si.unit === item.unit
+                                            ? { ...si, quantity: v }
+                                            : si
                                         )
                                       );
                                     }}
@@ -650,7 +820,9 @@ const StartRoute = () => {
                                     type="button"
                                     variant="outline"
                                     size="icon"
-                                    onClick={() => updateStock(item.productId, item.unit, 5)}
+                                    onClick={() =>
+                                      updateStock(item.productId, item.unit, 5)
+                                    }
                                     title="Increase"
                                   >
                                     <Plus className="w-4 h-4" />
@@ -662,7 +834,10 @@ const StartRoute = () => {
                                     onClick={() => {
                                       setStock((prev) =>
                                         prev.map((si) =>
-                                          si.productId === item.productId && si.unit === item.unit ? { ...si, quantity: 0 } : si
+                                          si.productId === item.productId &&
+                                          si.unit === item.unit
+                                            ? { ...si, quantity: 0 }
+                                            : si
                                         )
                                       );
                                     }}

@@ -2,7 +2,13 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
@@ -28,7 +34,19 @@ import {
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { mapRouteName } from "../../lib/routeUtils";
 import { useAuth } from "../../contexts/AuthContext";
-import { ArrowLeft, ShoppingCart, Plus, Minus, Printer, Store, Check, RefreshCw, Route as RouteIcon, MapPin, Phone } from "lucide-react";
+import {
+  ArrowLeft,
+  ShoppingCart,
+  Plus,
+  Minus,
+  Printer,
+  Store,
+  Check,
+  RefreshCw,
+  Route as RouteIcon,
+  MapPin,
+  Phone,
+} from "lucide-react";
 import AddProductModal from "../../components/driver/AddProductModal";
 import ProductQuantityCard from "../../components/driver/ProductQuantityCard";
 
@@ -50,7 +68,9 @@ const ShopBilling = () => {
   // Route/Truck/Date
   const [selectedRoute, setSelectedRoute] = useState("");
   const [selectedTruck, setSelectedTruck] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
   const [routeName, setRouteName] = useState("");
 
   // Shop details
@@ -78,7 +98,9 @@ const ShopBilling = () => {
   }, []);
 
   // Products
-  const [availableProducts, setAvailableProducts] = useState<Array<{ product: Product; stock: DailyStockItem }>>([]);
+  const [availableProducts, setAvailableProducts] = useState<
+    Array<{ product: Product; stock: DailyStockItem }>
+  >([]);
   const assignedSubRef = useRef<RealtimeChannel | null>(null);
   const [cartItems, setCartItems] = useState<Record<string, CartItem>>({});
   const [showAddProductModal, setShowAddProductModal] = useState(false);
@@ -94,7 +116,14 @@ const ShopBilling = () => {
     shopAddress: string;
     shopPhone: string;
     routeName: string;
-    items: Array<{ productId: string; productName: string; boxQty: number; pcsQty: number; price: number; total: number; }>;
+    items: Array<{
+      productId: string;
+      productName: string;
+      boxQty: number;
+      pcsQty: number;
+      price: number;
+      total: number;
+    }>;
     total: number;
   }>(null);
 
@@ -108,9 +137,11 @@ const ShopBilling = () => {
         setSelectedDate(route.date);
       } else {
         // Fallback to localStorage if getDriverRoute doesn't work
-        const routeId = localStorage.getItem('currentRoute');
-        const truckId = localStorage.getItem('currentTruck');
-        const date = localStorage.getItem('currentDate') || format(new Date(), "yyyy-MM-dd");
+        const routeId = localStorage.getItem("currentRoute");
+        const truckId = localStorage.getItem("currentTruck");
+        const date =
+          localStorage.getItem("currentDate") ||
+          format(new Date(), "yyyy-MM-dd");
         if (routeId) setSelectedRoute(routeId);
         if (truckId) setSelectedTruck(truckId);
         if (date) setSelectedDate(date);
@@ -130,7 +161,7 @@ const ShopBilling = () => {
     const loadRouteName = async () => {
       if (selectedRoute) {
         const routes = await getActiveRoutes();
-        const route = routes.find(r => r.id === selectedRoute);
+        const route = routes.find((r) => r.id === selectedRoute);
         if (route) {
           setRouteName(mapRouteName(route.name));
         }
@@ -152,41 +183,64 @@ const ShopBilling = () => {
     const doSub = async () => {
       if (!selectedRoute || !selectedDate || !mounted) return;
       assignedSubRef.current?.unsubscribe?.();
-      assignedSubRef.current = subscribeAssignedStockForRouteDate(selectedRoute, selectedDate, loadAssignedStock);
+      assignedSubRef.current = subscribeAssignedStockForRouteDate(
+        selectedRoute,
+        selectedDate,
+        loadAssignedStock
+      );
     };
     doSub();
-    return () => { mounted = false; assignedSubRef.current?.unsubscribe?.(); };
+    return () => {
+      mounted = false;
+      assignedSubRef.current?.unsubscribe?.();
+    };
   }, [selectedRoute, selectedDate]);
 
   const loadAssignedStock = async () => {
     // For assigned routes, truck is optional - only need route and date
     if (!selectedRoute || !selectedDate) {
-      console.log("Cannot load stock - missing route or date:", { selectedRoute, selectedDate });
+      console.log("Cannot load stock - missing route or date:", {
+        selectedRoute,
+        selectedDate,
+      });
       return;
     }
 
     try {
       setLoadingStock(true);
       const driverId = user?.id || null;
-      console.log("Loading assigned stock for:", { route: selectedRoute, date: selectedDate, driverId });
-      
+      console.log("Loading assigned stock for:", {
+        route: selectedRoute,
+        date: selectedDate,
+        driverId,
+      });
+
       // Get both driver-assigned stock (if logged in) and route-only stock
-      const stockPromises: Promise<Array<{ product: Product; stock: DailyStockItem }>>[] = [];
-      
+      const stockPromises: Promise<
+        Array<{ product: Product; stock: DailyStockItem }>
+      >[] = [];
+
       // Try driver-assigned stock first if we have a driver ID
       if (driverId) {
-        stockPromises.push(getAssignedStockForBilling(driverId, selectedRoute, selectedDate));
+        stockPromises.push(
+          getAssignedStockForBilling(driverId, selectedRoute, selectedDate)
+        );
       }
-      
+
       // Also get route-only stock (driver_id IS NULL)
-      stockPromises.push(getAssignedStockForBilling(null, selectedRoute, selectedDate));
-      
+      stockPromises.push(
+        getAssignedStockForBilling(null, selectedRoute, selectedDate)
+      );
+
       // Get all stock results
       const stockResults = await Promise.all(stockPromises);
-      
+
       // Combine and deduplicate by product ID (prefer driver-assigned over route-only)
-      const stockMap = new Map<string, { product: Product; stock: DailyStockItem }>();
-      stockResults.forEach(stockArray => {
+      const stockMap = new Map<
+        string,
+        { product: Product; stock: DailyStockItem }
+      >();
+      stockResults.forEach((stockArray) => {
         stockArray.forEach(({ product, stock: stockItem }) => {
           // Only add if product has available stock
           if ((stockItem.boxQty || 0) > 0 || (stockItem.pcsQty || 0) > 0) {
@@ -198,11 +252,11 @@ const ShopBilling = () => {
           }
         });
       });
-      
+
       const combinedStock = Array.from(stockMap.values());
       console.log("Combined stock:", combinedStock.length, "products");
       setAvailableProducts(combinedStock);
-      
+
       // Initialize cart items for all products with available stock
       const initialCartItems: Record<string, CartItem> = {};
       combinedStock.forEach(({ product, stock: stockItem }) => {
@@ -210,8 +264,8 @@ const ShopBilling = () => {
         if ((stockItem.boxQty || 0) > 0 || (stockItem.pcsQty || 0) > 0) {
           const pcsPerBox = product.pcs_per_box || 24;
           const boxPrice = product.box_price || product.price || 0;
-          const pcsPrice = product.pcs_price || (boxPrice / pcsPerBox) || 0;
-          
+          const pcsPrice = product.pcs_price || boxPrice / pcsPerBox || 0;
+
           initialCartItems[product.id] = {
             product,
             stock: stockItem,
@@ -224,12 +278,18 @@ const ShopBilling = () => {
         }
       });
       setCartItems(initialCartItems);
-      console.log("Initialized cart items:", Object.keys(initialCartItems).length, "products");
+      console.log(
+        "Initialized cart items:",
+        Object.keys(initialCartItems).length,
+        "products"
+      );
     } catch (error) {
       console.error("Error loading stock:", error);
       toast({
         title: "Error",
-        description: `Failed to load assigned stock: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        description: `Failed to load assigned stock: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
         variant: "destructive",
       });
     } finally {
@@ -240,9 +300,9 @@ const ShopBilling = () => {
   const handleAddProduct = (product: Product, stock: DailyStockItem) => {
     const pcsPerBox = product.pcs_per_box || 24;
     const boxPrice = product.box_price || product.price || 0;
-    const pcsPrice = product.pcs_price || (boxPrice / pcsPerBox) || 0;
+    const pcsPrice = product.pcs_price || boxPrice / pcsPerBox || 0;
 
-    setCartItems(prev => ({
+    setCartItems((prev) => ({
       ...prev,
       [product.id]: {
         product,
@@ -252,17 +312,18 @@ const ShopBilling = () => {
         boxPrice,
         pcsPrice,
         totalAmount: 0,
-      }
+      },
     }));
   };
 
   const updateBoxQty = (productId: string, value: number) => {
-    setCartItems(prev => {
+    setCartItems((prev) => {
       const item = prev[productId];
       if (!item) return prev;
 
       const newBoxQty = Math.max(0, Math.min(item.stock.boxQty || 0, value));
-      const totalAmount = (newBoxQty * item.boxPrice) + (item.pcsQty * item.pcsPrice);
+      const totalAmount =
+        newBoxQty * item.boxPrice + item.pcsQty * item.pcsPrice;
 
       return {
         ...prev,
@@ -270,22 +331,24 @@ const ShopBilling = () => {
           ...item,
           boxQty: newBoxQty,
           totalAmount,
-        }
+        },
       };
     });
   };
 
   const updatePcsQty = (productId: string, value: number) => {
-    setCartItems(prev => {
+    setCartItems((prev) => {
       const item = prev[productId];
       if (!item) return prev;
 
       const pcsPerBox = item.product.pcs_per_box || 24;
       // Allow cutting boxes automatically - total available pcs includes boxes that can be converted
-      const totalAvailablePcs = ((item.stock.boxQty || 0) * pcsPerBox) + (item.stock.pcsQty || 0);
+      const totalAvailablePcs =
+        (item.stock.boxQty || 0) * pcsPerBox + (item.stock.pcsQty || 0);
       const maxPcsQty = totalAvailablePcs; // Allow using all available pcs (including from boxes)
       const newPcsQty = Math.max(0, Math.min(maxPcsQty, value));
-      const totalAmount = (item.boxQty * item.boxPrice) + (newPcsQty * item.pcsPrice);
+      const totalAmount =
+        item.boxQty * item.boxPrice + newPcsQty * item.pcsPrice;
 
       return {
         ...prev,
@@ -293,17 +356,17 @@ const ShopBilling = () => {
           ...item,
           pcsQty: newPcsQty,
           totalAmount,
-        }
+        },
       };
     });
   };
 
   const updateBoxPrice = (productId: string, value: number) => {
-    setCartItems(prev => {
+    setCartItems((prev) => {
       const item = prev[productId];
       if (!item) return prev;
 
-      const totalAmount = (item.boxQty * value) + (item.pcsQty * item.pcsPrice);
+      const totalAmount = item.boxQty * value + item.pcsQty * item.pcsPrice;
 
       return {
         ...prev,
@@ -311,17 +374,17 @@ const ShopBilling = () => {
           ...item,
           boxPrice: value,
           totalAmount,
-        }
+        },
       };
     });
   };
 
   const updatePcsPrice = (productId: string, value: number) => {
-    setCartItems(prev => {
+    setCartItems((prev) => {
       const item = prev[productId];
       if (!item) return prev;
 
-      const totalAmount = (item.boxQty * item.boxPrice) + (item.pcsQty * value);
+      const totalAmount = item.boxQty * item.boxPrice + item.pcsQty * value;
 
       return {
         ...prev,
@@ -329,13 +392,13 @@ const ShopBilling = () => {
           ...item,
           pcsPrice: value,
           totalAmount,
-        }
+        },
       };
     });
   };
 
   const removeFromCart = (productId: string) => {
-    setCartItems(prev => {
+    setCartItems((prev) => {
       const newCart = { ...prev };
       delete newCart[productId];
       return newCart;
@@ -344,13 +407,15 @@ const ShopBilling = () => {
 
   // Calculate totals
   const totals = useMemo(() => {
-    const items = Object.values(cartItems).filter(item => item.boxQty > 0 || item.pcsQty > 0);
+    const items = Object.values(cartItems).filter(
+      (item) => item.boxQty > 0 || item.pcsQty > 0
+    );
     const totalAmount = items.reduce((sum, item) => sum + item.totalAmount, 0);
     return { totalAmount };
   }, [cartItems]);
 
   // Phone validation
-  const isValidPhone = (p: string) => p.trim() === '' || /^\d{10}$/.test(p);
+  const isValidPhone = (p: string) => p.trim() === "" || /^\d{10}$/.test(p);
 
   // Validation
   const isFormValid = useMemo(() => {
@@ -360,15 +425,18 @@ const ShopBilling = () => {
     if (!selectedTruck && availableProducts.length === 0) return false;
     if (!shopName.trim()) return false;
     if (shopPhone.trim() && !isValidPhone(shopPhone)) return false;
-    const hasItems = Object.values(cartItems).some(item => item.boxQty > 0 || item.pcsQty > 0);
+    const hasItems = Object.values(cartItems).some(
+      (item) => item.boxQty > 0 || item.pcsQty > 0
+    );
     if (!hasItems) return false;
 
     // Check stock availability (with auto-cut logic - pcs can use boxes)
     for (const item of Object.values(cartItems)) {
       if (item.boxQty > 0 || item.pcsQty > 0) {
         const pcsPerBox = item.product.pcs_per_box || 24;
-        const totalAvailablePcs = ((item.stock.boxQty || 0) * pcsPerBox) + (item.stock.pcsQty || 0);
-        const totalRequestedPcs = (item.boxQty * pcsPerBox) + item.pcsQty;
+        const totalAvailablePcs =
+          (item.stock.boxQty || 0) * pcsPerBox + (item.stock.pcsQty || 0);
+        const totalRequestedPcs = item.boxQty * pcsPerBox + item.pcsQty;
         // Allow pcs to use boxes automatically, so check total available pcs
         if (totalRequestedPcs > totalAvailablePcs) {
           return false;
@@ -385,15 +453,28 @@ const ShopBilling = () => {
 
   const handleGenerateBill = () => {
     if (!shopName.trim()) {
-      toast({ title: "Error", description: "Please enter shop name", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "Please enter shop name",
+        variant: "destructive",
+      });
       return;
     }
     if (shopPhone.trim() && !isValidPhone(shopPhone)) {
-      toast({ title: "Error", description: "Enter a valid 10-digit mobile number", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "Enter a valid 10-digit mobile number",
+        variant: "destructive",
+      });
       return;
     }
     if (!isFormValid) {
-      toast({ title: "Error", description: "Please add products with valid quantity and non-negative price (₹0 allowed)", variant: "destructive" });
+      toast({
+        title: "Error",
+        description:
+          "Please add products with valid quantity and non-negative price (₹0 allowed)",
+        variant: "destructive",
+      });
       return;
     }
     setShowBillPreviewUI(true); // Show the preview UI
@@ -402,8 +483,8 @@ const ShopBilling = () => {
   // Get sold items for preview/print
   const getSoldItems = () => {
     return Object.values(cartItems)
-      .filter(item => item.boxQty > 0 || item.pcsQty > 0)
-      .map(item => ({
+      .filter((item) => item.boxQty > 0 || item.pcsQty > 0)
+      .map((item) => ({
         productId: item.product.id,
         productName: item.product.name,
         boxQty: item.boxQty,
@@ -425,7 +506,7 @@ const ShopBilling = () => {
       shopAddress: shopAddress.trim(),
       shopPhone: shopPhone.trim(),
       routeName: routeName,
-      items: soldItems.map(item => ({
+      items: soldItems.map((item) => ({
         productId: item.productId,
         productName: item.productName,
         boxQty: item.boxQty,
@@ -443,7 +524,7 @@ const ShopBilling = () => {
     // 2) After print dialog opens, persist the sale
     try {
       // Prepare bill items for stock deduction
-      const billItems: ShopBillItem[] = soldItems.map(item => ({
+      const billItems: ShopBillItem[] = soldItems.map((item) => ({
         productId: item.productId,
         productName: item.productName,
         boxQty: item.boxQty,
@@ -455,24 +536,34 @@ const ShopBilling = () => {
 
       // Build products_sold payload in old-portal shape
       const items = Object.values(cartItems)
-        .filter(ci => (ci.boxQty > 0 || ci.pcsQty > 0))
-        .flatMap(ci => {
-          const boxLine = ci.boxQty > 0 ? [{
-            productId: ci.product.id,
-            productName: ci.product.name,
-            unit: 'box' as const,
-            quantity: ci.boxQty,
-            price: ci.boxPrice,
-            total: ci.boxQty * ci.boxPrice,
-          }] : [];
-          const pcsLine = ci.pcsQty > 0 ? [{
-            productId: ci.product.id,
-            productName: ci.product.name,
-            unit: 'pcs' as const,
-            quantity: ci.pcsQty,
-            price: ci.pcsPrice,
-            total: ci.pcsQty * ci.pcsPrice,
-          }] : [];
+        .filter((ci) => ci.boxQty > 0 || ci.pcsQty > 0)
+        .flatMap((ci) => {
+          const boxLine =
+            ci.boxQty > 0
+              ? [
+                  {
+                    productId: ci.product.id,
+                    productName: ci.product.name,
+                    unit: "box" as const,
+                    quantity: ci.boxQty,
+                    price: ci.boxPrice,
+                    total: ci.boxQty * ci.boxPrice,
+                  },
+                ]
+              : [];
+          const pcsLine =
+            ci.pcsQty > 0
+              ? [
+                  {
+                    productId: ci.product.id,
+                    productName: ci.product.name,
+                    unit: "pcs" as const,
+                    quantity: ci.pcsQty,
+                    price: ci.pcsPrice,
+                    total: ci.pcsQty * ci.pcsPrice,
+                  },
+                ]
+              : [];
           return [...boxLine, ...pcsLine];
         });
       const products_sold = {
@@ -481,7 +572,10 @@ const ShopBilling = () => {
         shop_phone: shopPhone.trim() || undefined,
       };
 
-      const truckId = selectedTruck && /^[0-9a-fA-F-]{36}$/.test(selectedTruck) ? selectedTruck : null;
+      const truckId =
+        selectedTruck && /^[0-9a-fA-F-]{36}$/.test(selectedTruck)
+          ? selectedTruck
+          : null;
       const routeId = selectedRoute;
       const totalAmount = totals.totalAmount;
       const salePayload = {
@@ -512,18 +606,31 @@ const ShopBilling = () => {
 
       // Update stock after sale
       const products = await getProducts();
-      const saleItems = billItems.map(item => {
-        const p = products.find(pp => pp.id === item.productId);
+      const saleItems = billItems.map((item) => {
+        const p = products.find((pp) => pp.id === item.productId);
         const perBox = p?.pcs_per_box || 24;
-        return { productId: item.productId, qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0) };
+        return {
+          productId: item.productId,
+          qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0),
+        };
       });
-      const assignedRows = await getRouteAssignedStock(selectedRoute, selectedDate);
-      const assignedIds = new Set(assignedRows.map(r => r.product_id));
+      const assignedRows = await getRouteAssignedStock(
+        selectedRoute,
+        selectedDate
+      );
+      const assignedIds = new Set(assignedRows.map((r) => r.product_id));
       // Relaxed validation: Log warning instead of throwing error
       // This allows sales even if assigned_stock table is out of sync with daily_stock
       for (const si of saleItems) {
         if (!assignedIds.has(si.productId)) {
-          console.warn("Assigned stock missing in assigned_stock table (but present in daily_stock)", { route_id: selectedRoute, date: selectedDate, productId: si.productId });
+          console.warn(
+            "Assigned stock missing in assigned_stock table (but present in daily_stock)",
+            {
+              route_id: selectedRoute,
+              date: selectedDate,
+              productId: si.productId,
+            }
+          );
         }
       }
       // const strictValidation = import.meta.env.VITE_STRICT_ASSIGNED_STOCK_VALIDATION === 'true' || import.meta.env.DEV;
@@ -536,20 +643,20 @@ const ShopBilling = () => {
       //   }
       // }
       console.log("Updating daily stock (client-side)...");
-      const stockUpdateItems = billItems.map(item => ({
+      const stockUpdateItems = billItems.map((item) => ({
         productId: item.productId,
         boxQty: item.boxQty || 0,
-        pcsQty: item.pcsQty || 0
+        pcsQty: item.pcsQty || 0,
       }));
 
       // Use driver-aware stock update (handles missing truckId if driver is logged in)
       await updateDriverStockAfterSale(
-          user?.id || null,
-          selectedRoute, 
-          truckId, 
-          selectedDate, 
-          stockUpdateItems, 
-          products
+        user?.id || null,
+        selectedRoute,
+        truckId,
+        selectedDate,
+        stockUpdateItems,
+        products
       );
       console.log("Daily stock updated successfully");
 
@@ -557,9 +664,9 @@ const ShopBilling = () => {
       console.log("Reloading assigned stock after sale...");
       await loadAssignedStock();
       console.log("Assigned stock reloaded");
-      setCartItems(prev => {
+      setCartItems((prev) => {
         const updated: Record<string, CartItem> = {};
-        Object.keys(prev).forEach(key => {
+        Object.keys(prev).forEach((key) => {
           updated[key] = { ...prev[key], boxQty: 0, pcsQty: 0, totalAmount: 0 };
         });
         return updated;
@@ -574,7 +681,8 @@ const ShopBilling = () => {
       setShowBillPreviewUI(false);
     } catch (error: unknown) {
       console.error("Error during print+save flow:", error);
-      const msg = (error as { message?: string }).message || "Failed to save bill";
+      const msg =
+        (error as { message?: string }).message || "Failed to save bill";
       toast({ title: "Error", description: msg, variant: "destructive" });
       setLoading(false);
     }
@@ -589,14 +697,14 @@ const ShopBilling = () => {
     const handleAfterPrint = () => {
       setLoading(false);
     };
-    window.addEventListener('afterprint', handleAfterPrint);
-    return () => window.removeEventListener('afterprint', handleAfterPrint);
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
   }, []);
 
   const handleSaveBill = async () => {
     setLoading(true);
     const soldItems = getSoldItems();
-    const billItems: ShopBillItem[] = soldItems.map(item => ({
+    const billItems: ShopBillItem[] = soldItems.map((item) => ({
       productId: item.productId,
       productName: item.productName,
       boxQty: item.boxQty,
@@ -607,24 +715,34 @@ const ShopBilling = () => {
     }));
     try {
       const items = Object.values(cartItems)
-        .filter(ci => (ci.boxQty > 0 || ci.pcsQty > 0))
-        .flatMap(ci => {
-          const boxLine = ci.boxQty > 0 ? [{
-            productId: ci.product.id,
-            productName: ci.product.name,
-            unit: 'box' as const,
-            quantity: ci.boxQty,
-            price: ci.boxPrice,
-            total: ci.boxQty * ci.boxPrice,
-          }] : [];
-          const pcsLine = ci.pcsQty > 0 ? [{
-            productId: ci.product.id,
-            productName: ci.product.name,
-            unit: 'pcs' as const,
-            quantity: ci.pcsQty,
-            price: ci.pcsPrice,
-            total: ci.pcsQty * ci.pcsPrice,
-          }] : [];
+        .filter((ci) => ci.boxQty > 0 || ci.pcsQty > 0)
+        .flatMap((ci) => {
+          const boxLine =
+            ci.boxQty > 0
+              ? [
+                  {
+                    productId: ci.product.id,
+                    productName: ci.product.name,
+                    unit: "box" as const,
+                    quantity: ci.boxQty,
+                    price: ci.boxPrice,
+                    total: ci.boxQty * ci.boxPrice,
+                  },
+                ]
+              : [];
+          const pcsLine =
+            ci.pcsQty > 0
+              ? [
+                  {
+                    productId: ci.product.id,
+                    productName: ci.product.name,
+                    unit: "pcs" as const,
+                    quantity: ci.pcsQty,
+                    price: ci.pcsPrice,
+                    total: ci.pcsQty * ci.pcsPrice,
+                  },
+                ]
+              : [];
           return [...boxLine, ...pcsLine];
         });
       const products_sold = {
@@ -632,7 +750,10 @@ const ShopBilling = () => {
         shop_address: shopAddress.trim() || undefined,
         shop_phone: shopPhone.trim() || undefined,
       };
-      const truckId = selectedTruck && /^[0-9a-fA-F-]{36}$/.test(selectedTruck) ? selectedTruck : null;
+      const truckId =
+        selectedTruck && /^[0-9a-fA-F-]{36}$/.test(selectedTruck)
+          ? selectedTruck
+          : null;
       const salePayload = {
         route_id: selectedRoute,
         truck_id: truckId,
@@ -641,21 +762,41 @@ const ShopBilling = () => {
         products_sold,
         total_amount: totals.totalAmount,
       };
-      console.log("saveSale payload:", { route_id: salePayload.route_id, truck_id: salePayload.truck_id, date: salePayload.date, shop_name: salePayload.shop_name, items: products_sold.items, total_amount: salePayload.total_amount });
+      console.log("saveSale payload:", {
+        route_id: salePayload.route_id,
+        truck_id: salePayload.truck_id,
+        date: salePayload.date,
+        shop_name: salePayload.shop_name,
+        items: products_sold.items,
+        total_amount: salePayload.total_amount,
+      });
       const savedSale = await saveSale(salePayload);
       console.log("Sale saved:", savedSale);
       const products = await getProducts();
-      const saleItems = billItems.map(item => {
-        const p = products.find(pp => pp.id === item.productId);
+      const saleItems = billItems.map((item) => {
+        const p = products.find((pp) => pp.id === item.productId);
         const perBox = p?.pcs_per_box || 24;
-        return { productId: item.productId, qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0) };
+        return {
+          productId: item.productId,
+          qty_pcs: (item.boxQty || 0) * perBox + (item.pcsQty || 0),
+        };
       });
-      const assignedRows = await getRouteAssignedStock(selectedRoute, selectedDate);
-      const assignedIds = new Set(assignedRows.map(r => r.product_id));
+      const assignedRows = await getRouteAssignedStock(
+        selectedRoute,
+        selectedDate
+      );
+      const assignedIds = new Set(assignedRows.map((r) => r.product_id));
       // Relaxed validation for Save Bill as well
       for (const si of saleItems) {
         if (!assignedIds.has(si.productId)) {
-          console.warn("Assigned stock missing in assigned_stock table (but present in daily_stock)", { route_id: selectedRoute, date: selectedDate, productId: si.productId });
+          console.warn(
+            "Assigned stock missing in assigned_stock table (but present in daily_stock)",
+            {
+              route_id: selectedRoute,
+              date: selectedDate,
+              productId: si.productId,
+            }
+          );
         }
       }
       // const strictValidation = import.meta.env.VITE_STRICT_ASSIGNED_STOCK_VALIDATION === 'true' || import.meta.env.DEV;
@@ -672,23 +813,23 @@ const ShopBilling = () => {
         throw new Error("Cannot update stock: No Truck ID selected.");
       }
       await updateDailyStockAfterSale(
-          selectedRoute, 
-          truckId, 
-          selectedDate, 
-          billItems.map(item => ({
-            productId: item.productId,
-            boxQty: item.boxQty || 0,
-            pcsQty: item.pcsQty || 0
-          })), 
-          products
+        selectedRoute,
+        truckId,
+        selectedDate,
+        billItems.map((item) => ({
+          productId: item.productId,
+          boxQty: item.boxQty || 0,
+          pcsQty: item.pcsQty || 0,
+        })),
+        products
       );
       console.log("Daily stock updated successfully (client-side)");
       console.log("Reloading assigned stock after save...");
       await loadAssignedStock();
       console.log("Assigned stock reloaded");
-      setCartItems(prev => {
+      setCartItems((prev) => {
         const updated: Record<string, CartItem> = {};
-        Object.keys(prev).forEach(key => {
+        Object.keys(prev).forEach((key) => {
           updated[key] = { ...prev[key], boxQty: 0, pcsQty: 0, totalAmount: 0 };
         });
         return updated;
@@ -703,20 +844,23 @@ const ShopBilling = () => {
       // stay on the page
     } catch (error: unknown) {
       console.error("Error during save bill flow:", error);
-      const msg = (error as { message?: string }).message || "Failed to save bill";
+      const msg =
+        (error as { message?: string }).message || "Failed to save bill";
       toast({ title: "Error", description: msg, variant: "destructive" });
       setLoading(false);
     }
   };
 
-  const addedItems = Object.values(cartItems).filter(item => item.boxQty > 0 || item.pcsQty > 0);
+  const addedItems = Object.values(cartItems).filter(
+    (item) => item.boxQty > 0 || item.pcsQty > 0
+  );
   const soldItems = getSoldItems();
   const totalAmount = totals.totalAmount;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-success-green-light/10">
       {/* Header */}
-      <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10 print:hidden">
+      <header className="bg-white backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10 print:hidden">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 sm:gap-3">
@@ -739,15 +883,21 @@ const ShopBilling = () => {
                   <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-lg sm:text-xl font-bold text-foreground">Shop Billing</h1>
-                  <p className="text-xs sm:text-sm text-muted-foreground hidden xs:block">Create bills for shop sales</p>
+                  <h1 className="text-lg sm:text-xl font-bold text-foreground">
+                    Shop Billing
+                  </h1>
+                  <p className="text-xs sm:text-sm text-muted-foreground hidden xs:block">
+                    Create bills for shop sales
+                  </p>
                 </div>
               </div>
             </div>
             {routeName && (
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">Route</p>
-                <p className="text-sm sm:text-base font-semibold text-primary">{routeName}</p>
+                <p className="text-sm sm:text-base font-semibold text-primary">
+                  {routeName}
+                </p>
               </div>
             )}
             <Button
@@ -768,7 +918,9 @@ const ShopBilling = () => {
           // Billing Form
           <Card className="border-0 shadow-strong">
             <CardHeader className="text-center pb-4 sm:pb-6 px-4 sm:px-6">
-              <CardTitle className="text-xl sm:text-2xl font-bold">New Sale</CardTitle>
+              <CardTitle className="text-xl sm:text-2xl font-bold">
+                New Sale
+              </CardTitle>
               <CardDescription className="text-sm sm:text-base">
                 Enter shop details and select products
               </CardDescription>
@@ -782,353 +934,472 @@ const ShopBilling = () => {
             </CardHeader>
 
             <CardContent className="px-4 sm:px-6">
-            <div className="space-y-6 sm:space-y-8">
-              {/* Shop Details */}
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold flex items-center gap-2">
-                    <Store className="w-4 h-4" />
-                    Shop Name *
-                  </Label>
-                  <Input
-                    type="text"
-                    placeholder="Enter shop name"
-                    value={shopName}
-                    onChange={(e) => setShopName(e.target.value)}
-                    className="h-11 sm:h-10"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold flex items-center gap-2">
-                    <MapPin className="w-4 h-4" />
-                    Address / Village
-                  </Label>
-                  <Input
-                    type="text"
-                    placeholder="Enter address or village name"
-                    value={shopAddress}
-                    onChange={(e) => setShopAddress(e.target.value)}
-                    className="h-11 sm:h-10"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold flex items-center gap-2">
-                    <Phone className="w-4 h-4" />
-                    Phone Number
-                  </Label>
-                  <Input
-                    type="tel"
-                    inputMode="numeric"
-                    placeholder="Enter 10-digit mobile number"
-                    value={shopPhone}
-                    onChange={(e) => {
-                      const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
-                      setShopPhone(digitsOnly);
-                    }}
-                    pattern="[0-9]{10}"
-                    maxLength={10}
-                    className="h-11 sm:h-10 text-base"
-                  />
-                {shopPhone && !isValidPhone(shopPhone) && (
-                  <p className="text-xs text-destructive">Enter 10-digit mobile number</p>
-                )}
-                {import.meta.env.DEV && (
-                  <div className="flex justify-end pt-2">
-                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={fillDevDetails}>
-                      Set Temp Details
-                    </Button>
+              <div className="space-y-6 sm:space-y-8">
+                {/* Shop Details */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-2">
+                      <Store className="w-4 h-4" />
+                      Shop Name *
+                    </Label>
+                    <Input
+                      type="text"
+                      placeholder="Enter shop name"
+                      value={shopName}
+                      onChange={(e) => setShopName(e.target.value)}
+                      className="h-11 sm:h-10"
+                      required
+                    />
                   </div>
-                )}
-              </div>
-            </div>
 
-              {/* Products Section */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label className="text-base sm:text-lg font-semibold flex items-center gap-2">
-                    <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
-                    Select Products
-                  </Label>
-                  <div className="flex items-center gap-2">
-                    <div className="text-xs sm:text-sm text-muted-foreground">
-                      Items: <span className="font-semibold text-primary">{addedItems.length}</span>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      Address / Village
+                    </Label>
+                    <Input
+                      type="text"
+                      placeholder="Enter address or village name"
+                      value={shopAddress}
+                      onChange={(e) => setShopAddress(e.target.value)}
+                      className="h-11 sm:h-10"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-2">
+                      <Phone className="w-4 h-4" />
+                      Phone Number
+                    </Label>
+                    <Input
+                      type="tel"
+                      inputMode="numeric"
+                      placeholder="Enter 10-digit mobile number"
+                      value={shopPhone}
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, 10);
+                        setShopPhone(digitsOnly);
+                      }}
+                      pattern="[0-9]{10}"
+                      maxLength={10}
+                      className="h-11 sm:h-10 text-base"
+                    />
+                    {shopPhone && !isValidPhone(shopPhone) && (
+                      <p className="text-xs text-destructive">
+                        Enter 10-digit mobile number
+                      </p>
+                    )}
+                    {import.meta.env.DEV && (
+                      <div className="flex justify-end pt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8"
+                          onClick={fillDevDetails}
+                        >
+                          Set Temp Details
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Products Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                      <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
+                      Select Products
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs sm:text-sm text-muted-foreground">
+                        Items:{" "}
+                        <span className="font-semibold text-primary">
+                          {addedItems.length}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={() => setShowAddProductModal(true)}
+                        disabled={availableProducts.length === 0}
+                        variant="default"
+                        size="sm"
+                        className="h-9"
+                        title="Quick add product"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Product
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      onClick={() => setShowAddProductModal(true)}
-                      disabled={availableProducts.length === 0}
-                      variant="default"
-                      size="sm"
-                      className="h-9"
-                      title="Quick add product"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Product
-                    </Button>
                   </div>
-                </div>
 
-                {/* Quick Edit Added Items */}
-                {addedItems.length > 0 && (
-                  <div className="rounded-md border p-3">
-                    <div className="text-sm font-semibold mb-2">Added Items</div>
-                    <div className="space-y-2">
-                      {addedItems.map((item) => (
-                        <div key={item.product.id} className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm">{item.product.name}</span>
-                            <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">
-                              {item.boxQty > 0 && `${item.boxQty} Box`}
-                              {item.boxQty > 0 && item.pcsQty > 0 && ", "}
-                              {item.pcsQty > 0 && `${item.pcsQty} pcs`}
+                  {/* Quick Edit Added Items */}
+                  {addedItems.length > 0 && (
+                    <div className="rounded-md border p-3">
+                      <div className="text-sm font-semibold mb-2">
+                        Added Items
+                      </div>
+                      <div className="space-y-2">
+                        {addedItems.map((item) => (
+                          <div
+                            key={item.product.id}
+                            className="flex items-center justify-between gap-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">
+                                {item.product.name}
+                              </span>
+                              <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                                {item.boxQty > 0 && `${item.boxQty} Box`}
+                                {item.boxQty > 0 && item.pcsQty > 0 && ", "}
+                                {item.pcsQty > 0 && `${item.pcsQty} pcs`}
+                              </span>
+                            </div>
+                            <span className="text-sm font-semibold text-primary">
+                              ₹{item.totalAmount.toFixed(2)}
                             </span>
                           </div>
-                          <span className="text-sm font-semibold text-primary">
-                            ₹{item.totalAmount.toFixed(2)}
-                          </span>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Product Cards - Show all available products like Old-Portal */}
-                {loadingStock ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Loading products...
-                  </div>
-                ) : availableProducts.length > 0 ? (
-                  <div className="grid gap-3 sm:gap-4">
-                    {availableProducts
-                      .filter(({ stock: stockItem }) => (stockItem.boxQty || 0) > 0 || (stockItem.pcsQty || 0) > 0)
-                      .map(({ product, stock: stockItem }) => {
-                        const cartItem = cartItems[product.id];
-                        if (!cartItem) return null;
-                        
-                        const boxAvail = stockItem.boxQty || 0;
-                        const pcsAvail = stockItem.pcsQty || 0;
-                        const boxQty = cartItem.boxQty || 0;
-                        const pcsQty = cartItem.pcsQty || 0;
-                        const boxPrice = cartItem.boxPrice;
-                        const pcsPrice = cartItem.pcsPrice;
-                        const availableStock = boxAvail + pcsAvail;
-                        const lineTotal = cartItem.totalAmount;
+                  {/* Product Cards - Show all available products like Old-Portal */}
+                  {loadingStock ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Loading products...
+                    </div>
+                  ) : availableProducts.length > 0 ? (
+                    <div className="grid gap-3 sm:gap-4">
+                      {availableProducts
+                        .filter(
+                          ({ stock: stockItem }) =>
+                            (stockItem.boxQty || 0) > 0 ||
+                            (stockItem.pcsQty || 0) > 0
+                        )
+                        .map(({ product, stock: stockItem }) => {
+                          const cartItem = cartItems[product.id];
+                          if (!cartItem) return null;
 
-                        return (
-                          <Card
-                            key={product.id}
-                            className={`border transition-colors ${
-                              availableStock === 0
-                                ? 'border-destructive/50 opacity-60'
-                                : 'border-border hover:border-primary/50'
-                            }`}
-                          >
-                            <CardContent className="p-3 sm:p-4">
-                              <div className="space-y-3">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <h4 className="font-semibold text-foreground text-base">{product.name}</h4>
-                                  {availableStock === 0 && (
-                                    <span className="text-xs font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded">
-                                      Out of Stock
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  <div className="space-y-2">
-                                    {/* Box */}
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-xs font-medium text-muted-foreground">Unit: Box</span>
-                                      <span className="text-xs text-muted-foreground">Avail: {boxAvail} Box</span>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <Label className="text-xs font-medium text-muted-foreground">Price (₹)</Label>
-                                      <Input
-                                        type="number"
-                                        value={boxPrice}
-                                        onChange={(e) => {
-                                          const v = e.target.value;
-                                          const num = v === '' ? 0 : parseFloat(v);
-                                          updateBoxPrice(product.id, Number.isFinite(num) ? num : 0);
-                                        }}
-                                        className="h-9 text-sm"
-                                        min="0"
-                                        step="0.01"
-                                        disabled={boxAvail === 0}
-                                        placeholder={`${product.box_price ?? product.price}`}
-                                      />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <Label className="text-xs font-medium text-muted-foreground">Quantity (Box)</Label>
-                                      <div className="flex items-center gap-2">
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="icon"
-                                          onClick={() => updateBoxQty(product.id, boxQty - 1)}
-                                          disabled={boxQty === 0}
-                                          className="h-9 w-9"
-                                        >
-                                          <Minus className="w-4 h-4" />
-                                        </Button>
+                          const boxAvail = stockItem.boxQty || 0;
+                          const pcsAvail = stockItem.pcsQty || 0;
+                          const boxQty = cartItem.boxQty || 0;
+                          const pcsQty = cartItem.pcsQty || 0;
+                          const boxPrice = cartItem.boxPrice;
+                          const pcsPrice = cartItem.pcsPrice;
+                          const availableStock = boxAvail + pcsAvail;
+                          const lineTotal = cartItem.totalAmount;
+
+                          return (
+                            <Card
+                              key={product.id}
+                              className={`border transition-colors ${
+                                availableStock === 0
+                                  ? "border-destructive/50 opacity-60"
+                                  : "border-border hover:border-primary/50"
+                              }`}
+                            >
+                              <CardContent className="p-3 sm:p-4">
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <h4 className="font-semibold text-foreground text-base">
+                                      {product.name}
+                                    </h4>
+                                    {availableStock === 0 && (
+                                      <span className="text-xs font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded">
+                                        Out of Stock
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="space-y-2">
+                                      {/* Box */}
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-xs font-medium text-muted-foreground">
+                                          Unit: Box
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">
+                                          Avail: {boxAvail} Box
+                                        </span>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs font-medium text-muted-foreground">
+                                          Price (₹)
+                                        </Label>
                                         <Input
-                                          type="text"
-                                          value={String(boxQty)}
+                                          type="number"
+                                          value={boxPrice}
                                           onChange={(e) => {
-                                            const sanitized = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '') || '0';
-                                            const newQuantity = Math.max(0, parseInt(sanitized) || 0);
-                                            updateBoxQty(product.id, newQuantity);
+                                            const v = e.target.value;
+                                            const num =
+                                              v === "" ? 0 : parseFloat(v);
+                                            updateBoxPrice(
+                                              product.id,
+                                              Number.isFinite(num) ? num : 0
+                                            );
                                           }}
-                                          className="w-16 text-center text-sm h-9"
-                                          inputMode="numeric"
-                                          pattern="[0-9]*"
+                                          className="h-9 text-sm"
+                                          min="0"
+                                          step="0.01"
                                           disabled={boxAvail === 0}
+                                          placeholder={`${
+                                            product.box_price ?? product.price
+                                          }`}
                                         />
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="icon"
-                                          onClick={() => updateBoxQty(product.id, boxQty + 1)}
-                                          disabled={boxQty >= boxAvail || boxAvail === 0}
-                                          className="h-9 w-9"
-                                        >
-                                          <Plus className="w-4 h-4" />
-                                        </Button>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs font-medium text-muted-foreground">
+                                          Quantity (Box)
+                                        </Label>
+                                        <div className="flex items-center gap-2">
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() =>
+                                              updateBoxQty(
+                                                product.id,
+                                                boxQty - 1
+                                              )
+                                            }
+                                            disabled={boxQty === 0}
+                                            className="h-9 w-9"
+                                          >
+                                            <Minus className="w-4 h-4" />
+                                          </Button>
+                                          <Input
+                                            type="text"
+                                            value={String(boxQty)}
+                                            onChange={(e) => {
+                                              const sanitized =
+                                                e.target.value
+                                                  .replace(/[^0-9]/g, "")
+                                                  .replace(/^0+/, "") || "0";
+                                              const newQuantity = Math.max(
+                                                0,
+                                                parseInt(sanitized) || 0
+                                              );
+                                              updateBoxQty(
+                                                product.id,
+                                                newQuantity
+                                              );
+                                            }}
+                                            className="w-16 text-center text-sm h-9"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            disabled={boxAvail === 0}
+                                          />
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() =>
+                                              updateBoxQty(
+                                                product.id,
+                                                boxQty + 1
+                                              )
+                                            }
+                                            disabled={
+                                              boxQty >= boxAvail ||
+                                              boxAvail === 0
+                                            }
+                                            className="h-9 w-9"
+                                          >
+                                            <Plus className="w-4 h-4" />
+                                          </Button>
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                  <div className="space-y-2">
-                                    {/* Pcs */}
-                                    {(() => {
-                                      const pcsPerBox = product.pcs_per_box || 24;
-                                      const maxPcsCapacity = pcsAvail + boxAvail * pcsPerBox;
-                                      return (
-                                        <>
-                                          <div className="flex items-center justify-between">
-                                            <span className="text-xs font-medium text-muted-foreground">Unit: 1 pcs</span>
-                                            <span className="text-xs text-muted-foreground">Avail: {pcsAvail} pcs</span>
-                                          </div>
-                                          <div className="space-y-1">
-                                            <Label className="text-xs font-medium text-muted-foreground">Price (₹)</Label>
-                                            <Input
-                                              type="number"
-                                              value={pcsPrice}
-                                              onChange={(e) => {
-                                                const v = e.target.value;
-                                                const num = v === '' ? 0 : parseFloat(v);
-                                                updatePcsPrice(product.id, Number.isFinite(num) ? num : 0);
-                                              }}
-                                              className="h-9 text-sm"
-                                              min="0"
-                                              step="0.01"
-                                              disabled={maxPcsCapacity === 0}
-                                              placeholder={`${product.pcs_price ?? ((product.box_price ?? product.price) / pcsPerBox)}`}
-                                            />
-                                          </div>
-                                          <div className="space-y-1">
-                                            <Label className="text-xs font-medium text-muted-foreground">Quantity (pcs)</Label>
-                                            <div className="flex items-center gap-2">
-                                              <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="icon"
-                                                onClick={() => updatePcsQty(product.id, pcsQty - 1)}
-                                                disabled={pcsQty === 0}
-                                                className="h-9 w-9"
-                                              >
-                                                <Minus className="w-4 h-4" />
-                                              </Button>
-                                              <Input
-                                                type="text"
-                                                value={String(pcsQty)}
-                                                onChange={(e) => {
-                                                  const sanitized = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '') || '0';
-                                                  const newQuantity = Math.max(0, parseInt(sanitized) || 0);
-                                                  updatePcsQty(product.id, newQuantity);
-                                                }}
-                                                className="w-16 text-center text-sm h-9"
-                                                inputMode="numeric"
-                                                pattern="[0-9]*"
-                                                disabled={maxPcsCapacity === 0}
-                                              />
-                                              <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="icon"
-                                                onClick={() => updatePcsQty(product.id, pcsQty + 1)}
-                                                disabled={pcsQty >= maxPcsCapacity || maxPcsCapacity === 0}
-                                                className="h-9 w-9"
-                                              >
-                                                <Plus className="w-4 h-4" />
-                                              </Button>
+                                    <div className="space-y-2">
+                                      {/* Pcs */}
+                                      {(() => {
+                                        const pcsPerBox =
+                                          product.pcs_per_box || 24;
+                                        const maxPcsCapacity =
+                                          pcsAvail + boxAvail * pcsPerBox;
+                                        return (
+                                          <>
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-xs font-medium text-muted-foreground">
+                                                Unit: 1 pcs
+                                              </span>
+                                              <span className="text-xs text-muted-foreground">
+                                                Avail: {pcsAvail} pcs
+                                              </span>
                                             </div>
-                                          </div>
-                                        </>
-                                      );
-                                    })()}
+                                            <div className="space-y-1">
+                                              <Label className="text-xs font-medium text-muted-foreground">
+                                                Price (₹)
+                                              </Label>
+                                              <Input
+                                                type="number"
+                                                value={pcsPrice}
+                                                onChange={(e) => {
+                                                  const v = e.target.value;
+                                                  const num =
+                                                    v === ""
+                                                      ? 0
+                                                      : parseFloat(v);
+                                                  updatePcsPrice(
+                                                    product.id,
+                                                    Number.isFinite(num)
+                                                      ? num
+                                                      : 0
+                                                  );
+                                                }}
+                                                className="h-9 text-sm"
+                                                min="0"
+                                                step="0.01"
+                                                disabled={maxPcsCapacity === 0}
+                                                placeholder={`${
+                                                  product.pcs_price ??
+                                                  (product.box_price ??
+                                                    product.price) / pcsPerBox
+                                                }`}
+                                              />
+                                            </div>
+                                            <div className="space-y-1">
+                                              <Label className="text-xs font-medium text-muted-foreground">
+                                                Quantity (pcs)
+                                              </Label>
+                                              <div className="flex items-center gap-2">
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  size="icon"
+                                                  onClick={() =>
+                                                    updatePcsQty(
+                                                      product.id,
+                                                      pcsQty - 1
+                                                    )
+                                                  }
+                                                  disabled={pcsQty === 0}
+                                                  className="h-9 w-9"
+                                                >
+                                                  <Minus className="w-4 h-4" />
+                                                </Button>
+                                                <Input
+                                                  type="text"
+                                                  value={String(pcsQty)}
+                                                  onChange={(e) => {
+                                                    const sanitized =
+                                                      e.target.value
+                                                        .replace(/[^0-9]/g, "")
+                                                        .replace(/^0+/, "") ||
+                                                      "0";
+                                                    const newQuantity =
+                                                      Math.max(
+                                                        0,
+                                                        parseInt(sanitized) || 0
+                                                      );
+                                                    updatePcsQty(
+                                                      product.id,
+                                                      newQuantity
+                                                    );
+                                                  }}
+                                                  className="w-16 text-center text-sm h-9"
+                                                  inputMode="numeric"
+                                                  pattern="[0-9]*"
+                                                  disabled={
+                                                    maxPcsCapacity === 0
+                                                  }
+                                                />
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  size="icon"
+                                                  onClick={() =>
+                                                    updatePcsQty(
+                                                      product.id,
+                                                      pcsQty + 1
+                                                    )
+                                                  }
+                                                  disabled={
+                                                    pcsQty >= maxPcsCapacity ||
+                                                    maxPcsCapacity === 0
+                                                  }
+                                                  className="h-9 w-9"
+                                                >
+                                                  <Plus className="w-4 h-4" />
+                                                </Button>
+                                              </div>
+                                            </div>
+                                          </>
+                                        );
+                                      })()}
+                                    </div>
                                   </div>
-                                </div>
-                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t">
-                                  <div className="space-y-1">
-                                    <p className="text-sm font-semibold text-warning">
-                                      Available: {boxAvail} Box, {pcsAvail} pcs
-                                    </p>
-                                  </div>
-                                  {(boxQty + pcsQty) > 0 && (
-                                    <div className="text-right">
-                                      <p className="text-sm font-semibold text-success-green">
-                                        Line Total: ₹{lineTotal.toFixed(2)}
+                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t">
+                                    <div className="space-y-1">
+                                      <p className="text-sm font-semibold text-warning">
+                                        Available: {boxAvail} Box, {pcsAvail}{" "}
+                                        pcs
                                       </p>
                                     </div>
-                                  )}
+                                    {boxQty + pcsQty > 0 && (
+                                      <div className="text-right">
+                                        <p className="text-sm font-semibold text-success-green">
+                                          Line Total: ₹{lineTotal.toFixed(2)}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No products available. Please start a route first.
-                  </div>
-                )}
-              </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No products available. Please start a route first.
+                    </div>
+                  )}
+                </div>
 
-              {/* Total Amount Section */}
-              <div className="bg-primary-light/30 border-2 border-primary rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-lg sm:text-xl font-bold text-gray-900">Total Amount:</span>
-                  <span className="text-2xl sm:text-3xl font-bold text-primary-dark">₹{totals.totalAmount.toFixed(2)}</span>
+                {/* Total Amount Section */}
+                <div className="bg-primary-light/30 border-2 border-primary rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg sm:text-xl font-bold text-gray-900">
+                      Total Amount:
+                    </span>
+                    <span className="text-2xl sm:text-3xl font-bold text-primary-dark">
+                      ₹{totals.totalAmount.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Generate Bill Button */}
+                <div className="sticky bottom-3 sm:static bg-background/95 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none p-1 sm:p-0 -mx-2 sm:mx-0 rounded-md sm:rounded-none">
+                  <Button
+                    onClick={handleGenerateBill}
+                    variant="success"
+                    size="default"
+                    className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation shadow sm:shadow-none"
+                    disabled={!isFormValid || loading}
+                  >
+                    <Check className="w-5 h-5 mr-2" />
+                    Generate Bill
+                  </Button>
                 </div>
               </div>
-
-              {/* Generate Bill Button */}
-              <div className="sticky bottom-3 sm:static bg-background/95 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none p-1 sm:p-0 -mx-2 sm:mx-0 rounded-md sm:rounded-none">
-                <Button
-                  onClick={handleGenerateBill}
-                  variant="success"
-                  size="default"
-                  className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold touch-manipulation shadow sm:shadow-none"
-                  disabled={!isFormValid || loading}
-                >
-                  <Check className="w-5 h-5 mr-2" />
-                  Generate Bill
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
         ) : (
           // Bill Preview & Print UI
           <>
             <div className="space-y-4">
               <Card className="border-0 shadow-strong print:hidden">
                 <CardHeader className="text-center pb-4 px-4 sm:px-6">
-                  <CardTitle className="text-xl sm:text-2xl font-bold text-success-green">Bill Generated!</CardTitle>
-                  <CardDescription className="text-sm sm:text-base">Review and print the bill</CardDescription>
+                  <CardTitle className="text-xl sm:text-2xl font-bold text-success-green">
+                    Bill Generated!
+                  </CardTitle>
+                  <CardDescription className="text-sm sm:text-base">
+                    Review and print the bill
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="px-4 sm:px-6 space-y-4">
                   <div className="sticky bottom-3 sm:static bg-background/95 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none p-1 sm:p-0 -mx-2 sm:mx-0 rounded-md sm:rounded-none">
@@ -1173,8 +1444,16 @@ const ShopBilling = () => {
                     </div>
                     <div className="border-t pt-4">
                       <p className="font-semibold">Shop: {shopName}</p>
-                      {shopAddress && <p className="text-sm text-muted-foreground">Address: {shopAddress}</p>}
-                      {shopPhone && <p className="text-sm text-muted-foreground">Phone: {shopPhone}</p>}
+                      {shopAddress && (
+                        <p className="text-sm text-muted-foreground">
+                          Address: {shopAddress}
+                        </p>
+                      )}
+                      {shopPhone && (
+                        <p className="text-sm text-muted-foreground">
+                          Phone: {shopPhone}
+                        </p>
+                      )}
                     </div>
                     <div className="border-t pt-4">
                       <table className="w-full text-sm">
@@ -1188,15 +1467,22 @@ const ShopBilling = () => {
                         </thead>
                         <tbody>
                           {soldItems.map((item, index) => (
-                            <tr key={`${item.productId}-${index}`} className="border-b">
+                            <tr
+                              key={`${item.productId}-${index}`}
+                              className="border-b"
+                            >
                               <td className="py-2">{item.productName}</td>
                               <td className="text-center py-2">
                                 {item.boxQty > 0 && `${item.boxQty} Box`}
                                 {item.boxQty > 0 && item.pcsQty > 0 && ", "}
                                 {item.pcsQty > 0 && `${item.pcsQty} pcs`}
                               </td>
-                              <td className="text-right py-2">₹{item.price.toFixed(2)}</td>
-                              <td className="text-right py-2 font-semibold">₹{item.total.toFixed(2)}</td>
+                              <td className="text-right py-2">
+                                ₹{item.price.toFixed(2)}
+                              </td>
+                              <td className="text-right py-2 font-semibold">
+                                ₹{item.total.toFixed(2)}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -1205,7 +1491,9 @@ const ShopBilling = () => {
                     <div className="border-t pt-4">
                       <div className="flex justify-between items-center">
                         <span className="text-lg font-bold">TOTAL:</span>
-                        <span className="text-2xl font-bold text-success-green">₹{totalAmount.toFixed(2)}</span>
+                        <span className="text-2xl font-bold text-success-green">
+                          ₹{totalAmount.toFixed(2)}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1218,72 +1506,207 @@ const ShopBilling = () => {
 
       {/* Portal for Print Content - Now always rendered */}
       {createPortal(
-        <div id="print-receipt-container" style={{ display: 'none' }}>
+        <div id="print-receipt-container" style={{ display: "none" }}>
           <div className="receipt-58mm">
             {/* Bill Header */}
-            <div style={{ textAlign: 'center', marginBottom: '4px' }}>
-              <h1 style={{ margin: '0', fontSize: '14px', fontWeight: 'bold' }}>BHAVYA ENTERPRICE</h1>
-              <p style={{ margin: '0', fontSize: '10px', fontWeight: '600' }}>Sales Invoice</p>
-              <div style={{ marginTop: '2px', fontSize: '8px' }}>
-                <p style={{ margin: '0', lineHeight: '1.1' }}>Near Bala petrol pump</p>
-                <p style={{ margin: '0', lineHeight: '1.1' }}>Jambusar Bharuch road</p>
+            <div style={{ textAlign: "center", marginBottom: "4px" }}>
+              <h1 style={{ margin: "0", fontSize: "14px", fontWeight: "bold" }}>
+                BHAVYA ENTERPRICE
+              </h1>
+              <p style={{ margin: "0", fontSize: "10px", fontWeight: "600" }}>
+                Sales Invoice
+              </p>
+              <div style={{ marginTop: "2px", fontSize: "8px" }}>
+                <p style={{ margin: "0", lineHeight: "1.1" }}>
+                  Near Bala petrol pump
+                </p>
+                <p style={{ margin: "0", lineHeight: "1.1" }}>
+                  Jambusar Bharuch road
+                </p>
               </div>
-              <div style={{ marginTop: '2px', fontSize: '8px' }}>
-                <p style={{ margin: '0', lineHeight: '1.1' }}>Phone: 8866756059</p>
-                <p style={{ margin: '0', lineHeight: '1.1' }}>GSTIN: 24EVVPS8220P1ZF</p>
+              <div style={{ marginTop: "2px", fontSize: "8px" }}>
+                <p style={{ margin: "0", lineHeight: "1.1" }}>
+                  Phone: 8866756059
+                </p>
+                <p style={{ margin: "0", lineHeight: "1.1" }}>
+                  GSTIN: 24EVVPS8220P1ZF
+                </p>
               </div>
-              <div style={{ marginTop: '2px', fontSize: '8px' }}>
-                <p style={{ margin: '0' }}>Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
-                {routeName && <p style={{ margin: '0', fontWeight: 'bold' }}>Route: {routeName}</p>}
+              <div style={{ marginTop: "2px", fontSize: "8px" }}>
+                <p style={{ margin: "0" }}>
+                  Date:{" "}
+                  {new Date().toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+                {routeName && (
+                  <p style={{ margin: "0", fontWeight: "bold" }}>
+                    Route: {routeName}
+                  </p>
+                )}
               </div>
             </div>
             {/* Shop Details */}
-            <div style={{ marginBottom: '4px', paddingBottom: '2px', borderTop: '1px dashed black', borderBottom: '1px dashed black', paddingTop: '2px' }}>
-              <p style={{ fontSize: '9px', fontWeight: '600', margin: '0' }}>Shop: {printSnapshot?.shopName || shopName}</p>
-              {(printSnapshot?.shopAddress || shopAddress) && <p style={{ fontSize: '8px', margin: '0' }}>Addr: {printSnapshot?.shopAddress || shopAddress}</p>}
-              {(printSnapshot?.shopPhone || shopPhone) && <p style={{ fontSize: '8px', margin: '0' }}>Ph: {printSnapshot?.shopPhone || shopPhone}</p>}
+            <div
+              style={{
+                marginBottom: "4px",
+                paddingBottom: "2px",
+                borderTop: "1px dashed black",
+                borderBottom: "1px dashed black",
+                paddingTop: "2px",
+              }}
+            >
+              <p style={{ fontSize: "9px", fontWeight: "600", margin: "0" }}>
+                Shop: {printSnapshot?.shopName || shopName}
+              </p>
+              {(printSnapshot?.shopAddress || shopAddress) && (
+                <p style={{ fontSize: "8px", margin: "0" }}>
+                  Addr: {printSnapshot?.shopAddress || shopAddress}
+                </p>
+              )}
+              {(printSnapshot?.shopPhone || shopPhone) && (
+                <p style={{ fontSize: "8px", margin: "0" }}>
+                  Ph: {printSnapshot?.shopPhone || shopPhone}
+                </p>
+              )}
             </div>
             {/* Products Table */}
-            <div style={{ marginBottom: '4px' }}>
-              <table style={{ width: '100%', fontSize: '8px', borderCollapse: 'collapse' }}>
+            <div style={{ marginBottom: "4px" }}>
+              <table
+                style={{
+                  width: "100%",
+                  fontSize: "8px",
+                  borderCollapse: "collapse",
+                }}
+              >
                 <thead>
-                  <tr style={{ borderBottom: '1px dashed black' }}>
-                    <th style={{ textAlign: 'left', padding: '1px 0', fontSize: '8px' }}>Item</th>
-                    <th style={{ textAlign: 'center', padding: '1px 0', fontSize: '8px' }}>Qty</th>
-                    <th style={{ textAlign: 'right', padding: '1px 0', fontSize: '8px' }}>Rate</th>
-                    <th style={{ textAlign: 'right', padding: '1px 0', fontSize: '8px' }}>Amt</th>
+                  <tr style={{ borderBottom: "1px dashed black" }}>
+                    <th
+                      style={{
+                        textAlign: "left",
+                        padding: "1px 0",
+                        fontSize: "8px",
+                      }}
+                    >
+                      Item
+                    </th>
+                    <th
+                      style={{
+                        textAlign: "center",
+                        padding: "1px 0",
+                        fontSize: "8px",
+                      }}
+                    >
+                      Qty
+                    </th>
+                    <th
+                      style={{
+                        textAlign: "right",
+                        padding: "1px 0",
+                        fontSize: "8px",
+                      }}
+                    >
+                      Rate
+                    </th>
+                    <th
+                      style={{
+                        textAlign: "right",
+                        padding: "1px 0",
+                        fontSize: "8px",
+                      }}
+                    >
+                      Amt
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {(printSnapshot?.items || soldItems).map((item, index) => (
                     <tr key={`${item.productId}-${index}`}>
-                      <td style={{ padding: '1px 0', fontSize: '8px' }}>{item.productName}</td>
-                      <td style={{ padding: '1px 0', textAlign: 'center', fontSize: '8px' }}>
+                      <td style={{ padding: "1px 0", fontSize: "8px" }}>
+                        {item.productName}
+                      </td>
+                      <td
+                        style={{
+                          padding: "1px 0",
+                          textAlign: "center",
+                          fontSize: "8px",
+                        }}
+                      >
                         {item.boxQty > 0 && `${item.boxQty} Box`}
                         {item.boxQty > 0 && item.pcsQty > 0 && " "}
                         {item.pcsQty > 0 && `${item.pcsQty} pcs`}
                       </td>
-                      <td style={{ padding: '1px 0', textAlign: 'right', fontSize: '8px' }}>₹{item.price.toFixed(2)}</td>
-                      <td style={{ padding: '1px 0', textAlign: 'right', fontSize: '8px', fontWeight: '600' }}>₹{item.total.toFixed(2)}</td>
+                      <td
+                        style={{
+                          padding: "1px 0",
+                          textAlign: "right",
+                          fontSize: "8px",
+                        }}
+                      >
+                        ₹{item.price.toFixed(2)}
+                      </td>
+                      <td
+                        style={{
+                          padding: "1px 0",
+                          textAlign: "right",
+                          fontSize: "8px",
+                          fontWeight: "600",
+                        }}
+                      >
+                        ₹{item.total.toFixed(2)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
             {/* Total Section */}
-            <div style={{ borderTop: '1px dashed black', paddingTop: '2px', marginBottom: '4px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 'bold' }}>TOTAL:</span>
-                <span style={{ fontSize: '12px', fontWeight: 'bold' }}>₹{(printSnapshot?.total ?? totalAmount).toFixed(2)}</span>
+            <div
+              style={{
+                borderTop: "1px dashed black",
+                paddingTop: "2px",
+                marginBottom: "4px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span style={{ fontSize: "11px", fontWeight: "bold" }}>
+                  TOTAL:
+                </span>
+                <span style={{ fontSize: "12px", fontWeight: "bold" }}>
+                  ₹{(printSnapshot?.total ?? totalAmount).toFixed(2)}
+                </span>
               </div>
-              <div style={{ fontSize: '8px', textAlign: 'right' }}>
-                Items: {(printSnapshot?.items || soldItems).reduce((sum, it) => sum + (it.boxQty || 0) + (it.pcsQty || 0), 0)}
+              <div style={{ fontSize: "8px", textAlign: "right" }}>
+                Items:{" "}
+                {(printSnapshot?.items || soldItems).reduce(
+                  (sum, it) => sum + (it.boxQty || 0) + (it.pcsQty || 0),
+                  0
+                )}
               </div>
             </div>
             {/* Footer */}
-            <div style={{ marginTop: '4px', paddingTop: '2px', borderTop: '1px dashed black', textAlign: 'center' }}>
-              <p style={{ fontSize: '9px', fontWeight: '600', margin: '0' }}>Thank you for your business!</p>
-              <p style={{ fontSize: '8px', margin: '0' }}>Have a great day!</p>
+            <div
+              style={{
+                marginTop: "4px",
+                paddingTop: "2px",
+                borderTop: "1px dashed black",
+                textAlign: "center",
+              }}
+            >
+              <p style={{ fontSize: "9px", fontWeight: "600", margin: "0" }}>
+                Thank you for your business!
+              </p>
+              <p style={{ fontSize: "8px", margin: "0" }}>Have a great day!</p>
             </div>
           </div>
         </div>,
@@ -1331,7 +1754,3 @@ const ShopBilling = () => {
 };
 
 export default ShopBilling;
-
-
-
-

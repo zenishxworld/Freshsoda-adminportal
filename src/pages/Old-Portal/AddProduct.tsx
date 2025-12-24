@@ -1,12 +1,23 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { getProducts, upsertProduct, softDeleteProduct, type Product } from "@/lib/supabase";
+import {
+  getProducts,
+  upsertProduct,
+  softDeleteProduct,
+  type Product,
+} from "@/lib/supabase";
 import { ArrowLeft, Plus, Edit2, Trash2, Package, Save, X } from "lucide-react";
 import {
   AlertDialog,
@@ -18,8 +29,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
-
 
 const AddProduct = () => {
   const navigate = useNavigate();
@@ -44,7 +53,9 @@ const AddProduct = () => {
   const fetchProducts = async () => {
     try {
       const data = await getProducts();
-      const sorted = data.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      const sorted = data.sort((a, b) =>
+        String(a.name).localeCompare(String(b.name))
+      );
       setProducts(sorted);
     } catch (error: any) {
       console.error("Error fetching products:", error);
@@ -151,7 +162,7 @@ const AddProduct = () => {
 
     setLoading(true);
     try {
-      const productToDelete = products.find(p => p.id === deleteId);
+      const productToDelete = products.find((p) => p.id === deleteId);
       if (!productToDelete) throw new Error("Product not found");
 
       await softDeleteProduct(deleteId);
@@ -174,16 +185,21 @@ const AddProduct = () => {
     }
   };
 
-  const activeProducts = products.filter(p => p.status === "active");
-  const inactiveProducts = products.filter(p => p.status !== "active");
+  const activeProducts = products.filter((p) => p.status === "active");
+  const inactiveProducts = products.filter((p) => p.status !== "active");
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-warning-light/10">
       {/* Header */}
-      <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
+      <header className="bg-white backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center gap-2 sm:gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")} className="h-9 w-9 p-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/dashboard")}
+              className="h-9 w-9 p-0"
+            >
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="flex items-center gap-2 sm:gap-3">
@@ -191,8 +207,12 @@ const AddProduct = () => {
                 <Package className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-lg sm:text-xl font-bold text-foreground">Manage Products</h1>
-                <p className="text-xs sm:text-sm text-muted-foreground hidden xs:block">Add or edit products</p>
+                <h1 className="text-lg sm:text-xl font-bold text-foreground">
+                  Manage Products
+                </h1>
+                <p className="text-xs sm:text-sm text-muted-foreground hidden xs:block">
+                  Add or edit products
+                </p>
               </div>
             </div>
           </div>
@@ -217,7 +237,9 @@ const AddProduct = () => {
               )}
             </CardTitle>
             <CardDescription className="text-sm sm:text-base">
-              {editingId ? "Update product details" : "Enter product details to add to inventory"}
+              {editingId
+                ? "Update product details"
+                : "Enter product details to add to inventory"}
             </CardDescription>
           </CardHeader>
 
@@ -225,7 +247,10 @@ const AddProduct = () => {
             <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
               {/* Product Name */}
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm sm:text-base font-semibold">
+                <Label
+                  htmlFor="name"
+                  className="text-sm sm:text-base font-semibold"
+                >
                   Product Name *
                 </Label>
                 <Input
@@ -241,7 +266,10 @@ const AddProduct = () => {
 
               {/* Price */}
               <div className="space-y-2">
-                <Label htmlFor="box_price" className="text-sm sm:text-base font-semibold">
+                <Label
+                  htmlFor="box_price"
+                  className="text-sm sm:text-base font-semibold"
+                >
                   Box Price (₹) *
                 </Label>
                 <Input
@@ -256,18 +284,30 @@ const AddProduct = () => {
                     setBoxPrice(v);
                     const num = parseFloat(v);
                     const ppbNum = parseInt(pcsPerBox, 10);
-                    setPcsPrice(Number.isFinite(num) && num > 0 && Number.isFinite(ppbNum) && ppbNum > 0 ? (num / ppbNum).toFixed(2) : "");
+                    setPcsPrice(
+                      Number.isFinite(num) &&
+                        num > 0 &&
+                        Number.isFinite(ppbNum) &&
+                        ppbNum > 0
+                        ? (num / ppbNum).toFixed(2)
+                        : ""
+                    );
                   }}
                   className="h-11 sm:h-10 text-base"
                   inputMode="decimal"
                   required
                 />
-                <p className="mt-1 text-xs text-muted-foreground">PCS price auto-calculated as Box ÷ PCS/Box</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  PCS price auto-calculated as Box ÷ PCS/Box
+                </p>
               </div>
 
               {/* PCS per Box */}
               <div className="space-y-2">
-                <Label htmlFor="pcs_per_box" className="text-sm sm:text-base font-semibold">
+                <Label
+                  htmlFor="pcs_per_box"
+                  className="text-sm sm:text-base font-semibold"
+                >
                   PCS per Box *
                 </Label>
                 <Input
@@ -283,15 +323,27 @@ const AddProduct = () => {
                     setPcsPerBox(v);
                     const ppbNum = parseInt(v, 10);
                     const boxNum = parseFloat(boxPrice);
-                    setPcsPrice(Number.isFinite(boxNum) && boxNum > 0 && Number.isFinite(ppbNum) && ppbNum > 0 ? (boxNum / ppbNum).toFixed(2) : "");
+                    setPcsPrice(
+                      Number.isFinite(boxNum) &&
+                        boxNum > 0 &&
+                        Number.isFinite(ppbNum) &&
+                        ppbNum > 0
+                        ? (boxNum / ppbNum).toFixed(2)
+                        : ""
+                    );
                   }}
                   className="h-11 sm:h-10 text-base"
                   required
                 />
-                <p className="mt-1 text-xs text-muted-foreground">Set how many pieces are in one box</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Set how many pieces are in one box
+                </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="pcs_price" className="text-sm sm:text-base font-semibold">
+                <Label
+                  htmlFor="pcs_price"
+                  className="text-sm sm:text-base font-semibold"
+                >
                   PCS Price (₹)
                 </Label>
                 <Input
@@ -308,7 +360,10 @@ const AddProduct = () => {
 
               {/* Description */}
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-sm sm:text-base font-semibold">
+                <Label
+                  htmlFor="description"
+                  className="text-sm sm:text-base font-semibold"
+                >
                   Description (Optional)
                 </Label>
                 <Textarea
@@ -364,7 +419,9 @@ const AddProduct = () => {
         {/* Products List */}
         <Card className="border-0 shadow-strong">
           <CardHeader className="pb-4 sm:pb-6 px-4 sm:px-6">
-            <CardTitle className="text-xl sm:text-2xl font-bold">Products</CardTitle>
+            <CardTitle className="text-xl sm:text-2xl font-bold">
+              Products
+            </CardTitle>
             <CardDescription className="text-sm sm:text-base">
               {activeProducts.length} active products
             </CardDescription>
@@ -379,17 +436,32 @@ const AddProduct = () => {
               <div className="space-y-3">
                 {activeProducts.map((product) => {
                   const ppb = product.pcs_per_box ?? 24;
-                  const boxPrice = product.box_price ?? product.price ?? ((product.pcs_price ?? 0) * ppb);
-                  const pcsPrice = product.pcs_price ?? ((product.box_price ?? product.price ?? 0) / ppb);
+                  const boxPrice =
+                    product.box_price ??
+                    product.price ??
+                    (product.pcs_price ?? 0) * ppb;
+                  const pcsPrice =
+                    product.pcs_price ??
+                    (product.box_price ?? product.price ?? 0) / ppb;
                   return (
-                    <Card key={product.id} className="border border-border hover:border-primary/50 transition-colors">
+                    <Card
+                      key={product.id}
+                      className="border border-border hover:border-primary/50 transition-colors"
+                    >
                       <CardContent className="p-3 sm:p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
-                            <h4 className="font-semibold text-foreground text-base mb-1">{product.name}</h4>
-                            <p className="text-sm text-muted-foreground mb-1">Box: ₹{boxPrice.toFixed(2)} · PCS: ₹{pcsPrice.toFixed(2)} · Pcs/Box: {ppb}</p>
+                            <h4 className="font-semibold text-foreground text-base mb-1">
+                              {product.name}
+                            </h4>
+                            <p className="text-sm text-muted-foreground mb-1">
+                              Box: ₹{boxPrice.toFixed(2)} · PCS: ₹
+                              {pcsPrice.toFixed(2)} · Pcs/Box: {ppb}
+                            </p>
                             {product.description && (
-                              <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
+                              <p className="text-sm text-muted-foreground line-clamp-2">
+                                {product.description}
+                              </p>
                             )}
                           </div>
 
@@ -428,17 +500,32 @@ const AddProduct = () => {
                     </div>
                     {inactiveProducts.map((product) => {
                       const ppb = product.pcs_per_box ?? 24;
-                      const boxPrice = product.box_price ?? product.price ?? ((product.pcs_price ?? 0) * ppb);
-                      const pcsPrice = product.pcs_price ?? ((product.box_price ?? product.price ?? 0) / ppb);
+                      const boxPrice =
+                        product.box_price ??
+                        product.price ??
+                        (product.pcs_price ?? 0) * ppb;
+                      const pcsPrice =
+                        product.pcs_price ??
+                        (product.box_price ?? product.price ?? 0) / ppb;
                       return (
-                        <Card key={product.id} className="border border-border opacity-60">
+                        <Card
+                          key={product.id}
+                          className="border border-border opacity-60"
+                        >
                           <CardContent className="p-3 sm:p-4">
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex-1 min-w-0">
-                                <h4 className="font-semibold text-foreground text-base mb-1">{product.name}</h4>
-                                <p className="text-sm text-muted-foreground mb-1">Box: ₹{boxPrice.toFixed(2)} · PCS: ₹{pcsPrice.toFixed(2)} · Pcs/Box: {ppb}</p>
+                                <h4 className="font-semibold text-foreground text-base mb-1">
+                                  {product.name}
+                                </h4>
+                                <p className="text-sm text-muted-foreground mb-1">
+                                  Box: ₹{boxPrice.toFixed(2)} · PCS: ₹
+                                  {pcsPrice.toFixed(2)} · Pcs/Box: {ppb}
+                                </p>
                                 {product.description && (
-                                  <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
+                                  <p className="text-sm text-muted-foreground line-clamp-2">
+                                    {product.description}
+                                  </p>
                                 )}
                               </div>
 
@@ -481,11 +568,14 @@ const AddProduct = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Product?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will mark the product as inactive. It will no longer appear in product lists but will be preserved in historical data.
+              This will mark the product as inactive. It will no longer appear
+              in product lists but will be preserved in historical data.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="touch-manipulation">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="touch-manipulation">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90 touch-manipulation"

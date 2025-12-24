@@ -1,17 +1,48 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 import { useToast } from "../../hooks/use-toast";
-import { getActiveRoutes, getProducts, getRouteAssignedStock, getSalesFor, endRouteReturnStockRouteRPC, endRouteReturnStockRPC, clearDailyStock, getWarehouseMovements, getAssignedStockForBilling, getDriverRoute, type Product, type DailyStockItem } from "../../lib/supabase";
+import {
+  getActiveRoutes,
+  getProducts,
+  getRouteAssignedStock,
+  getSalesFor,
+  endRouteReturnStockRouteRPC,
+  endRouteReturnStockRPC,
+  clearDailyStock,
+  getWarehouseMovements,
+  getAssignedStockForBilling,
+  getDriverRoute,
+  type Product,
+  type DailyStockItem,
+} from "../../lib/supabase";
 import { mapRouteName, shouldDisplayRoute } from "../../lib/routeUtils";
-import { ArrowLeft, BarChart3, Printer, Calendar, TrendingUp, Package, DollarSign } from "lucide-react";
+import {
+  ArrowLeft,
+  BarChart3,
+  Printer,
+  Calendar,
+  TrendingUp,
+  Package,
+  DollarSign,
+} from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-
-
 
 interface RouteOption {
   id: string;
@@ -32,18 +63,26 @@ interface SummaryItem {
   totalRevenue: number;
 }
 
-type SoldItem = { productId: string; unit?: 'box' | 'pcs'; quantity?: number; price?: number; total?: number; productName?: string; name?: string };
+type SoldItem = {
+  productId: string;
+  unit?: "box" | "pcs";
+  quantity?: number;
+  price?: number;
+  total?: number;
+  productName?: string;
+  name?: string;
+};
 function normalizeSaleProducts(ps: unknown): SoldItem[] {
   if (!ps) return [];
   if (Array.isArray(ps)) return ps as SoldItem[];
-  if (typeof ps === 'object' && ps !== null) {
+  if (typeof ps === "object" && ps !== null) {
     const obj = ps as { items?: unknown };
     if (Array.isArray(obj.items)) return obj.items as SoldItem[];
   }
-  if (typeof ps === 'string') {
+  if (typeof ps === "string") {
     const parsed = JSON.parse(ps);
     if (Array.isArray(parsed)) return parsed as SoldItem[];
-    if (typeof parsed === 'object' && parsed !== null) {
+    if (typeof parsed === "object" && parsed !== null) {
       const obj2 = parsed as { items?: unknown };
       if (Array.isArray(obj2.items)) return obj2.items as SoldItem[];
     }
@@ -55,9 +94,9 @@ function normalizeSaleProducts(ps: unknown): SoldItem[] {
 // falling back to an inferred ratio from prices or a default of 24.
 function getPcsPerBoxFromProduct(product: any): number {
   const configured = product?.pcs_per_box;
-  if (typeof configured === 'number' && configured > 0) return configured;
+  if (typeof configured === "number" && configured > 0) return configured;
   const boxPrice = product?.box_price ?? product?.price;
-  const pcsPrice = product?.pcs_price ?? (boxPrice / 24);
+  const pcsPrice = product?.pcs_price ?? boxPrice / 24;
   const ratio = Math.round(boxPrice / (pcsPrice || 1));
   return Number.isFinite(ratio) && ratio > 0 ? ratio : 24;
 }
@@ -67,7 +106,9 @@ const Summary = () => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
   const [selectedRoute, setSelectedRoute] = useState("");
   const [routes, setRoutes] = useState<RouteOption[]>([]);
   const [summaryData, setSummaryData] = useState<SummaryItem[]>([]);
@@ -88,16 +129,22 @@ const Summary = () => {
         acc.remainingPcs += item.remainingPcs;
         return acc;
       },
-      { startBox: 0, startPcs: 0, soldBox: 0, soldPcs: 0, remainingBox: 0, remainingPcs: 0 }
+      {
+        startBox: 0,
+        startPcs: 0,
+        soldBox: 0,
+        soldPcs: 0,
+        remainingBox: 0,
+        remainingPcs: 0,
+      }
     );
     const gt = summaryData.reduce((sum, item) => sum + item.totalRevenue, 0);
     return { totals: t, grandTotal: gt };
   }, [summaryData]);
 
-
   useEffect(() => {
     fetchRoutes();
-    
+
     // Auto-select route and date
     const loadDefaults = async () => {
       // 1. Try to get active route for driver
@@ -109,22 +156,20 @@ const Summary = () => {
       }
 
       // 2. Fallback to localStorage (only for route, date should default to today)
-      const savedRoute = localStorage.getItem('currentRoute');
-      // const savedDate = localStorage.getItem('currentDate'); 
+      const savedRoute = localStorage.getItem("currentRoute");
+      // const savedDate = localStorage.getItem('currentDate');
       if (savedRoute) setSelectedRoute(savedRoute);
       // if (savedDate) setSelectedDate(savedDate);
     };
     loadDefaults();
   }, []);
 
-
-
   const fetchRoutes = async () => {
     try {
       const data = await getActiveRoutes();
       const mappedAndFilteredRoutes = data
-        .filter(route => shouldDisplayRoute(route.name))
-        .map(route => ({
+        .filter((route) => shouldDisplayRoute(route.name))
+        .map((route) => ({
           ...route,
           name: mapRouteName(route.name),
         }));
@@ -153,23 +198,29 @@ const Summary = () => {
       const products = await getProducts();
       const allSales = await getSalesFor(selectedDate, selectedRoute);
       // Filter sales by current driver if logged in
-      const sales = user?.id 
+      const sales = user?.id
         ? allSales.filter((s: any) => s.auth_user_id === user.id)
         : allSales;
 
       // Load assigned stock (both driver-specific and route-generic)
       const driverId = user?.id || null;
-      const stockPromises: Promise<Array<{ product: Product; stock: DailyStockItem }>>[] = [];
-      
+      const stockPromises: Promise<
+        Array<{ product: Product; stock: DailyStockItem }>
+      >[] = [];
+
       // Try driver-assigned stock first if we have a driver ID
       if (driverId) {
-        stockPromises.push(getAssignedStockForBilling(driverId, selectedRoute, selectedDate));
+        stockPromises.push(
+          getAssignedStockForBilling(driverId, selectedRoute, selectedDate)
+        );
       }
       // Also get route-only stock (driver_id IS NULL)
-      stockPromises.push(getAssignedStockForBilling(null, selectedRoute, selectedDate));
-      
+      stockPromises.push(
+        getAssignedStockForBilling(null, selectedRoute, selectedDate)
+      );
+
       const stockResults = await Promise.all(stockPromises);
-      
+
       // Combine and deduplicate by product ID (prefer driver-assigned over route-only)
       const stockMap = new Map<string, DailyStockItem>();
       let hasStock = false;
@@ -178,7 +229,7 @@ const Summary = () => {
         stockArray.forEach(({ product, stock: stockItem }) => {
           // If we have a driver ID, the first result is driver-assigned stock
           const isDriverStock = driverId && index === 0;
-          
+
           const existing = stockMap.get(product.id);
           // Prefer driver-assigned stock if both exist, otherwise add new
           // Also if we haven't seen this product yet, add it
@@ -197,42 +248,51 @@ const Summary = () => {
       const summary: SummaryItem[] = [];
 
       if (products) {
-        products.forEach(product => {
+        products.forEach((product) => {
           const ppb = getPcsPerBoxFromProduct(product);
-          
+
           // Current Remaining Stock from database
           const stockItem = stockMap.get(product.id);
-          const remainingBox = stockItem ? (stockItem.boxQty || 0) : 0;
-          const remainingPcs = stockItem ? (stockItem.pcsQty || 0) : 0;
-          const remainingTotalPcs = (remainingBox * ppb) + remainingPcs;
+          const remainingBox = stockItem ? stockItem.boxQty || 0 : 0;
+          const remainingPcs = stockItem ? stockItem.pcsQty || 0 : 0;
+          const remainingTotalPcs = remainingBox * ppb + remainingPcs;
 
           // Sold per unit and revenue from sales
           let soldBox = 0;
           let soldPcs = 0;
           let totalRevenue = 0;
           const boxPrice = (product as any).box_price ?? product.price;
-          const pcsPrice = (product as any).pcs_price ?? (((product as any).box_price ?? product.price) / ppb);
+          const pcsPrice =
+            (product as any).pcs_price ??
+            ((product as any).box_price ?? product.price) / ppb;
 
           if (sales) {
             sales.forEach((sale) => {
               const items = normalizeSaleProducts(sale.products_sold);
               items.forEach((p) => {
                 if (p.productId === product.id) {
-                  const u = p.unit || 'pcs';
+                  const u = p.unit || "pcs";
                   const q = p.quantity || 0;
-                  if (u === 'box') soldBox += q; else soldPcs += q;
+                  if (u === "box") soldBox += q;
+                  else soldPcs += q;
                   // Sum revenue using saved total or fallback to price
-                  const lineTotal = typeof p.total === 'number'
-                    ? p.total
-                    : q * (typeof p.price === 'number' ? p.price : (u === 'box' ? boxPrice : pcsPrice));
+                  const lineTotal =
+                    typeof p.total === "number"
+                      ? p.total
+                      : q *
+                        (typeof p.price === "number"
+                          ? p.price
+                          : u === "box"
+                          ? boxPrice
+                          : pcsPrice);
                   totalRevenue += lineTotal;
                 }
               });
             });
           }
 
-          const soldTotalPcs = (soldBox * ppb) + soldPcs;
-          
+          const soldTotalPcs = soldBox * ppb + soldPcs;
+
           // Calculate Start Stock = Remaining + Sold
           const startTotalPcs = remainingTotalPcs + soldTotalPcs;
           const startBox = Math.floor(startTotalPcs / ppb);
@@ -263,7 +323,8 @@ const Summary = () => {
       if (summary.length === 0) {
         toast({
           title: "No Data",
-          description: "No sales or stock data found for the selected date and route",
+          description:
+            "No sales or stock data found for the selected date and route",
           variant: "destructive",
         });
       }
@@ -285,11 +346,24 @@ const Summary = () => {
 
   const handleLoadOut = async () => {
     try {
-      console.log("LoadOut -> Calling RPC", { route_id: selectedRoute, p_work_date: selectedDate });
+      console.log("LoadOut -> Calling RPC", {
+        route_id: selectedRoute,
+        p_work_date: selectedDate,
+      });
       // Pre-check: show remaining before
-      const beforeAssigned = await getRouteAssignedStock(selectedRoute, selectedDate);
-      const beforeRemaining = (beforeAssigned || []).reduce((sum, r) => sum + (r.qty_remaining || 0), 0);
-      console.log("LoadOut -> Before Assigned Remaining (pcs)", beforeRemaining, beforeAssigned);
+      const beforeAssigned = await getRouteAssignedStock(
+        selectedRoute,
+        selectedDate
+      );
+      const beforeRemaining = (beforeAssigned || []).reduce(
+        (sum, r) => sum + (r.qty_remaining || 0),
+        0
+      );
+      console.log(
+        "LoadOut -> Before Assigned Remaining (pcs)",
+        beforeRemaining,
+        beforeAssigned
+      );
 
       // Use driver-specific RPC if user is logged in, otherwise fallback to route RPC
       const driverId = user?.id || null;
@@ -300,30 +374,50 @@ const Summary = () => {
         console.log("LoadOut -> Using Route RPC (No driver)");
         await endRouteReturnStockRouteRPC(selectedRoute, selectedDate);
       }
-      
+
       // Update route status by clearing daily stock
       console.log("LoadOut -> Clearing Daily Stock to update status");
       await clearDailyStock(driverId, selectedRoute, selectedDate);
-      
+
       console.log("LoadOut -> RPC Success");
 
       // Post-check: assigned stock should be zero
-      const afterAssigned = await getRouteAssignedStock(selectedRoute, selectedDate);
-      const afterRemaining = (afterAssigned || []).reduce((sum, r) => sum + (r.qty_remaining || 0), 0);
-      console.log("LoadOut -> After Assigned Remaining (pcs)", afterRemaining, afterAssigned);
+      const afterAssigned = await getRouteAssignedStock(
+        selectedRoute,
+        selectedDate
+      );
+      const afterRemaining = (afterAssigned || []).reduce(
+        (sum, r) => sum + (r.qty_remaining || 0),
+        0
+      );
+      console.log(
+        "LoadOut -> After Assigned Remaining (pcs)",
+        afterRemaining,
+        afterAssigned
+      );
 
       // Fetch recent warehouse movements to confirm returns logged
       const movements = await getWarehouseMovements(undefined, 20);
-      console.log("LoadOut -> Recent Warehouse Movements", movements.filter(m => m.movement_type === 'RETURN'));
+      console.log(
+        "LoadOut -> Recent Warehouse Movements",
+        movements.filter((m) => m.movement_type === "RETURN")
+      );
 
-      toast({ title: "LoadOut successful", description: "Remaining stock returned to warehouse." });
+      toast({
+        title: "LoadOut successful",
+        description: "Remaining stock returned to warehouse.",
+      });
       setSummaryData([]);
       setShowSummary(false);
       // Delay navigation so toast is visible and logs can be seen
-      setTimeout(() => navigate('/driver/dashboard'), 1500);
+      setTimeout(() => navigate("/driver/dashboard"), 1500);
     } catch (error: any) {
       console.log("LoadOut -> Error", error);
-      toast({ title: "Error", description: error?.message || "Failed to return remaining stock", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to return remaining stock",
+        variant: "destructive",
+      });
     }
   };
 
@@ -333,11 +427,15 @@ const Summary = () => {
       clearTimeout(loadOutTimerRef.current);
       loadOutTimerRef.current = null;
     }
-    if (!showSummary || !hasAssignedStock || !selectedRoute || !selectedDate) return;
+    if (!showSummary || !hasAssignedStock || !selectedRoute || !selectedDate)
+      return;
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split("T")[0];
     if (selectedDate < todayStr) {
-      console.log("Auto LoadOut -> Past day detected, finalizing immediately", { route_id: selectedRoute, p_work_date: selectedDate });
+      console.log("Auto LoadOut -> Past day detected, finalizing immediately", {
+        route_id: selectedRoute,
+        p_work_date: selectedDate,
+      });
       handleLoadOut();
       return;
     }
@@ -347,10 +445,18 @@ const Summary = () => {
       nextMidnight.setHours(24, 0, 0, 0);
       const delay = nextMidnight.getTime() - now.getTime();
       if (delay <= 0) {
-        console.log("Auto LoadOut -> Midnight reached, finalizing now", { route_id: selectedRoute, p_work_date: selectedDate });
+        console.log("Auto LoadOut -> Midnight reached, finalizing now", {
+          route_id: selectedRoute,
+          p_work_date: selectedDate,
+        });
         handleLoadOut();
       } else {
-        console.log("Auto LoadOut -> Scheduled", { at: nextMidnight.toISOString(), route_id: selectedRoute, p_work_date: selectedDate, delay_ms: delay });
+        console.log("Auto LoadOut -> Scheduled", {
+          at: nextMidnight.toISOString(),
+          route_id: selectedRoute,
+          p_work_date: selectedDate,
+          delay_ms: delay,
+        });
         loadOutTimerRef.current = window.setTimeout(() => {
           handleLoadOut();
           loadOutTimerRef.current = null;
@@ -366,7 +472,7 @@ const Summary = () => {
   }, [showSummary, hasAssignedStock, selectedRoute, selectedDate]);
 
   const getRouteName = () => {
-    const route = routes.find(r => r.id === selectedRoute);
+    const route = routes.find((r) => r.id === selectedRoute);
     if (!route) return "Unknown Route";
 
     // route names are already mapped in fetchRoutes
@@ -377,22 +483,26 @@ const Summary = () => {
   const getReceiptContent = () => {
     const t = totals;
     const grandTotalStr = grandTotal.toFixed(2);
-    const generatedDate = new Date().toLocaleString('en-IN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    }).replace(',', ''); // Remove comma for cleaner output
+    const generatedDate = new Date()
+      .toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      })
+      .replace(",", ""); // Remove comma for cleaner output
 
     const routeName = getRouteName();
     // Format date as DD-MM-YYYY to match image
-    const formattedDate = new Date(selectedDate).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    }).replace(/\//g, '-');
+    const formattedDate = new Date(selectedDate)
+      .toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+      .replace(/\//g, "-");
 
     // 32-character width for 58mm printer
     let content = "";
@@ -408,14 +518,17 @@ const Summary = () => {
     content += `Total Revenue: ₹${grandTotalStr}\n`;
     content += "--------------------------------\n";
     // Header fits exactly 32 characters with vertical separators: 15 + 1 + 8 + 1 + 7
-    content += `${'Item'.padEnd(15, ' ')}|${'S(B|p)'.padEnd(8, ' ')}|${'L(B|p)'.padEnd(7, ' ')}\n`;
+    content += `${"Item".padEnd(15, " ")}|${"S(B|p)".padEnd(
+      8,
+      " "
+    )}|${"L(B|p)".padEnd(7, " ")}\n`;
     content += "---------------+--------+-------\n";
 
-    summaryData.forEach(item => {
+    summaryData.forEach((item) => {
       // Keep line width to 32 chars with separators: 15 + 1 + 8 + 1 + 7 = 32
-      const name = item.productName.substring(0, 15).padEnd(15, ' ');
-      const sold = `${item.soldBox}|${item.soldPcs}`.padEnd(8, ' ');
-      const left = `${item.remainingBox}|${item.remainingPcs}`.padEnd(7, ' ');
+      const name = item.productName.substring(0, 15).padEnd(15, " ");
+      const sold = `${item.soldBox}|${item.soldPcs}`.padEnd(8, " ");
+      const left = `${item.remainingBox}|${item.remainingPcs}`.padEnd(7, " ");
       content += `${name}|${sold}|${left}\n`;
     });
 
@@ -435,10 +548,15 @@ const Summary = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-accent-light/10">
       {/* Header - Hidden when printing */}
-      <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10 print:hidden">
+      <header className="bg-white backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10 print:hidden">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center gap-2 sm:gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/driver/dashboard")} className="h-9 w-9 p-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/driver/dashboard")}
+              className="h-9 w-9 p-0"
+            >
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="flex items-center gap-2 sm:gap-3">
@@ -446,8 +564,12 @@ const Summary = () => {
                 <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-lg sm:text-xl font-bold text-foreground">Day Summary</h1>
-                <p className="text-xs sm:text-sm text-muted-foreground hidden xs:block">View daily sales report</p>
+                <h1 className="text-lg sm:text-xl font-bold text-foreground">
+                  Day Summary
+                </h1>
+                <p className="text-xs sm:text-sm text-muted-foreground hidden xs:block">
+                  View daily sales report
+                </p>
               </div>
             </div>
           </div>
@@ -459,7 +581,9 @@ const Summary = () => {
           // Filter Form
           <Card className="border-0 shadow-strong">
             <CardHeader className="text-center pb-4 sm:pb-6 px-4 sm:px-6">
-              <CardTitle className="text-xl sm:text-2xl font-bold">Generate Day Summary</CardTitle>
+              <CardTitle className="text-xl sm:text-2xl font-bold">
+                Generate Day Summary
+              </CardTitle>
               <CardDescription className="text-sm sm:text-base">
                 Select date and route to view sales report
               </CardDescription>
@@ -477,7 +601,7 @@ const Summary = () => {
                     type="date"
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    max={new Date().toISOString().split('T')[0]}
+                    max={new Date().toISOString().split("T")[0]}
                     className="w-full h-11 sm:h-10 px-3 text-base rounded-md border border-input bg-background ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   />
                 </div>
@@ -488,13 +612,20 @@ const Summary = () => {
                     <TrendingUp className="w-4 h-4" />
                     Select Route
                   </Label>
-                  <Select value={selectedRoute} onValueChange={setSelectedRoute}>
-                    <SelectTrigger className="h-11 sm:h-10 text-base">
+                  <Select
+                    value={selectedRoute}
+                    onValueChange={setSelectedRoute}
+                  >
+                    <SelectTrigger className="h-11 sm:h-10 text-base  bg-white">
                       <SelectValue placeholder="Choose route" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-white">
                       {routes.map((route) => (
-                        <SelectItem key={route.id} value={route.id} className="text-base py-3">
+                        <SelectItem
+                          key={route.id}
+                          value={route.id}
+                          className="text-base py-3"
+                        >
                           {route.name}
                         </SelectItem>
                       ))}
@@ -549,15 +680,24 @@ const Summary = () => {
               <CardContent className="p-4 sm:p-8 print:p-0">
                 {/* Report Header */}
                 <div className="text-center mb-6 print:hidden">
-                  <h1 className="text-2xl sm:text-3xl font-bold text-foreground print:text-xl">Fresh Soda Sales</h1>
-                  <p className="text-base sm:text-lg font-semibold text-muted-foreground print:text-sm">Day Summary Report</p>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-foreground print:text-xl">
+                    Fresh Soda Sales
+                  </h1>
+                  <p className="text-base sm:text-lg font-semibold text-muted-foreground print:text-sm">
+                    Day Summary Report
+                  </p>
                   <div className="mt-3 space-y-1 text-sm text-muted-foreground print:text-xs print:mt-2">
-                    <p><strong>Date:</strong> {new Date(selectedDate).toLocaleDateString('en-IN', {
-                      day: '2-digit',
-                      month: 'long',
-                      year: 'numeric'
-                    })}</p>
-                    <p><strong>Route:</strong> {getRouteName()}</p>
+                    <p>
+                      <strong>Date:</strong>{" "}
+                      {new Date(selectedDate).toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </p>
+                    <p>
+                      <strong>Route:</strong> {getRouteName()}
+                    </p>
                   </div>
                 </div>
 
@@ -566,29 +706,45 @@ const Summary = () => {
                   <Card className="border border-primary-dark/30 bg-primary-light/20">
                     <CardContent className="p-3 sm:p-4 text-center">
                       <Package className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-primary-dark" />
-                      <p className="text-xs sm:text-sm text-gray-700 font-medium">Total Stock</p>
-                      <p className="text-lg sm:text-xl font-bold text-primary-dark">{totals.startBox} Box | {totals.startPcs} pcs</p>
+                      <p className="text-xs sm:text-sm text-gray-700 font-medium">
+                        Total Stock
+                      </p>
+                      <p className="text-lg sm:text-xl font-bold text-primary-dark">
+                        {totals.startBox} Box | {totals.startPcs} pcs
+                      </p>
                     </CardContent>
                   </Card>
                   <Card className="border border-primary-dark/30 bg-primary-light/20">
                     <CardContent className="p-3 sm:p-4 text-center">
                       <Package className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-primary-dark" />
-                      <p className="text-xs sm:text-sm text-gray-700 font-medium">Sold</p>
-                      <p className="text-lg sm:text-xl font-bold text-primary-dark">{totals.soldBox} Box | {totals.soldPcs} pcs</p>
+                      <p className="text-xs sm:text-sm text-gray-700 font-medium">
+                        Sold
+                      </p>
+                      <p className="text-lg sm:text-xl font-bold text-primary-dark">
+                        {totals.soldBox} Box | {totals.soldPcs} pcs
+                      </p>
                     </CardContent>
                   </Card>
                   <Card className="border border-warning-dark/30 bg-warning-light/20">
                     <CardContent className="p-3 sm:p-4 text-center">
                       <Package className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-warning-dark" />
-                      <p className="text-xs sm:text-sm text-gray-700 font-medium">Remaining</p>
-                      <p className="text-lg sm:text-xl font-bold text-warning-dark">{totals.remainingBox} Box | {totals.remainingPcs} pcs</p>
+                      <p className="text-xs sm:text-sm text-gray-700 font-medium">
+                        Remaining
+                      </p>
+                      <p className="text-lg sm:text-xl font-bold text-warning-dark">
+                        {totals.remainingBox} Box | {totals.remainingPcs} pcs
+                      </p>
                     </CardContent>
                   </Card>
                   <Card className="border border-success-green-dark/30 bg-success-green-light/20">
                     <CardContent className="p-3 sm:p-4 text-center">
                       <DollarSign className="w-5 h-5 sm:w-8 sm:h-8 mx-auto mb-1 text-success-green-dark" />
-                      <p className="text-xs sm:text-sm text-gray-700 font-medium">Revenue</p>
-                      <p className="text-lg sm:text-xl font-bold text-success-green-dark truncate max-w-full overflow-hidden">₹{grandTotal.toFixed(2)}</p>
+                      <p className="text-xs sm:text-sm text-gray-700 font-medium">
+                        Revenue
+                      </p>
+                      <p className="text-lg sm:text-xl font-bold text-success-green-dark truncate max-w-full overflow-hidden">
+                        ₹{grandTotal.toFixed(2)}
+                      </p>
                     </CardContent>
                   </Card>
                 </div>
@@ -598,23 +754,51 @@ const Summary = () => {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b-2 border-foreground">
-                        <th className="text-left py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">Product</th>
-                        <th className="text-center py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">Start (Box | pcs)</th>
-                        <th className="text-center py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">Sold (Box | pcs)</th>
-                        <th className="text-center py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">Left (Box | pcs)</th>
-                        <th className="text-right py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">Prices</th>
-                        <th className="text-right py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">Revenue</th>
+                        <th className="text-left py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">
+                          Product
+                        </th>
+                        <th className="text-center py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">
+                          Start (Box | pcs)
+                        </th>
+                        <th className="text-center py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">
+                          Sold (Box | pcs)
+                        </th>
+                        <th className="text-center py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">
+                          Left (Box | pcs)
+                        </th>
+                        <th className="text-right py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">
+                          Prices
+                        </th>
+                        <th className="text-right py-2 sm:py-3 font-bold text-foreground print:text-xs print:py-1">
+                          Revenue
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {summaryData.map((item) => (
-                        <tr key={item.productId} className="border-b border-border">
-                          <td className="py-3 text-foreground font-medium print:text-xs print:py-2">{item.productName}</td>
-                          <td className="py-3 text-center text-muted-foreground print:text-xs print:py-2">{item.startBox} Box | {item.startPcs} pcs</td>
-                          <td className="py-3 text-center text-primary-dark font-semibold print:text-xs print:py-2">{item.soldBox} Box | {item.soldPcs} pcs</td>
-                          <td className="py-3 text-center text-warning-dark font-semibold print:text-xs print:py-2">{item.remainingBox} Box | {item.remainingPcs} pcs</td>
-                          <td className="py-3 text-right text-gray-700 print:text-xs print:py-2">Box ₹{item.boxPrice.toFixed(2)} | pcs ₹{item.pcsPrice.toFixed(2)}</td>
-                          <td className="py-3 text-right font-semibold text-success-green-dark print:text-xs print:py-2">₹{item.totalRevenue.toFixed(2)}</td>
+                        <tr
+                          key={item.productId}
+                          className="border-b border-border"
+                        >
+                          <td className="py-3 text-foreground font-medium print:text-xs print:py-2">
+                            {item.productName}
+                          </td>
+                          <td className="py-3 text-center text-muted-foreground print:text-xs print:py-2">
+                            {item.startBox} Box | {item.startPcs} pcs
+                          </td>
+                          <td className="py-3 text-center text-primary-dark font-semibold print:text-xs print:py-2">
+                            {item.soldBox} Box | {item.soldPcs} pcs
+                          </td>
+                          <td className="py-3 text-center text-warning-dark font-semibold print:text-xs print:py-2">
+                            {item.remainingBox} Box | {item.remainingPcs} pcs
+                          </td>
+                          <td className="py-3 text-right text-gray-700 print:text-xs print:py-2">
+                            Box ₹{item.boxPrice.toFixed(2)} | pcs ₹
+                            {item.pcsPrice.toFixed(2)}
+                          </td>
+                          <td className="py-3 text-right font-semibold text-success-green-dark print:text-xs print:py-2">
+                            ₹{item.totalRevenue.toFixed(2)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -626,25 +810,38 @@ const Summary = () => {
                   {summaryData.map((item) => (
                     <div key={item.productId} className="rounded-md border p-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-foreground truncate max-w-[60%]">{item.productName}</span>
-                        <span className="text-sm font-bold text-success-green-dark">₹{item.totalRevenue.toFixed(2)}</span>
+                        <span className="text-sm font-semibold text-foreground truncate max-w-[60%]">
+                          {item.productName}
+                        </span>
+                        <span className="text-sm font-bold text-success-green-dark">
+                          ₹{item.totalRevenue.toFixed(2)}
+                        </span>
                       </div>
                       <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                         <div>
                           <span className="text-muted-foreground">Start:</span>
-                          <span className="ml-1 font-semibold">{item.startBox} Box | {item.startPcs} pcs</span>
+                          <span className="ml-1 font-semibold">
+                            {item.startBox} Box | {item.startPcs} pcs
+                          </span>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Sold:</span>
-                          <span className="ml-1 font-semibold text-primary-dark">{item.soldBox} Box | {item.soldPcs} pcs</span>
+                          <span className="ml-1 font-semibold text-primary-dark">
+                            {item.soldBox} Box | {item.soldPcs} pcs
+                          </span>
                         </div>
                         <div>
                           <span className="text-gray-700">Left:</span>
-                          <span className="ml-1 font-semibold text-warning-dark">{item.remainingBox} Box | {item.remainingPcs} pcs</span>
+                          <span className="ml-1 font-semibold text-warning-dark">
+                            {item.remainingBox} Box | {item.remainingPcs} pcs
+                          </span>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Price:</span>
-                          <span className="ml-1 font-medium text-muted-foreground">Box ₹{item.boxPrice.toFixed(2)} | pcs ₹{item.pcsPrice.toFixed(2)}</span>
+                          <span className="ml-1 font-medium text-muted-foreground">
+                            Box ₹{item.boxPrice.toFixed(2)} | pcs ₹
+                            {item.pcsPrice.toFixed(2)}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -654,24 +851,38 @@ const Summary = () => {
                 {/* Totals Section */}
                 <div className="border-t-2 border-foreground pt-4 print:pt-3 space-y-2 print:hidden">
                   <div className="flex justify-between items-center text-sm sm:text-base print:text-xs">
-                    <span className="font-semibold text-muted-foreground">Total Items Sold:</span>
-                    <span className="font-bold text-primary-dark">{totals.soldBox} Box | {totals.soldPcs} pcs</span>
+                    <span className="font-semibold text-muted-foreground">
+                      Total Items Sold:
+                    </span>
+                    <span className="font-bold text-primary-dark">
+                      {totals.soldBox} Box | {totals.soldPcs} pcs
+                    </span>
                   </div>
                   <div className="flex justify-between items-center text-sm sm:text-base print:text-xs">
-                    <span className="font-semibold text-gray-700">Total Remaining:</span>
-                    <span className="font-bold text-warning-dark">{totals.remainingBox} Box | {totals.remainingPcs} pcs</span>
+                    <span className="font-semibold text-gray-700">
+                      Total Remaining:
+                    </span>
+                    <span className="font-bold text-warning-dark">
+                      {totals.remainingBox} Box | {totals.remainingPcs} pcs
+                    </span>
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-dashed flex-wrap gap-2 sm:flex-nowrap min-w-0">
-                    <span className="text-lg sm:text-xl font-bold text-foreground print:text-base">GRAND TOTAL:</span>
-                    <span className="text-2xl sm:text-3xl font-bold text-success-green-dark print:text-xl truncate max-w-[60%] sm:max-w-none overflow-hidden text-right">₹{grandTotal.toFixed(2)}</span>
+                    <span className="text-lg sm:text-xl font-bold text-foreground print:text-base">
+                      GRAND TOTAL:
+                    </span>
+                    <span className="text-2xl sm:text-3xl font-bold text-success-green-dark print:text-xl truncate max-w-[60%] sm:max-w-none overflow-hidden text-right">
+                      ₹{grandTotal.toFixed(2)}
+                    </span>
                   </div>
                 </div>
 
                 {/* Footer */}
                 <div className="mt-8 pt-4 border-t border-dashed text-center print:hidden">
-                  <p className="text-sm font-semibold text-foreground print:text-xs">End of Day Report</p>
+                  <p className="text-sm font-semibold text-foreground print:text-xs">
+                    End of Day Report
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1 print:text-[10px]">
-                    Generated on {new Date().toLocaleString('en-IN')}
+                    Generated on {new Date().toLocaleString("en-IN")}
                   </p>
                 </div>
               </CardContent>
@@ -690,23 +901,24 @@ const Summary = () => {
       </main>
 
       {/* Top-level print container (rendered into document.body via portal) */}
-      {showSummary && createPortal(
-        <div
-          id="print-summary-receipt"
-          // These inline styles are a fallback, the @media print CSS is primary
-          style={{
-            whiteSpace: 'pre',
-            fontFamily: '"Courier New", Courier, monospace',
-            fontSize: '11px',
-            lineHeight: '1.3',
-            color: '#000',
-            display: 'none' // Hidden by default, only shown by print CSS
-          }}
-        >
-          {getReceiptContent()}
-        </div>,
-        document.body
-      )}
+      {showSummary &&
+        createPortal(
+          <div
+            id="print-summary-receipt"
+            // These inline styles are a fallback, the @media print CSS is primary
+            style={{
+              whiteSpace: "pre",
+              fontFamily: '"Courier New", Courier, monospace',
+              fontSize: "11px",
+              lineHeight: "1.3",
+              color: "#000",
+              display: "none", // Hidden by default, only shown by print CSS
+            }}
+          >
+            {getReceiptContent()}
+          </div>,
+          document.body
+        )}
 
       {/* Print Styles for 58mm receipt */}
       <style>{`

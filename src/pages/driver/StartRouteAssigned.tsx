@@ -1,25 +1,62 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 import { useToast } from "../../hooks/use-toast";
-import { getActiveRoutes, getProducts, getAssignedStockForBilling, subscribeAssignmentsForDate, startRouteForDriver, type Product, type DailyStockItem } from "../../lib/supabase";
+import {
+  getActiveRoutes,
+  getProducts,
+  getAssignedStockForBilling,
+  subscribeAssignmentsForDate,
+  startRouteForDriver,
+  type Product,
+  type DailyStockItem,
+} from "../../lib/supabase";
 import { supabase } from "@/integrations/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { mapRouteName } from "../../lib/routeUtils";
-import { ArrowLeft, Route as RouteIcon, RefreshCw, Package } from "lucide-react";
+import {
+  ArrowLeft,
+  Route as RouteIcon,
+  RefreshCw,
+  Package,
+} from "lucide-react";
 
 const StartRouteAssigned = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [routes, setRoutes] = useState<Array<{ id: string; name: string; displayName?: string }>>([]);
+  const [routes, setRoutes] = useState<
+    Array<{ id: string; name: string; displayName?: string }>
+  >([]);
   const [selectedRoute, setSelectedRoute] = useState("");
-  const [selectedDate, setSelectedDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
-  const [assigned, setAssigned] = useState<Array<{ product: Product; stock: DailyStockItem }>>([]);
+  const [selectedDate, setSelectedDate] = useState(() =>
+    format(new Date(), "yyyy-MM-dd")
+  );
+  const [assigned, setAssigned] = useState<
+    Array<{ product: Product; stock: DailyStockItem }>
+  >([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const subRef = useRef<RealtimeChannel | null>(null);
@@ -29,11 +66,16 @@ const StartRouteAssigned = () => {
       try {
         setLoading(true);
         const [rs, ps] = await Promise.all([getActiveRoutes(), getProducts()]);
-        const mapped = rs.map(r => ({ id: r.id, name: r.name, displayName: mapRouteName(r.name) }));
+        const mapped = rs.map((r) => ({
+          id: r.id,
+          name: r.name,
+          displayName: mapRouteName(r.name),
+        }));
         setRoutes(mapped);
         setProducts(ps);
       } catch (e: unknown) {
-        const msg = (e as { message?: string })?.message || "Failed to load routes";
+        const msg =
+          (e as { message?: string })?.message || "Failed to load routes";
         toast({ title: "Error", description: msg, variant: "destructive" });
       } finally {
         setLoading(false);
@@ -44,19 +86,29 @@ const StartRouteAssigned = () => {
 
   const loadAssigned = useCallback(async () => {
     try {
-      if (!selectedRoute || !selectedDate) { setAssigned([]); return; }
-      console.log('DEBUG: loadAssigned calling getAssignedStockForBilling');
-      const rows = await getAssignedStockForBilling(null, selectedRoute, selectedDate);
-      console.log('DEBUG: loadAssigned received rows:', rows);
+      if (!selectedRoute || !selectedDate) {
+        setAssigned([]);
+        return;
+      }
+      console.log("DEBUG: loadAssigned calling getAssignedStockForBilling");
+      const rows = await getAssignedStockForBilling(
+        null,
+        selectedRoute,
+        selectedDate
+      );
+      console.log("DEBUG: loadAssigned received rows:", rows);
       setAssigned(rows);
     } catch (e: unknown) {
-      console.error('DEBUG: loadAssigned error:', e);
-      const msg = (e as { message?: string })?.message || "Failed to load assigned stock";
+      console.error("DEBUG: loadAssigned error:", e);
+      const msg =
+        (e as { message?: string })?.message || "Failed to load assigned stock";
       toast({ title: "Error", description: msg, variant: "destructive" });
     }
   }, [selectedRoute, selectedDate, toast]);
 
-  useEffect(() => { loadAssigned(); }, [loadAssigned]);
+  useEffect(() => {
+    loadAssigned();
+  }, [loadAssigned]);
 
   useEffect(() => {
     let mounted = true;
@@ -66,11 +118,17 @@ const StartRouteAssigned = () => {
       subRef.current = subscribeAssignmentsForDate(selectedDate, loadAssigned);
     };
     sub();
-    return () => { mounted = false; subRef.current?.unsubscribe?.(); };
+    return () => {
+      mounted = false;
+      subRef.current?.unsubscribe?.();
+    };
   }, [selectedRoute, selectedDate, loadAssigned]);
 
   const totals = useMemo(() => {
-    let assignedBoxes = 0, assignedPcs = 0, remainingBoxes = 0, remainingPcs = 0;
+    let assignedBoxes = 0,
+      assignedPcs = 0,
+      remainingBoxes = 0,
+      remainingPcs = 0;
     assigned.forEach(({ product, stock }) => {
       const per = product?.pcs_per_box || 24;
       const a = (stock.boxQty || 0) * per + (stock.pcsQty || 0);
@@ -86,39 +144,58 @@ const StartRouteAssigned = () => {
 
   const handleStartRoute = async () => {
     if (!selectedRoute || !selectedDate) {
-      toast({ title: "Error", description: "Please select route and date", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "Please select route and date",
+        variant: "destructive",
+      });
       return;
     }
 
     try {
       setLoading(true);
       // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
-        toast({ title: "Error", description: "User not authenticated", variant: "destructive" });
+        toast({
+          title: "Error",
+          description: "User not authenticated",
+          variant: "destructive",
+        });
         return;
       }
 
       // Start route (claim stock)
       await startRouteForDriver(user.id, selectedRoute, selectedDate);
-      
+
       // Navigate
-      localStorage.setItem('currentRoute', selectedRoute);
-      localStorage.setItem('currentDate', selectedDate);
-      navigate('/driver/shop-billing');
+      localStorage.setItem("currentRoute", selectedRoute);
+      localStorage.setItem("currentDate", selectedDate);
+      navigate("/driver/shop-billing");
     } catch (e: any) {
-      console.error('Error starting route:', e);
-      toast({ title: "Error", description: e.message || "Failed to start route", variant: "destructive" });
+      console.error("Error starting route:", e);
+      toast({
+        title: "Error",
+        description: e.message || "Failed to start route",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-primary-light/10">
-      <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
+      <header className="bg-white backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center gap-2 sm:gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/driver/dashboard")} className="h-9 w-9 p-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/driver/dashboard")}
+              className="h-9 w-9 p-0"
+            >
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="flex items-center gap-2 sm:gap-3">
@@ -126,11 +203,21 @@ const StartRouteAssigned = () => {
                 <RouteIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-lg sm:text-xl font-bold text-foreground">Start Route</h1>
-                <p className="text-xs sm:text-sm text-muted-foreground hidden xs:block">Assigned stock for today</p>
+                <h1 className="text-lg sm:text-xl font-bold text-foreground">
+                  Start Route
+                </h1>
+                <p className="text-xs sm:text-sm text-muted-foreground hidden xs:block">
+                  Assigned stock for today
+                </p>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={loadAssigned} className="h-9 w-9 p-0" title="Refresh">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadAssigned}
+              className="h-9 w-9 p-0"
+              title="Refresh"
+            >
               <RefreshCw className="w-4 h-4" />
             </Button>
           </div>
@@ -139,19 +226,29 @@ const StartRouteAssigned = () => {
       <main className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-safe">
         <Card className="border-0 shadow-strong">
           <CardHeader className="text-center pb-4 sm:pb-6 px-4 sm:px-6">
-            <CardTitle className="text-xl sm:text-2xl font-bold">Route</CardTitle>
-            <CardDescription className="text-sm sm:text-base">Select route and view assigned stock</CardDescription>
+            <CardTitle className="text-xl sm:text-2xl font-bold">
+              Route
+            </CardTitle>
+            <CardDescription className="text-sm sm:text-base">
+              Select route and view assigned stock
+            </CardDescription>
           </CardHeader>
           <CardContent className="px-4 sm:px-6 space-y-6">
             <div className="space-y-2">
-              <Label className="text-sm sm:text-base font-semibold">Select Route</Label>
+              <Label className="text-sm sm:text-base font-semibold">
+                Select Route
+              </Label>
               <Select value={selectedRoute} onValueChange={setSelectedRoute}>
-                <SelectTrigger className="h-11 sm:h-10 text-base">
+                <SelectTrigger className="h-11 sm:h-10 text-base  bg-white">
                   <SelectValue placeholder="Choose your route" />
                 </SelectTrigger>
-                <SelectContent>
-                  {routes.map(r => (
-                    <SelectItem key={r.id} value={r.id} className="text-base py-3">
+                <SelectContent className="bg-white">
+                  {routes.map((r) => (
+                    <SelectItem
+                      key={r.id}
+                      value={r.id}
+                      className="text-base py-3"
+                    >
                       {r.displayName || r.name}
                     </SelectItem>
                   ))}
@@ -159,27 +256,54 @@ const StartRouteAssigned = () => {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-sm sm:text-base font-semibold">Select Date</Label>
-              <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="h-11 sm:h-10 text-base" />
+              <Label className="text-sm sm:text-base font-semibold">
+                Select Date
+              </Label>
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="h-11 sm:h-10 text-base"
+              />
             </div>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-base sm:text-lg font-semibold flex items-center gap-2"><Package className="w-4 h-4 sm:w-5 sm:h-5" />Assigned Stock</Label>
-                <div className="text-xs sm:text-sm text-muted-foreground">Assigned: {totals.assignedBoxes} Box | {totals.assignedPcs} pcs • Remaining: {totals.remainingBoxes} Box | {totals.remainingPcs} pcs</div>
+                <Label className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                  <Package className="w-4 h-4 sm:w-5 sm:h-5" />
+                  Assigned Stock
+                </Label>
+                <div className="text-xs sm:text-sm text-muted-foreground">
+                  Assigned: {totals.assignedBoxes} Box | {totals.assignedPcs}{" "}
+                  pcs • Remaining: {totals.remainingBoxes} Box |{" "}
+                  {totals.remainingPcs} pcs
+                </div>
               </div>
               <div className="border rounded-lg overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-muted/50">
                       <tr>
-                        <th className="text-left px-4 py-3 text-sm font-semibold">Product Name</th>
-                        <th className="text-center px-4 py-3 text-sm font-semibold">Assigned</th>
-                        <th className="text-center px-4 py-3 text-sm font-semibold">Remaining</th>
+                        <th className="text-left px-4 py-3 text-sm font-semibold">
+                          Product Name
+                        </th>
+                        <th className="text-center px-4 py-3 text-sm font-semibold">
+                          Assigned
+                        </th>
+                        <th className="text-center px-4 py-3 text-sm font-semibold">
+                          Remaining
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {assigned.length === 0 ? (
-                        <tr><td colSpan={3} className="px-4 py-6 text-center text-muted-foreground">No assigned stock</td></tr>
+                        <tr>
+                          <td
+                            colSpan={3}
+                            className="px-4 py-6 text-center text-muted-foreground"
+                          >
+                            No assigned stock
+                          </td>
+                        </tr>
                       ) : (
                         assigned.map(({ product, stock }) => (
                           <tr key={product.id} className="border-t">
@@ -189,7 +313,9 @@ const StartRouteAssigned = () => {
                             <td className="px-4 py-3 text-center">
                               {(() => {
                                 const per = product?.pcs_per_box || 24;
-                                const a = (stock.boxQty || 0) * per + (stock.pcsQty || 0);
+                                const a =
+                                  (stock.boxQty || 0) * per +
+                                  (stock.pcsQty || 0);
                                 const box = Math.floor(a / per);
                                 const pcs = a % per;
                                 return `${box} Box | ${pcs} pcs`;
@@ -198,7 +324,9 @@ const StartRouteAssigned = () => {
                             <td className="px-4 py-3 text-center">
                               {(() => {
                                 const per = product?.pcs_per_box || 24;
-                                const a = (stock.boxQty || 0) * per + (stock.pcsQty || 0);
+                                const a =
+                                  (stock.boxQty || 0) * per +
+                                  (stock.pcsQty || 0);
                                 const box = Math.floor(a / per);
                                 const pcs = a % per;
                                 return `${box} Box | ${pcs} pcs`;
@@ -215,7 +343,10 @@ const StartRouteAssigned = () => {
           </CardContent>
         </Card>
         <div className="mt-6 flex justify-end">
-          <Button onClick={handleStartRoute} disabled={loading || !selectedRoute}>
+          <Button
+            onClick={handleStartRoute}
+            disabled={loading || !selectedRoute}
+          >
             {loading ? "Starting..." : "Start Route"}
           </Button>
         </div>

@@ -1,16 +1,22 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Route, 
-  ShoppingCart, 
-  Plus, 
-  BarChart3, 
-  LogOut, 
+import {
+  Route,
+  ShoppingCart,
+  Plus,
+  BarChart3,
+  LogOut,
   User,
-  Package
+  Package,
 } from "lucide-react";
 import { isWithinAuthGracePeriod } from "@/lib/utils";
 
@@ -23,8 +29,13 @@ const Dashboard = () => {
   useEffect(() => {}, [navigate]);
 
   const handleLogout = async () => {
-    try { localStorage.removeItem('lastLoginAt'); } catch {}
-    toast({ title: "Logged Out", description: "You have been logged out successfully" });
+    try {
+      localStorage.removeItem("lastLoginAt");
+    } catch {}
+    toast({
+      title: "Logged Out",
+      description: "You have been logged out successfully",
+    });
   };
 
   if (loading) {
@@ -37,7 +48,6 @@ const Dashboard = () => {
       </div>
     );
   }
-
 
   const quickActions = [
     {
@@ -80,7 +90,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-accent-light/20">
       {/* Header */}
-      <header className="bg-card/95 backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
+      <header className="bg-white backdrop-blur-sm border-b border-border shadow-soft sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3">
@@ -88,17 +98,28 @@ const Dashboard = () => {
                 <Route className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-base sm:text-xl font-bold text-foreground">Fresh Soda</h1>
-                <p className="text-xs sm:text-sm text-muted-foreground">Driver Dashboard</p>
+                <h1 className="text-base sm:text-xl font-bold text-foreground">
+                  Fresh Soda
+                </h1>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  Driver Dashboard
+                </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="hidden sm:flex items-center gap-2 text-sm">
                 <User className="w-4 h-4" />
-                <span className="font-medium">{user?.email?.split('@')[0] || 'Driver'}</span>
+                <span className="font-medium">
+                  {user?.email?.split("@")[0] || "Driver"}
+                </span>
               </div>
-              <Button variant="ghost" size="sm" onClick={handleLogout} className="h-9 w-9 p-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                className="h-9 w-9 p-0"
+              >
                 <LogOut className="w-4 h-4" />
               </Button>
             </div>
@@ -110,29 +131,44 @@ const Dashboard = () => {
       <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-safe">
         {/* Welcome Section */}
         <div className="mb-6 sm:mb-8">
-          <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-1 sm:mb-2">Welcome Back!</h2>
-          <p className="text-muted-foreground text-sm sm:text-base">Ready to start your delivery route today?</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-1 sm:mb-2">
+            Welcome Back!
+          </h2>
+          <p className="text-muted-foreground text-sm sm:text-base">
+            Ready to start your delivery route today?
+          </p>
         </div>
 
         {/* Quick Actions */}
         <div>
-          <h3 className="text-xl sm:text-2xl font-bold text-foreground mb-3 sm:mb-4">Quick Actions</h3>
+          <h3 className="text-xl sm:text-2xl font-bold text-foreground mb-3 sm:mb-4">
+            Quick Actions
+          </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             {quickActions.map((action, index) => (
-              <Card 
-                key={index} 
+              <Card
+                key={index}
                 className="border-0 shadow-medium active:shadow-strong transition-all duration-200 cursor-pointer group active:scale-[0.98] sm:hover:scale-[1.02] touch-manipulation"
                 onClick={action.action}
               >
                 <CardHeader className="pb-3 sm:pb-4 p-4 sm:p-6">
-                  <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl ${action.color} flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                  <div
+                    className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl ${action.color} flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform duration-300`}
+                  >
                     <action.icon className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
                   </div>
-                  <CardTitle className="text-lg sm:text-xl font-bold">{action.title}</CardTitle>
-                  <CardDescription className="text-sm sm:text-base">{action.description}</CardDescription>
+                  <CardTitle className="text-lg sm:text-xl font-bold">
+                    {action.title}
+                  </CardTitle>
+                  <CardDescription className="text-sm sm:text-base">
+                    {action.description}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6 pt-0">
-                  <Button variant="card" className="w-full h-10 sm:h-9 text-sm sm:text-base touch-manipulation">
+                  <Button
+                    variant="card"
+                    className="w-full h-10 sm:h-9 text-sm sm:text-base touch-manipulation"
+                  >
                     Get Started
                   </Button>
                 </CardContent>
