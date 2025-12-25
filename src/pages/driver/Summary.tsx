@@ -29,6 +29,7 @@ import {
   getWarehouseMovements,
   getAssignedStockForBilling,
   getDriverRoute,
+  addWarehouseStock,
   type Product,
   type DailyStockItem,
 } from "../../lib/supabase";
@@ -350,6 +351,29 @@ const Summary = () => {
         route_id: selectedRoute,
         p_work_date: selectedDate,
       });
+
+      // Explicitly return remaining stock to warehouse
+      if (summaryData.length > 0) {
+        console.log("LoadOut -> Returning remaining stock to warehouse...");
+        toast({
+          title: "Processing Return",
+          description: "Returning remaining stock to warehouse...",
+        });
+        
+        const stockReturnPromises = summaryData.map(async (item) => {
+          if (item.remainingBox > 0 || item.remainingPcs > 0) {
+            await addWarehouseStock(
+              item.productId,
+              item.remainingBox,
+              item.remainingPcs,
+              `Return from Route: ${selectedRoute} (Driver Load-out)`
+            );
+          }
+        });
+        await Promise.all(stockReturnPromises);
+        console.log("LoadOut -> Stock returned successfully");
+      }
+
       // Pre-check: show remaining before
       const beforeAssigned = await getRouteAssignedStock(
         selectedRoute,
