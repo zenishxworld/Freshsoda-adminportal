@@ -4,6 +4,7 @@ import { Table } from '../../../components/tailadmin/Table';
 import { Button } from '../../../components/tailadmin/Button';
 import { Input } from '../../../components/tailadmin/Input';
 import { Badge } from '../../../components/tailadmin/Badge';
+import { DatePicker } from '../../../components/tailadmin/DatePicker';
 import { RefreshCw, Download } from 'lucide-react';
 import { buildDailySummary, exportCsv, type DailySummaryRow } from '../../../lib/reports';
 
@@ -37,7 +38,7 @@ export const DailySummary: React.FC = () => {
   const reset = () => { setFrom(''); setTo(''); setRows([]); };
 
   const onExport = () => {
-    const headers = ['Date','Route','Driver','AssignedPCS','SoldPCS','ReturnedPCS','Revenue'];
+    const headers = ['Date', 'Route', 'Driver', 'AssignedPCS', 'SoldPCS', 'ReturnedPCS', 'Revenue'];
     const csv = exportCsv(headers, rows.map(r => ({
       Date: r.date,
       Route: r.route_name,
@@ -68,8 +69,8 @@ export const DailySummary: React.FC = () => {
     <div className="space-y-6">
       <Card>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Input label="From Date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          <Input label="To Date" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DatePicker label="From Date" value={from} onChange={setFrom} />
+          <DatePicker label="To Date" value={to} onChange={setTo} />
           <div className="flex items-end gap-2">
             <Button variant="primary" onClick={load} disabled={!from || !to || loading}>{loading ? 'Loading...' : 'Filter'}</Button>
             <Button variant="outline" onClick={onExport} disabled={rows.length === 0}><Download className="w-4 h-4 mr-2" />Export</Button>

@@ -3,6 +3,7 @@ import { Card } from '../../../components/tailadmin/Card';
 import { Table } from '../../../components/tailadmin/Table';
 import { Button } from '../../../components/tailadmin/Button';
 import { Input } from '../../../components/tailadmin/Input';
+import { DatePicker } from '../../../components/tailadmin/DatePicker';
 import { RefreshCw, Download } from 'lucide-react';
 import { buildRouteSummary, exportCsv, type RouteSummaryRow } from '../../../lib/reports';
 import { getActiveRoutes, type RouteOption } from '../../../lib/supabase';
@@ -46,7 +47,7 @@ export const RouteSummary: React.FC = () => {
   const reset = () => { setFrom(''); setTo(''); setRouteId(''); setRows([]); };
 
   const onExport = () => {
-    const headers = ['Route','AssignedPCS','SoldPCS','ReturnedPCS','Revenue','Drivers','Invoices'];
+    const headers = ['Route', 'AssignedPCS', 'SoldPCS', 'ReturnedPCS', 'Revenue', 'Drivers', 'Invoices'];
     const csv = exportCsv(headers, rows.map(r => ({
       Route: r.route_name,
       AssignedPCS: r.assigned_pcs,
@@ -78,8 +79,8 @@ export const RouteSummary: React.FC = () => {
     <div className="space-y-6">
       <Card>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <Input label="From Date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          <Input label="To Date" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DatePicker label="From Date" value={from} onChange={setFrom} />
+          <DatePicker label="To Date" value={to} onChange={setTo} />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Route</label>
             <select value={routeId} onChange={(e) => setRouteId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">

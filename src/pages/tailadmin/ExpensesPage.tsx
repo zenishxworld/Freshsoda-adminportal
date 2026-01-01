@@ -6,6 +6,7 @@ import { Input } from '../../components/tailadmin/Input';
 import { Modal } from '../../components/tailadmin/Modal';
 import { Badge } from '../../components/tailadmin/Badge';
 import { CustomDropdown } from '../../components/tailadmin/CustomDropdown';
+import { DatePicker } from '../../components/tailadmin/DatePicker';
 import { useToast } from '@/hooks/use-toast';
 import { DollarSign, TrendingUp, Edit, Trash2, PieChart, RefreshCw, Plus, Download } from 'lucide-react';
 import { addExpense, deleteExpense, getExpenses, getExpenseSummary, updateExpense, getExpenseMovements, type Expense, type ExpenseMovement } from '@/lib/supabase';
@@ -233,8 +234,8 @@ export const ExpensesPage: React.FC = () => {
             <Card>
                 <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <Input label="Date From" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                        <Input label="Date To" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                        <DatePicker label="Date From" value={dateFrom} onChange={setDateFrom} />
+                        <DatePicker label="Date To" value={dateTo} onChange={setDateTo} />
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
                             <CustomDropdown
@@ -284,7 +285,7 @@ export const ExpensesPage: React.FC = () => {
                         />
                     </div>
                     <Input label="Amount" type="number" value={form.amount} onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))} />
-                    <Input label="Date" type="date" value={form.date} onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
+                    <DatePicker label="Date" value={form.date} onChange={(value) => setForm(f => ({ ...f, date: value }))} />
                     <Input label="Note" placeholder="Enter note" value={form.note} onChange={(e) => setForm(f => ({ ...f, note: e.target.value }))} />
                 </div>
             </Modal>
@@ -306,7 +307,7 @@ export const ExpensesPage: React.FC = () => {
                         />
                     </div>
                     <Input label="Amount" type="number" value={form.amount} onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))} />
-                    <Input label="Date" type="date" value={form.date} onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
+                    <DatePicker label="Date" value={form.date} onChange={(value) => setForm(f => ({ ...f, date: value }))} />
                     <Input label="Note" placeholder="Enter note" value={form.note} onChange={(e) => setForm(f => ({ ...f, note: e.target.value }))} />
                 </div>
             </Modal>

@@ -21,6 +21,12 @@ export const Input: React.FC<InputProps> = ({
         }
     };
 
+    // Enhanced styling for date inputs
+    const isDateInput = type === 'date';
+    const dateInputClasses = isDateInput
+        ? 'cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-70 [&::-webkit-calendar-picker-indicator]:hover:opacity-100 [&::-webkit-calendar-picker-indicator]:transition-opacity'
+        : '';
+
     return (
         <div className="w-full">
             {label && (
@@ -30,10 +36,12 @@ export const Input: React.FC<InputProps> = ({
             )}
             <input
                 type={type}
-                className={`w-full px-4 py-2.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors ${error
-                    ? 'border-danger focus:ring-danger'
-                    : 'border-gray-300 hover:border-gray-400'
-                    } ${className}`}
+                className={`w-full px-4 py-2.5 border-2 rounded-lg text-sm font-medium focus:outline-none focus:ring-4 focus:border-transparent transition-all duration-200 shadow-sm ${error
+                        ? 'border-danger focus:ring-danger/20 bg-red-50'
+                        : isDateInput
+                            ? 'border-primary/30 hover:border-primary/50 focus:border-primary focus:ring-primary/20 hover:shadow-md bg-gradient-to-r from-white to-primary/5'
+                            : 'border-gray-300 hover:border-gray-400 focus:ring-primary/20 focus:border-primary hover:shadow-md'
+                    } ${dateInputClasses} ${className}`}
                 onWheel={handleWheel}
                 {...props}
             />
