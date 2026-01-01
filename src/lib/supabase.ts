@@ -43,6 +43,7 @@ export type Sale = {
     route_id: string;
     date: string; // YYYY-MM-DD
     shop_name?: string;
+    items?: any[];
     products_sold: any;
     total_amount?: number;
     created_at?: string;

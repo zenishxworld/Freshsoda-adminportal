@@ -7,11 +7,15 @@ import {
   Archive,
   ChevronLeft,
   ChevronRight,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import {
   getAssignmentsForDate,
   subscribeAssignmentsForDate,
   getLowStockProducts,
+  getWarehouseStock,
+  getSalesFor,
   type AssignmentLogEntry,
   type LowStockItem,
 } from "@/lib/supabase";
@@ -25,31 +29,49 @@ interface StatCardProps {
   title: string;
   value: string;
   icon: React.ReactNode;
-  color: string;
-  change?: string;
+  gradient: string;
+  change?: number;
+  loading?: boolean;
 }
 
 const StatCard: React.FC<StatCardProps> = ({
   title,
   value,
   icon,
-  color,
+  gradient,
   change,
+  loading,
 }) => {
   return (
-    <Card className="hover:shadow-2 transition-shadow">
+    <Card className="hover:shadow-lg transition-all duration-300 border-0">
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-600 mb-1">{title}</p>
-          <h3 className="text-2xl font-bold text-gray-900">{value}</h3>
-          {change && (
-            <p className="text-sm text-success mt-1">
-              <span className="font-medium">{change}</span> from yesterday
-            </p>
+        <div className="flex-1">
+          <p className="text-sm font-medium text-gray-600 mb-2">{title}</p>
+          {loading ? (
+            <div className="h-8 w-24 bg-gray-200 animate-pulse rounded"></div>
+          ) : (
+            <h3 className="text-3xl font-bold text-gray-900">{value}</h3>
+          )}
+          {change !== undefined && !loading && (
+            <div className="flex items-center mt-2">
+              {change >= 0 ? (
+                <TrendingUp className="w-4 h-4 text-success mr-1" />
+              ) : (
+                <TrendingDown className="w-4 h-4 text-danger mr-1" />
+              )}
+              <span
+                className={`text-sm font-semibold ${change >= 0 ? "text-success" : "text-danger"
+                  }`}
+              >
+                {change >= 0 ? "+" : ""}
+                {change.toFixed(1)}%
+              </span>
+              <span className="text-xs text-gray-500 ml-1">vs yesterday</span>
+            </div>
           )}
         </div>
         <div
-          className={`w-14 h-14 rounded-full flex items-center justify-center ${color}`}
+          className={`w-16 h-16 rounded-2xl flex items-center justify-center ${gradient} shadow-md`}
         >
           {icon}
         </div>
@@ -68,9 +90,100 @@ export const DashboardPage: React.FC = () => {
   const [loadingAssignments, setLoadingAssignments] = useState<boolean>(false);
   const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
   const [loadingLowStock, setLoadingLowStock] = useState<boolean>(false);
+  const [stats, setStats] = useState({
+    warehouseStock: 0,
+    assignedStock: 0,
+    sales: 0,
+    remainingStock: 0,
+    warehouseChange: 0,
+    assignedChange: 0,
+    salesChange: 0,
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
   const [lowPage, setLowPage] = useState<number>(0);
+
+  // Fetch dashboard statistics
+  useEffect(() => {
+    const fetchStats = async () => {
+      setLoadingStats(true);
+      try {
+        // Get warehouse stock
+        const warehouseData = await getWarehouseStock();
+        const totalWarehouse = warehouseData.reduce((sum, item) => {
+          return sum + (item.boxes * item.pcs_per_box) + item.pcs;
+        }, 0);
+
+        // Get today's assignments
+        const todayAssignments = await getAssignmentsForDate(today);
+        const totalAssigned = todayAssignments.reduce((sum, assignment) => {
+          return sum + (assignment.total_boxes * 24) + assignment.total_pcs;
+        }, 0);
+
+        // Get today's sales
+        const todaySales = await getSalesFor(today);
+        const totalSalesAmount = todaySales.reduce(
+          (sum, sale) => sum + (sale.total_amount || 0),
+          0
+        );
+
+        // Calculate sold quantity
+        const soldQty = todaySales.reduce((sum, sale) => {
+          const items = Array.isArray(sale.items) ? sale.items : [];
+          return (
+            sum +
+            items.reduce((s: number, item: any) => {
+              return s + ((item.boxQty || 0) * 24) + (item.pcsQty || 0);
+            }, 0)
+          );
+        }, 0);
+
+        const remaining = totalAssigned - soldQty;
+
+        // Get yesterday's data for comparison
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayDate = yesterday.toISOString().split("T")[0];
+
+        const yesterdayAssignments = await getAssignmentsForDate(yesterdayDate);
+        const yesterdayAssigned = yesterdayAssignments.reduce((sum, assignment) => {
+          return sum + (assignment.total_boxes * 24) + assignment.total_pcs;
+        }, 0);
+
+        const yesterdaySales = await getSalesFor(yesterdayDate);
+        const yesterdaySalesAmount = yesterdaySales.reduce(
+          (sum, sale) => sum + (sale.total_amount || 0),
+          0
+        );
+
+        const assignedChange =
+          yesterdayAssigned > 0
+            ? ((totalAssigned - yesterdayAssigned) / yesterdayAssigned) * 100
+            : 0;
+        const salesChange =
+          yesterdaySalesAmount > 0
+            ? ((totalSalesAmount - yesterdaySalesAmount) / yesterdaySalesAmount) * 100
+            : 0;
+
+        setStats({
+          warehouseStock: totalWarehouse,
+          assignedStock: totalAssigned,
+          sales: totalSalesAmount,
+          remainingStock: remaining,
+          warehouseChange: 0,
+          assignedChange,
+          salesChange,
+        });
+      } catch (error) {
+        console.error("Error fetching stats:", error);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+
+    fetchStats();
+  }, [today]);
 
   useEffect(() => {
     const load = async () => {
@@ -137,62 +250,67 @@ export const DashboardPage: React.FC = () => {
   }, [toast]);
 
   return (
-    <div className="space-y-6 bg-white min-h-screen">
+    <div className="space-y-6 bg-gray-50 min-h-screen p-6">
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+        <h1 className="text-3xl font-bold text-gray-900">
           Dashboard
         </h1>
-        <p className="text-sm sm:text-base text-gray-600 mt-1">
+        <p className="text-base text-gray-600 mt-1">
           Welcome back! Here's what's happening today.
         </p>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total Warehouse Stock"
-          value="12,458"
-          icon={<Package className="w-7 h-7 text-white" />}
-          color="bg-primary"
-          change="+5.2%"
+          value={stats.warehouseStock.toLocaleString()}
+          icon={<Package className="w-8 h-8 text-white" />}
+          gradient="bg-gradient-to-br from-blue-500 to-blue-600"
+          change={stats.warehouseChange}
+          loading={loadingStats}
         />
         <StatCard
           title="Today's Assigned Stock"
-          value="3,245"
-          icon={<TruckIcon className="w-7 h-7 text-white" />}
-          color="bg-success"
-          change="+12.5%"
+          value={stats.assignedStock.toLocaleString()}
+          icon={<TruckIcon className="w-8 h-8 text-white" />}
+          gradient="bg-gradient-to-br from-green-500 to-green-600"
+          change={stats.assignedChange}
+          loading={loadingStats}
         />
         <StatCard
           title="Today's Sales"
-          value="₹45,678"
-          icon={<DollarSign className="w-7 h-7 text-white" />}
-          color="bg-warning"
-          change="+8.1%"
+          value={`₹${stats.sales.toLocaleString()}`}
+          icon={<DollarSign className="w-8 h-8 text-white" />}
+          gradient="bg-gradient-to-br from-amber-500 to-amber-600"
+          change={stats.salesChange}
+          loading={loadingStats}
         />
         <StatCard
           title="Remaining Stock"
-          value="9,213"
-          icon={<Archive className="w-7 h-7 text-white" />}
-          color="bg-danger"
+          value={stats.remainingStock.toLocaleString()}
+          icon={<Archive className="w-8 h-8 text-white" />}
+          gradient="bg-gradient-to-br from-purple-500 to-purple-600"
+          loading={loadingStats}
         />
       </div>
 
       {/* Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card
+          className="border-0"
           header={
             <h3 className="text-lg font-semibold text-gray-900">
               Recent Stock Assignments
             </h3>
           }
         >
-          <div className="space-y-4">
+          <div className="space-y-3">
             {loadingAssignments && recent.length === 0 ? (
-              <div className="py-3 text-center text-gray-600">Loading...</div>
+              <div className="py-8 text-center text-gray-600">Loading...</div>
             ) : recent.length === 0 ? (
-              <div className="py-3 text-center text-gray-600">
+              <div className="py-8 text-center text-gray-600">
                 No assignments yet today
               </div>
             ) : (
@@ -202,9 +320,8 @@ export const DashboardPage: React.FC = () => {
                   row.driver_name ||
                   row.truck_name ||
                   "Unknown";
-                const units = `${row.total_boxes} boxes${
-                  row.total_pcs ? `, ${row.total_pcs} pcs` : ""
-                }`;
+                const units = `${row.total_boxes} boxes${row.total_pcs ? `, ${row.total_pcs} pcs` : ""
+                  }`;
                 const time = (() => {
                   try {
                     return new Date(row.created_at || "").toLocaleTimeString(
@@ -218,14 +335,14 @@ export const DashboardPage: React.FC = () => {
                 return (
                   <div
                     key={row.id}
-                    className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0"
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                   >
                     <div>
-                      <p className="font-medium text-gray-900">{target}</p>
+                      <p className="font-semibold text-gray-900">{target}</p>
                       <p className="text-sm text-gray-600">Date: {row.date}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-gray-900">{units}</p>
+                      <p className="font-semibold text-gray-900">{units}</p>
                       <p className="text-sm text-gray-600">{time}</p>
                     </div>
                   </div>
@@ -236,6 +353,7 @@ export const DashboardPage: React.FC = () => {
         </Card>
 
         <Card
+          className="border-0"
           header={
             <h3 className="text-lg font-semibold text-gray-900">
               Low Stock Alerts
@@ -243,9 +361,9 @@ export const DashboardPage: React.FC = () => {
           }
         >
           {loadingLowStock ? (
-            <div className="py-3 text-center text-gray-600">Loading...</div>
+            <div className="py-8 text-center text-gray-600">Loading...</div>
           ) : lowStock.length === 0 ? (
-            <div className="py-3 text-center text-gray-600">
+            <div className="py-8 text-center text-gray-600">
               All products sufficiently stocked ✔️
             </div>
           ) : (
