@@ -181,6 +181,8 @@ export interface AssignmentLogEntry {
     updated_at?: string;
     total_boxes: number;
     total_pcs: number;
+    initial_boxes?: number;
+    initial_pcs?: number;
     route_status?: 'not_started' | 'started' | 'route is ended';
 }
 
@@ -208,7 +210,7 @@ export const isRouteStarted = async (
     // If total items are 0, we consider the route ended/available for new assignment
     const stock = Array.isArray(data.stock) ? data.stock : [];
     const totalItems = stock.reduce((sum: number, item: any) => sum + (item.boxQty || 0) + (item.pcsQty || 0), 0);
-    
+
     if (totalItems === 0) return false;
 
     return !!data.auth_user_id;
@@ -675,7 +677,7 @@ export const startRouteForDriver = async (
                 stock: [],
                 truck_id: null
             });
-            
+
         if (insertError) {
             console.error('Error starting route (empty):', insertError);
             throw new Error('Failed to start route');
@@ -1903,39 +1905,39 @@ export const createShop = async (shopData: {
         .insert(payload)
         .select()
         .single();
-    
+
     // Expanded check for missing column errors
     const isColumnError = error && (
-        error.code === '42703' || 
-        error.code === 'PGRST204' || 
+        error.code === '42703' ||
+        error.code === 'PGRST204' ||
         /column.*(village|route_id)/i.test(error.message || '') ||
         /Could not find the.*column/i.test(error.message || '')
     );
 
     if (isColumnError) {
         console.warn('createShop: Missing column detected, retrying with fallbacks. Error:', error);
-        
+
         // STAGE 2: Try without Route/Village, but WITH Timestamps
         const { village, route_id, ...fallbackPayload2 } = payload as any;
         console.log('createShop: Fallback Stage 2:', fallbackPayload2);
-        
+
         const { data: data2, error: error2 } = await supabase
             .from('shops')
             .insert(fallbackPayload2)
             .select()
             .single();
-            
+
         if (!error2 && data2) return data2 as Shop;
 
         // Check for timestamp errors
         const isTimestampError = error2 && (
-            error2.code === '42703' || 
-            error2.code === 'PGRST204' || 
+            error2.code === '42703' ||
+            error2.code === 'PGRST204' ||
             /column/i.test(error2.message || '')
         );
 
         if (isTimestampError) {
-             // STAGE 3: Try without UpdatedAt
+            // STAGE 3: Try without UpdatedAt
             const { updated_at, ...fallbackPayload3 } = fallbackPayload2;
             console.log('createShop: Fallback Stage 3:', fallbackPayload3);
             const { data: data3, error: error3 } = await supabase
@@ -1962,8 +1964,8 @@ export const createShop = async (shopData: {
                 throw new Error('Failed to create shop. Please try again.');
             }
         } else if (error2) {
-             console.error('createShop: Fallback failed:', error2);
-             throw new Error('Failed to create shop. Please try again.');
+            console.error('createShop: Fallback failed:', error2);
+            throw new Error('Failed to create shop. Please try again.');
         }
     }
     if (error) {
@@ -2011,22 +2013,22 @@ export const updateShop = async (
         .eq('id', id)
         .select()
         .single();
-    
+
     // Expanded check for missing column errors
     const isColumnError = error && (
-        error.code === '42703' || 
-        error.code === 'PGRST204' || 
+        error.code === '42703' ||
+        error.code === 'PGRST204' ||
         /column.*(village|route_id)/i.test(error.message || '') ||
         /Could not find the.*column/i.test(error.message || '')
     );
 
     if (isColumnError) {
         console.warn('updateShop: Missing column detected, retrying with fallbacks. Error:', error);
-        
+
         // STAGE 2: Try without Route/Village, but WITH Timestamps
         const { village, route_id, ...fallbackPayload2 } = payload as any;
         console.log('updateShop: Fallback Stage 2:', fallbackPayload2);
-        
+
         const { data: data2, error: error2 } = await supabase
             .from('shops')
             .update(fallbackPayload2)
@@ -2037,13 +2039,13 @@ export const updateShop = async (
 
         // Check for timestamp errors
         const isTimestampError = error2 && (
-            error2.code === '42703' || 
-            error2.code === 'PGRST204' || 
+            error2.code === '42703' ||
+            error2.code === 'PGRST204' ||
             /column/i.test(error2.message || '')
         );
 
         if (isTimestampError) {
-             // STAGE 3: Try without UpdatedAt
+            // STAGE 3: Try without UpdatedAt
             const { updated_at, ...fallbackPayload3 } = fallbackPayload2;
             console.log('updateShop: Fallback Stage 3:', fallbackPayload3);
             const { data: data3, error: error3 } = await supabase
@@ -2072,8 +2074,8 @@ export const updateShop = async (
                 throw new Error('Failed to update shop. Please try again.');
             }
         } else if (error2) {
-             console.error('updateShop: Fallback failed:', error2);
-             throw new Error('Failed to update shop. Please try again.');
+            console.error('updateShop: Fallback failed:', error2);
+            throw new Error('Failed to update shop. Please try again.');
         }
     }
     if (error) {
@@ -2210,14 +2212,14 @@ export const ensureShopExists = async (
             .select('id, phone, address')
             .eq('name', trimmedName)
             .maybeSingle();
-        
+
         if (!error && data) {
             existingShop = data;
             // Try to get village separately in case it doesn't exist
             try {
                 const { data: vData } = await supabase.from('shops').select('village').eq('id', data.id).single();
                 if (vData) existingShop.village = vData.village;
-            } catch (ve) {}
+            } catch (ve) { }
         }
     } catch (e) {
         console.error('Error checking for existing shop:', e);
@@ -2228,7 +2230,7 @@ export const ensureShopExists = async (
         const updates: any = {};
         if (phone && !existingShop.phone) updates.phone = phone;
         if (address && !existingShop.address) updates.address = address;
-        
+
         // Only update village if we have it and it's missing
         if (village && !existingShop.village) {
             try {
@@ -2266,23 +2268,23 @@ export const ensureShopExists = async (
             .insert(payloadWithVillage)
             .select('id')
             .single();
-        
+
         if (!error && data) return data.id;
-        
+
         console.error('ensureShopExists: Initial insert failed:', error);
 
         // Check for missing column errors (village or route_id)
         // Expanded check to catch any PGRST error or 42* code that mentions columns
         const isColumnError = error && (
-            error.code === '42703' || 
-            error.code === 'PGRST204' || 
+            error.code === '42703' ||
+            error.code === 'PGRST204' ||
             /column.*(village|route_id)/i.test(error.message || '') ||
             /Could not find the.*column/i.test(error.message || '')
         );
 
         if (isColumnError) {
             console.log('ensureShopExists: Detected missing column error, attempting fallback sequence');
-            
+
             // STAGE 2: Try without Route/Village, but WITH Timestamps
             const fallbackPayload2 = {
                 name: trimmedName,
@@ -2298,22 +2300,22 @@ export const ensureShopExists = async (
                 .insert(fallbackPayload2)
                 .select('id')
                 .single();
-                
+
             if (!error2 && data2) return data2.id;
-            
+
             // Check if error2 is about updated_at or created_at
             // Broader check: if it's a schema/column error, try next stage
             const isTimestampError = error2 && (
-                error2.code === '42703' || 
-                error2.code === 'PGRST204' || 
+                error2.code === '42703' ||
+                error2.code === 'PGRST204' ||
                 /column/i.test(error2.message || '')
             );
 
             if (isTimestampError) {
                 console.log('ensureShopExists: Timestamp column missing, trying fallback Stage 3');
-                
+
                 // STAGE 3: Try without UpdatedAt, but WITH CreatedAt
-                 const fallbackPayload3 = {
+                const fallbackPayload3 = {
                     name: trimmedName,
                     phone: phone || null,
                     address: address || null,
@@ -2327,16 +2329,16 @@ export const ensureShopExists = async (
                     .single();
 
                 if (!error3 && data3) return data3.id;
-                
+
                 // If Stage 3 failed, check if it's because of created_at
                 const isCreatedAtError = error3 && (
-                    error3.code === '42703' || 
-                    error3.code === 'PGRST204' || 
+                    error3.code === '42703' ||
+                    error3.code === 'PGRST204' ||
                     /column/i.test(error3.message || '')
                 );
 
                 if (isCreatedAtError || error3) {
-                     // STAGE 4: Minimal (No Timestamps)
+                    // STAGE 4: Minimal (No Timestamps)
                     // If Stage 3 failed, try bare minimum
                     const minimalPayload = {
                         name: trimmedName,
@@ -2349,7 +2351,7 @@ export const ensureShopExists = async (
                         .insert(minimalPayload)
                         .select('id')
                         .single();
-                    
+
                     console.log('ensureShopExists: Stage 4 result:', { data4, error4 });
 
                     if (!error4 && data4) return data4.id;
@@ -2360,8 +2362,8 @@ export const ensureShopExists = async (
                     }
                 }
             } else if (error2) {
-                 console.error('ensureShopExists: Fallback Stage 2 failed:', error2);
-                 throw error2;
+                console.error('ensureShopExists: Fallback Stage 2 failed:', error2);
+                throw error2;
             }
         } else if (error) {
             throw error;
@@ -2380,7 +2382,7 @@ export const ensureShopExists = async (
  */
 export const syncMissingShops = async (): Promise<{ total: number; fixed: number }> => {
     console.log('Starting shop sync...');
-    
+
     // Log current session for debugging RLS
     const { data: sessionData } = await supabase.auth.getSession();
     console.log('syncMissingShops: Current user:', sessionData?.session?.user?.id || 'No user');
@@ -2693,7 +2695,7 @@ export const updateDriverStockAfterSale = async (
         .select('*')
         .eq('route_id', routeId)
         .eq('date', date);
-    
+
     if (driverId) {
         query = query.eq('auth_user_id', driverId);
     } else if (truckId) {
@@ -2703,7 +2705,7 @@ export const updateDriverStockAfterSale = async (
     }
 
     const { data: stockRows, error: fetchError } = await query;
-    
+
     if (fetchError) {
         console.error("Error fetching stock for update:", fetchError);
         throw new Error("Failed to fetch stock for update");
@@ -2716,24 +2718,24 @@ export const updateDriverStockAfterSale = async (
         // If we are here, it means we can't find the row.
         // Let's try to find ANY row for this route/date if we have truckId?
         if (driverId && truckId) {
-             console.log("No driver-specific stock found, checking for unassigned stock with truckId...");
-             const { data: unassignedRows } = await supabase
+            console.log("No driver-specific stock found, checking for unassigned stock with truckId...");
+            const { data: unassignedRows } = await supabase
                 .from('daily_stock')
                 .select('*')
                 .eq('route_id', routeId)
                 .eq('date', date)
                 .eq('truck_id', truckId)
                 .is('auth_user_id', null);
-             
-             if (unassignedRows && unassignedRows.length > 0) {
-                 // We found unassigned stock. We should probably update THIS row.
-                 // Note: Ideally we should also claim it (set auth_user_id), but for now just update stock.
-                 // We will proceed with this row.
-                 stockRows?.push(unassignedRows[0]);
-             } else {
-                 console.error("No stock record found for update (checked driver and unassigned)", { driverId, routeId, truckId, date });
-                 throw new Error("No stock record found to update");
-             }
+
+            if (unassignedRows && unassignedRows.length > 0) {
+                // We found unassigned stock. We should probably update THIS row.
+                // Note: Ideally we should also claim it (set auth_user_id), but for now just update stock.
+                // We will proceed with this row.
+                stockRows?.push(unassignedRows[0]);
+            } else {
+                console.error("No stock record found for update (checked driver and unassigned)", { driverId, routeId, truckId, date });
+                throw new Error("No stock record found to update");
+            }
         } else {
             console.error("No stock record found for update", { driverId, routeId, truckId, date });
             throw new Error("No stock record found to update");
@@ -2743,7 +2745,7 @@ export const updateDriverStockAfterSale = async (
     // Assuming we update the first matching row (should be unique per driver/route/date)
     // If we pushed a fallback row, stockRows now has length 1.
     if (!stockRows || stockRows.length === 0) { // Double check
-         throw new Error("No stock record found to update");
+        throw new Error("No stock record found to update");
     }
 
     const stockRow = stockRows[0];
@@ -2882,7 +2884,7 @@ export const getAssignedStockForBilling = async (
             console.error('Error fetching assigned stock:', error);
             return [];
         }
-        
+
         console.log(`DEBUG: getAssignedStockForBilling found ${data?.length || 0} rows`);
         if (data && data.length > 0) {
             console.log('DEBUG: rows:', data);
@@ -2894,7 +2896,7 @@ export const getAssignedStockForBilling = async (
                     allItems.push(...(row.stock as DailyStockItem[]));
                 }
             });
-            
+
             // Consolidate items by productId
             const mergedMap = new Map<string, DailyStockItem>();
             allItems.forEach(item => {
@@ -2906,7 +2908,7 @@ export const getAssignedStockForBilling = async (
                     mergedMap.set(item.productId, { ...item });
                 }
             });
-            
+
             stockData = Array.from(mergedMap.values());
         } else {
             stockData = [];

@@ -67,10 +67,10 @@ const CustomRouteDropdown: React.FC<CustomRouteDropdownProps> = ({
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 disabled={disabled}
                 className={`w-full px-4 py-3.5 text-base font-medium text-left bg-white border-2 rounded-xl shadow-sm transition-all duration-200 flex items-center justify-between ${disabled
-                        ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200'
-                        : isOpen
-                            ? 'border-primary ring-4 ring-primary/20 shadow-md'
-                            : 'border-gray-200 hover:border-primary/50 hover:shadow-md cursor-pointer'
+                    ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200'
+                    : isOpen
+                        ? 'border-primary ring-4 ring-primary/20 shadow-md'
+                        : 'border-gray-200 hover:border-primary/50 hover:shadow-md cursor-pointer'
                     } ${selectedRoute ? 'text-gray-900' : 'text-gray-500'}`}
             >
                 <span>{selectedRouteName || 'Choose a route to assign stock...'}</span>
@@ -92,8 +92,8 @@ const CustomRouteDropdown: React.FC<CustomRouteDropdownProps> = ({
                                 setIsOpen(false);
                             }}
                             className={`w-full px-4 py-3 text-left text-base transition-colors duration-150 flex items-center justify-between ${!selectedRoute
-                                    ? 'bg-primary/10 text-primary font-semibold'
-                                    : 'text-gray-500 hover:bg-gray-50'
+                                ? 'bg-primary/10 text-primary font-semibold'
+                                : 'text-gray-500 hover:bg-gray-50'
                                 }`}
                         >
                             <span>Choose a route to assign stock...</span>
@@ -118,14 +118,14 @@ const CustomRouteDropdown: React.FC<CustomRouteDropdownProps> = ({
                                         setIsOpen(false);
                                     }}
                                     className={`w-full px-4 py-3 text-left text-base transition-all duration-150 flex items-center justify-between group ${selectedRoute === route.id
-                                            ? 'bg-primary/10 text-primary font-semibold'
-                                            : 'text-gray-900 hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:text-primary'
+                                        ? 'bg-primary/10 text-primary font-semibold'
+                                        : 'text-gray-900 hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:text-primary'
                                         }`}
                                 >
                                     <span className="flex items-center gap-3">
                                         <div className={`w-2 h-2 rounded-full transition-colors ${selectedRoute === route.id
-                                                ? 'bg-primary'
-                                                : 'bg-gray-300 group-hover:bg-primary/50'
+                                            ? 'bg-primary'
+                                            : 'bg-gray-300 group-hover:bg-primary/50'
                                             }`}></div>
                                         {route.name}
                                     </span>
@@ -636,20 +636,27 @@ export const AssignStockPage: React.FC = () => {
                                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route Status</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Boxes</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">PCS</th>
+                                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" colSpan={2}>Initially Assigned</th>
+                                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" colSpan={2}>Remaining Stock</th>
+                                    </tr>
+                                    <tr className="bg-gray-100">
+                                        <th colSpan={3}></th>
+                                        <th className="px-4 py-1.5 text-right text-xs font-medium text-blue-600">Boxes</th>
+                                        <th className="px-4 py-1.5 text-right text-xs font-medium text-blue-600">PCS</th>
+                                        <th className="px-4 py-1.5 text-right text-xs font-medium text-green-600">Boxes</th>
+                                        <th className="px-4 py-1.5 text-right text-xs font-medium text-green-600">PCS</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
                                     {assignmentLog.map((entry) => (
                                         <tr key={entry.id} className="hover:bg-gray-50">
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
                                                 {entry.created_at ? new Date(entry.created_at).toLocaleTimeString() : '-'}
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap">
+                                            <td className="px-4 py-3 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900">{entry.route_name || '-'}</div>
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap">
+                                            <td className="px-4 py-3 whitespace-nowrap">
                                                 {entry.route_status === 'route is ended' ? (
                                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                                         route is ended
@@ -667,8 +674,28 @@ export const AssignStockPage: React.FC = () => {
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-semibold text-gray-900">{entry.total_boxes}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-semibold text-gray-900">{entry.total_pcs}</td>
+                                            {/* Initially Assigned */}
+                                            <td className="px-4 py-3 whitespace-nowrap text-right">
+                                                <div className="text-sm font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded inline-block">
+                                                    {entry.initial_boxes ?? entry.total_boxes}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-right">
+                                                <div className="text-sm font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded inline-block">
+                                                    {entry.initial_pcs ?? entry.total_pcs}
+                                                </div>
+                                            </td>
+                                            {/* Remaining Stock */}
+                                            <td className="px-4 py-3 whitespace-nowrap text-right">
+                                                <div className="text-sm font-semibold text-green-700 bg-green-50 px-2 py-1 rounded inline-block">
+                                                    {entry.total_boxes}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-right">
+                                                <div className="text-sm font-semibold text-green-700 bg-green-50 px-2 py-1 rounded inline-block">
+                                                    {entry.total_pcs}
+                                                </div>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
