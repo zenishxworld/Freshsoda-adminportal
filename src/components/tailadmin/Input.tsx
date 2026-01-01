@@ -11,8 +11,16 @@ export const Input: React.FC<InputProps> = ({
     error,
     helperText,
     className = '',
+    type,
     ...props
 }) => {
+    // Prevent scroll wheel from changing number inputs
+    const handleWheel = (e: React.WheelEvent<HTMLInputElement>) => {
+        if (type === 'number') {
+            e.currentTarget.blur();
+        }
+    };
+
     return (
         <div className="w-full">
             {label && (
@@ -21,10 +29,12 @@ export const Input: React.FC<InputProps> = ({
                 </label>
             )}
             <input
+                type={type}
                 className={`w-full px-4 py-2.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors ${error
-                        ? 'border-danger focus:ring-danger'
-                        : 'border-gray-300 hover:border-gray-400'
+                    ? 'border-danger focus:ring-danger'
+                    : 'border-gray-300 hover:border-gray-400'
                     } ${className}`}
+                onWheel={handleWheel}
                 {...props}
             />
             {error && <p className="mt-1 text-sm text-danger">{error}</p>}
