@@ -3,7 +3,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { Card } from '@/components/tailadmin/Card';
 import { Button } from '@/components/tailadmin/Button';
 import { Input } from '@/components/tailadmin/Input';
-import { Package, Calendar, AlertCircle } from 'lucide-react';
+import { Package, Calendar, AlertCircle, ChevronDown, Check } from 'lucide-react';
 import {
     getDrivers,
     getActiveRoutes,
@@ -22,6 +22,126 @@ interface AssignmentQuantity {
     boxQty: number;
     pcsQty: number;
 }
+
+// Custom Route Dropdown Component
+interface CustomRouteDropdownProps {
+    routes: RouteOption[];
+    selectedRoute: string;
+    onSelectRoute: (routeId: string) => void;
+    disabled?: boolean;
+}
+
+const CustomRouteDropdown: React.FC<CustomRouteDropdownProps> = ({
+    routes,
+    selectedRoute,
+    onSelectRoute,
+    disabled = false,
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen]);
+
+    const selectedRouteName = routes.find(r => r.id === selectedRoute)?.name;
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            {/* Dropdown Trigger */}
+            <button
+                type="button"
+                onClick={() => !disabled && setIsOpen(!isOpen)}
+                disabled={disabled}
+                className={`w-full px-4 py-3.5 text-base font-medium text-left bg-white border-2 rounded-xl shadow-sm transition-all duration-200 flex items-center justify-between ${disabled
+                        ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200'
+                        : isOpen
+                            ? 'border-primary ring-4 ring-primary/20 shadow-md'
+                            : 'border-gray-200 hover:border-primary/50 hover:shadow-md cursor-pointer'
+                    } ${selectedRoute ? 'text-gray-900' : 'text-gray-500'}`}
+            >
+                <span>{selectedRouteName || 'Choose a route to assign stock...'}</span>
+                <ChevronDown
+                    className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${isOpen ? 'transform rotate-180' : ''
+                        }`}
+                />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isOpen && !disabled && (
+                <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="max-h-80 overflow-y-auto">
+                        {/* Placeholder option */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                onSelectRoute('');
+                                setIsOpen(false);
+                            }}
+                            className={`w-full px-4 py-3 text-left text-base transition-colors duration-150 flex items-center justify-between ${!selectedRoute
+                                    ? 'bg-primary/10 text-primary font-semibold'
+                                    : 'text-gray-500 hover:bg-gray-50'
+                                }`}
+                        >
+                            <span>Choose a route to assign stock...</span>
+                            {!selectedRoute && <Check className="w-5 h-5 text-primary" />}
+                        </button>
+
+                        {/* Divider */}
+                        <div className="border-t border-gray-200"></div>
+
+                        {/* Route options */}
+                        {routes.length === 0 ? (
+                            <div className="px-4 py-6 text-center text-gray-500">
+                                No routes available
+                            </div>
+                        ) : (
+                            routes.map((route) => (
+                                <button
+                                    key={route.id}
+                                    type="button"
+                                    onClick={() => {
+                                        onSelectRoute(route.id);
+                                        setIsOpen(false);
+                                    }}
+                                    className={`w-full px-4 py-3 text-left text-base transition-all duration-150 flex items-center justify-between group ${selectedRoute === route.id
+                                            ? 'bg-primary/10 text-primary font-semibold'
+                                            : 'text-gray-900 hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 hover:text-primary'
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-3">
+                                        <div className={`w-2 h-2 rounded-full transition-colors ${selectedRoute === route.id
+                                                ? 'bg-primary'
+                                                : 'bg-gray-300 group-hover:bg-primary/50'
+                                            }`}></div>
+                                        {route.name}
+                                    </span>
+                                    {selectedRoute === route.id && (
+                                        <Check className="w-5 h-5 text-primary" />
+                                    )}
+                                </button>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 export const AssignStockPage: React.FC = () => {
     // Dropdown data
@@ -346,26 +466,32 @@ export const AssignStockPage: React.FC = () => {
                 <div className="lg:col-span-2 lg:order-1 space-y-6">
                     {/* Selection Card */}
                     <Card>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-6">
                             {/* Route Selection */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    <Package className="w-4 h-4 inline mr-1" />
-                                    Select Route *
+                            <div className="space-y-3">
+                                <label className="flex items-center gap-2 text-base font-semibold text-gray-800">
+                                    <div className="p-2 bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg">
+                                        <Package className="w-5 h-5 text-primary" />
+                                    </div>
+                                    <span>Select Route</span>
+                                    <span className="text-red-500">*</span>
                                 </label>
-                                <select
-                                    value={selectedRoute}
-                                    onChange={(e) => setSelectedRoute(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                <CustomRouteDropdown
+                                    routes={routes}
+                                    selectedRoute={selectedRoute}
+                                    onSelectRoute={setSelectedRoute}
                                     disabled={loading}
-                                >
-                                    <option value="">Choose route</option>
-                                    {routes.map(route => (
-                                        <option key={route.id} value={route.id}>
-                                            {route.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                />
+                                {selectedRoute && (
+                                    <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                                        <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        <span className="text-sm font-medium text-green-800">
+                                            Route selected: {routes.find(r => r.id === selectedRoute)?.name}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </Card>

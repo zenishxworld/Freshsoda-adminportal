@@ -3,9 +3,9 @@ import { Card } from '../../components/tailadmin/Card';
 import { Table } from '../../components/tailadmin/Table';
 import { Button } from '../../components/tailadmin/Button';
 import { Input } from '../../components/tailadmin/Input';
-import { Select } from '../../components/tailadmin/Select';
 import { Modal } from '../../components/tailadmin/Modal';
 import { Badge } from '../../components/tailadmin/Badge';
+import { CustomDropdown } from '../../components/tailadmin/CustomDropdown';
 import { useToast } from '@/hooks/use-toast';
 import { DollarSign, TrendingUp, Edit, Trash2, PieChart, RefreshCw, Plus, Download } from 'lucide-react';
 import { addExpense, deleteExpense, getExpenses, getExpenseSummary, updateExpense, getExpenseMovements, type Expense, type ExpenseMovement } from '@/lib/supabase';
@@ -235,7 +235,15 @@ export const ExpensesPage: React.FC = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <Input label="Date From" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
                         <Input label="Date To" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-                        <Select label="Category" value={category} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCategory(e.target.value)} options={[{ value: '', label: 'All Categories' }, ...categories.map(c => ({ value: c, label: c }))]} />
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                            <CustomDropdown
+                                options={[{ value: '', label: 'All Categories' }, ...categories.map(c => ({ value: c, label: c }))]}
+                                value={category}
+                                onChange={setCategory}
+                                placeholder="All Categories"
+                            />
+                        </div>
                         <Input label="Search" placeholder="Search note/category" value={search} onChange={(e) => setSearch(e.target.value)} />
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
@@ -266,7 +274,15 @@ export const ExpensesPage: React.FC = () => {
                 footer={<><Button variant="secondary" onClick={() => setIsAddOpen(false)}>Cancel</Button><Button variant="primary" onClick={handleAdd}>Save</Button></>}
             >
                 <div className="space-y-4">
-                    <Select label="Category" value={form.category} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm(f => ({ ...f, category: e.target.value }))} options={[{ value: '', label: 'Select category' }, ...categories.map(c => ({ value: c, label: c }))]} />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                        <CustomDropdown
+                            options={[{ value: '', label: 'Select category' }, ...categories.map(c => ({ value: c, label: c }))]}
+                            value={form.category}
+                            onChange={(value) => setForm(f => ({ ...f, category: value }))}
+                            placeholder="Select category"
+                        />
+                    </div>
                     <Input label="Amount" type="number" value={form.amount} onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))} />
                     <Input label="Date" type="date" value={form.date} onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
                     <Input label="Note" placeholder="Enter note" value={form.note} onChange={(e) => setForm(f => ({ ...f, note: e.target.value }))} />
@@ -280,7 +296,15 @@ export const ExpensesPage: React.FC = () => {
                 footer={<><Button variant="secondary" onClick={() => setIsEditOpen(false)}>Cancel</Button><Button variant="primary" onClick={handleEdit}>Save</Button></>}
             >
                 <div className="space-y-4">
-                    <Select label="Category" value={form.category} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm(f => ({ ...f, category: e.target.value }))} options={[{ value: '', label: 'Select category' }, ...categories.map(c => ({ value: c, label: c }))]} />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                        <CustomDropdown
+                            options={[{ value: '', label: 'Select category' }, ...categories.map(c => ({ value: c, label: c }))]}
+                            value={form.category}
+                            onChange={(value) => setForm(f => ({ ...f, category: value }))}
+                            placeholder="Select category"
+                        />
+                    </div>
                     <Input label="Amount" type="number" value={form.amount} onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))} />
                     <Input label="Date" type="date" value={form.date} onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
                     <Input label="Note" placeholder="Enter note" value={form.note} onChange={(e) => setForm(f => ({ ...f, note: e.target.value }))} />

@@ -4,6 +4,7 @@ import { Button } from '@/components/tailadmin/Button';
 import { Input } from '@/components/tailadmin/Input';
 import { Modal } from '@/components/tailadmin/Modal';
 import { Badge } from '@/components/tailadmin/Badge';
+import { CustomDropdown } from '@/components/tailadmin/CustomDropdown';
 import {
     getWarehouseStock,
     addWarehouseStock,
@@ -537,18 +538,12 @@ export const WarehouseStockPage: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Select Product
                         </label>
-                        <select
+                        <CustomDropdown
+                            options={[{ value: '', label: '-- Choose a product --' }, ...allProducts.map(p => ({ value: p.id, label: p.name }))]}
                             value={selectedProductId}
-                            onChange={(e) => setSelectedProductId(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                        >
-                            <option value="">-- Choose a product --</option>
-                            {allProducts.map((product) => (
-                                <option key={product.id} value={product.id}>
-                                    {product.name}
-                                </option>
-                            ))}
-                        </select>
+                            onChange={setSelectedProductId}
+                            placeholder="-- Choose a product --"
+                        />
                     </div>
 
                     <Input

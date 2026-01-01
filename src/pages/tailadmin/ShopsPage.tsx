@@ -4,6 +4,7 @@ import { Card } from '../../components/tailadmin/Card';
 import { Button } from '../../components/tailadmin/Button';
 import { Modal } from '../../components/tailadmin/Modal';
 import { Input } from '../../components/tailadmin/Input';
+import { CustomDropdown } from '../../components/tailadmin/CustomDropdown';
 import { Plus, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getAllShops, createShop, updateShop, getActiveRoutes, syncMissingShops, type Shop, type RouteOption } from '@/lib/supabase';
@@ -33,7 +34,7 @@ export const ShopsPage: React.FC = () => {
     const villages = useMemo(() => {
         const set = new Set<string>();
         shops.forEach(s => { if (s.village) set.add(s.village); });
-        return Array.from(set).sort((a,b)=>a.localeCompare(b));
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
     }, [shops]);
 
     const routeName = (id?: string | null) => routes.find(r => r.id === id)?.name || '';
@@ -69,8 +70,8 @@ export const ShopsPage: React.FC = () => {
                     <p className="text-gray-600 mt-1">Manage shops and customer information</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button 
-                        variant="outline" 
+                    <Button
+                        variant="outline"
                         onClick={async () => {
                             setSyncing(true);
                             try {
@@ -98,15 +99,19 @@ export const ShopsPage: React.FC = () => {
             {/* Filters */}
             <Card>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <Input placeholder="Search (name/phone/village)" value={search} onChange={e=>setSearch(e.target.value)} />
-                    <select value={villageFilter} onChange={e=>setVillageFilter(e.target.value)} className="px-3 py-2 border rounded-md">
-                        <option value="">All Villages</option>
-                        {villages.map(v => <option key={v} value={v}>{v}</option>)}
-                    </select>
-                    <select value={routeFilter} onChange={e=>setRouteFilter(e.target.value)} className="px-3 py-2 border rounded-md">
-                        <option value="">All Routes</option>
-                        {routes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                    </select>
+                    <Input placeholder="Search (name/phone/village)" value={search} onChange={e => setSearch(e.target.value)} />
+                    <CustomDropdown
+                        options={[{ value: '', label: 'All Villages' }, ...villages.map(v => ({ value: v, label: v }))]}
+                        value={villageFilter}
+                        onChange={setVillageFilter}
+                        placeholder="All Villages"
+                    />
+                    <CustomDropdown
+                        options={[{ value: '', label: 'All Routes' }, ...routes.map(r => ({ value: r.id, label: r.name }))]}
+                        value={routeFilter}
+                        onChange={setRouteFilter}
+                        placeholder="All Routes"
+                    />
                     <div className="flex gap-2">
                         <Button variant="outline" onClick={() => { setSearch(''); setVillageFilter(''); setRouteFilter(''); toast({ title: 'Info', description: 'Showing all shops' }); }}>Show All</Button>
                         <Button variant="outline" onClick={() => { setVillageFilter(''); setRouteFilter(''); }}>Clear Filters</Button>
@@ -180,16 +185,18 @@ export const ShopsPage: React.FC = () => {
                 }
             >
                 <div className="space-y-4">
-                    <Input label="Shop Name" placeholder="Enter shop name" value={form.name} onChange={(e) => setForm(f=>({ ...f, name: e.target.value }))} />
-                    <Input label="Phone" placeholder="Enter phone number" value={form.phone} onChange={(e) => setForm(f=>({ ...f, phone: e.target.value }))} />
-                    <Input label="Village" placeholder="Enter village" value={form.village} onChange={(e) => setForm(f=>({ ...f, village: e.target.value }))} />
-                    <Input label="Address" placeholder="Enter address" value={form.address} onChange={(e) => setForm(f=>({ ...f, address: e.target.value }))} />
+                    <Input label="Shop Name" placeholder="Enter shop name" value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} />
+                    <Input label="Phone" placeholder="Enter phone number" value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} />
+                    <Input label="Village" placeholder="Enter village" value={form.village} onChange={(e) => setForm(f => ({ ...f, village: e.target.value }))} />
+                    <Input label="Address" placeholder="Enter address" value={form.address} onChange={(e) => setForm(f => ({ ...f, address: e.target.value }))} />
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Route</label>
-                        <select value={form.route_id} onChange={e=>setForm(f=>({ ...f, route_id: e.target.value }))} className="w-full px-3 py-2 border rounded-md">
-                            <option value="">-- Optional --</option>
-                            {routes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                        </select>
+                        <CustomDropdown
+                            options={[{ value: '', label: '-- Optional --' }, ...routes.map(r => ({ value: r.id, label: r.name }))]}
+                            value={form.route_id}
+                            onChange={(value) => setForm(f => ({ ...f, route_id: value }))}
+                            placeholder="-- Optional --"
+                        />
                     </div>
                 </div>
             </Modal>
@@ -223,16 +230,18 @@ export const ShopsPage: React.FC = () => {
                 }
             >
                 <div className="space-y-4">
-                    <Input label="Shop Name" placeholder="Enter shop name" value={form.name} onChange={(e) => setForm(f=>({ ...f, name: e.target.value }))} />
-                    <Input label="Phone" placeholder="Enter phone number" value={form.phone} onChange={(e) => setForm(f=>({ ...f, phone: e.target.value }))} />
-                    <Input label="Village" placeholder="Enter village" value={form.village} onChange={(e) => setForm(f=>({ ...f, village: e.target.value }))} />
-                    <Input label="Address" placeholder="Enter address" value={form.address} onChange={(e) => setForm(f=>({ ...f, address: e.target.value }))} />
+                    <Input label="Shop Name" placeholder="Enter shop name" value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} />
+                    <Input label="Phone" placeholder="Enter phone number" value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} />
+                    <Input label="Village" placeholder="Enter village" value={form.village} onChange={(e) => setForm(f => ({ ...f, village: e.target.value }))} />
+                    <Input label="Address" placeholder="Enter address" value={form.address} onChange={(e) => setForm(f => ({ ...f, address: e.target.value }))} />
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Route</label>
-                        <select value={form.route_id} onChange={e=>setForm(f=>({ ...f, route_id: e.target.value }))} className="w-full px-3 py-2 border rounded-md">
-                            <option value="">-- Optional --</option>
-                            {routes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                        </select>
+                        <CustomDropdown
+                            options={[{ value: '', label: '-- Optional --' }, ...routes.map(r => ({ value: r.id, label: r.name }))]}
+                            value={form.route_id}
+                            onChange={(value) => setForm(f => ({ ...f, route_id: value }))}
+                            placeholder="-- Optional --"
+                        />
                     </div>
                 </div>
             </Modal>
