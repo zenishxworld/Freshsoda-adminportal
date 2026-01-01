@@ -38,11 +38,19 @@ import {
   ArrowLeft,
   BarChart3,
   Printer,
-  Calendar,
+  Calendar as CalendarIcon,
   TrendingUp,
   Package,
   DollarSign,
 } from "lucide-react";
+import { format } from "date-fns";
+import { Calendar } from "../../components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../../components/ui/popover";
+import { cn } from "../../lib/utils";
 import { useAuth } from "../../contexts/AuthContext";
 
 interface RouteOption {
@@ -107,8 +115,8 @@ const Summary = () => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0]
+  const [selectedDate, setSelectedDate] = useState<string>(
+    format(new Date(), "yyyy-MM-dd")
   );
   const [selectedRoute, setSelectedRoute] = useState("");
   const [routes, setRoutes] = useState<RouteOption[]>([]);
@@ -454,7 +462,7 @@ const Summary = () => {
     if (!showSummary || !hasAssignedStock || !selectedRoute || !selectedDate)
       return;
 
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = format(new Date(), "yyyy-MM-dd");
     if (selectedDate < todayStr) {
       console.log("Auto LoadOut -> Past day detected, finalizing immediately", {
         route_id: selectedRoute,
@@ -618,16 +626,40 @@ const Summary = () => {
                 {/* Date Selection */}
                 <div className="space-y-2">
                   <Label className="text-sm sm:text-base font-semibold flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
+                    <CalendarIcon className="w-4 h-4" />
                     Select Date
                   </Label>
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    max={new Date().toISOString().split("T")[0]}
-                    className="w-full h-11 sm:h-10 px-3 text-base rounded-md border border-input bg-background ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "w-full h-11 sm:h-10 justify-start text-left font-normal",
+                          !selectedDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {selectedDate ? (
+                          format(new Date(selectedDate + "T00:00:00"), "PPP")
+                        ) : (
+                          <span>Pick a date</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={new Date(selectedDate + "T00:00:00")}
+                        onSelect={(date) =>
+                          date && setSelectedDate(format(date, "yyyy-MM-dd"))
+                        }
+                        disabled={(date) =>
+                          date > new Date() || date < new Date("1900-01-01")
+                        }
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
                 {/* Route Selection */}

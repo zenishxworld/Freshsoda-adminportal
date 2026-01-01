@@ -56,3 +56,18 @@ SELECT SUM(boxes) AS total_boxes, SUM(pcs) AS total_pcs FROM public.warehouse_st
   ```sql
   DELETE FROM public.trucks;
   ```
+
+
+
+  -- WARNING: THIS WILL DELETE ALL DATA FROM SALES AND SHOPS TABLES
+-- THIS CANNOT BE UNDONE.
+
+-- 1. Delete all sales first (because sales reference shops)
+TRUNCATE TABLE sales CASCADE;
+
+-- 2. Delete all shops
+TRUNCATE TABLE shops CASCADE;
+
+-- 3. (Optional) If you want to reset the auto-increment counters (if any), use RESTART IDENTITY
+-- TRUNCATE TABLE sales RESTART IDENTITY CASCADE;
+-- TRUNCATE TABLE shops RESTART IDENTITY CASCADE;

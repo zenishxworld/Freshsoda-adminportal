@@ -367,23 +367,6 @@ export const AssignStockPage: React.FC = () => {
                                     ))}
                                 </select>
                             </div>
-
-                            {/* Spacer */}
-                            <div></div>
-
-                            {/* Date Selection */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    <Calendar className="w-4 h-4 inline mr-1" />
-                                    Date *
-                                </label>
-                                <Input
-                                    type="date"
-                                    value={selectedDate}
-                                    onChange={(e) => setSelectedDate(e.target.value)}
-                                    disabled={loading}
-                                />
-                            </div>
                         </div>
                     </Card>
 
