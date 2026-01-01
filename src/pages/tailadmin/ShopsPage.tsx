@@ -4,9 +4,9 @@ import { Card } from '../../components/tailadmin/Card';
 import { Button } from '../../components/tailadmin/Button';
 import { Modal } from '../../components/tailadmin/Modal';
 import { Input } from '../../components/tailadmin/Input';
-import { Plus } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getAllShops, createShop, updateShop, getActiveRoutes, type Shop, type RouteOption } from '@/lib/supabase';
+import { getAllShops, createShop, updateShop, getActiveRoutes, syncMissingShops, type Shop, type RouteOption } from '@/lib/supabase';
 
 export const ShopsPage: React.FC = () => {
     const { toast } = useToast();
@@ -14,6 +14,7 @@ export const ShopsPage: React.FC = () => {
     const [shops, setShops] = useState<Shop[]>([]);
     const [routes, setRoutes] = useState<RouteOption[]>([]);
     const [loading, setLoading] = useState(false);
+    const [syncing, setSyncing] = useState(false);
     const [search, setSearch] = useState('');
     const [villageFilter, setVillageFilter] = useState('');
     const [routeFilter, setRouteFilter] = useState('');
@@ -67,10 +68,31 @@ export const ShopsPage: React.FC = () => {
                     <h1 className="text-3xl font-bold text-gray-900">Shop Directory</h1>
                     <p className="text-gray-600 mt-1">Manage shops and customer information</p>
                 </div>
-                <Button variant="primary" onClick={() => { setForm({ name: '', phone: '', village: '', address: '', route_id: '' }); setIsAddOpen(true); }}>
-                    <Plus className="w-5 h-5 mr-2" />
-                    Add Shop
-                </Button>
+                <div className="flex gap-2">
+                    <Button 
+                        variant="outline" 
+                        onClick={async () => {
+                            setSyncing(true);
+                            try {
+                                const { total, fixed } = await syncMissingShops();
+                                toast({ title: 'Sync Complete', description: `Scanned ${total} sales. Linked/Created ${fixed} shops.` });
+                                load();
+                            } catch (e: any) {
+                                toast({ title: 'Sync Failed', description: e.message, variant: 'destructive' });
+                            } finally {
+                                setSyncing(false);
+                            }
+                        }}
+                        disabled={syncing}
+                    >
+                        <RefreshCw className={`w-5 h-5 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                        {syncing ? 'Syncing...' : 'Sync from Sales'}
+                    </Button>
+                    <Button variant="primary" onClick={() => { setForm({ name: '', phone: '', village: '', address: '', route_id: '' }); setIsAddOpen(true); }}>
+                        <Plus className="w-5 h-5 mr-2" />
+                        Add Shop
+                    </Button>
+                </div>
             </div>
 
             {/* Filters */}

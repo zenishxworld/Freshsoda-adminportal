@@ -1813,7 +1813,7 @@ export const getAllShops = async (
     village?: string,
     routeId?: string
 ): Promise<Shop[]> => {
-    const buildQuery = (includeVillage: boolean) => {
+    const buildQuery = (includeVillage: boolean, includeRouteId: boolean) => {
         let q = supabase
             .from('shops')
             .select('*')
@@ -1829,29 +1829,30 @@ export const getAllShops = async (
         if (includeVillage && village && village.trim()) {
             q = q.ilike('village', `%${village.trim()}%`);
         }
-        if (routeId && routeId.trim()) {
+        if (includeRouteId && routeId && routeId.trim()) {
             q = q.eq('route_id', routeId.trim());
         }
         return q;
     };
 
-    // First attempt including 'village' column
-    let { data, error } = await buildQuery(true);
-    // Fallback if column doesn't exist
-    if (error && (error.code === '42703' || /column\s+shops\.village\s+does\s+not\s+exist/i.test(error.message || ''))) {
-        const res = await buildQuery(false);
-        const { data: data2, error: err2 } = await res;
-        if (err2) {
-            console.error('Error fetching shops (fallback):', err2);
-            throw new Error('Failed to fetch shops. Please try again.');
-        }
-        return data2 || [];
+    // Try combinations of columns
+    let result = await buildQuery(true, true);
+    if (result.error && /column.*village/i.test(result.error.message)) {
+        result = await buildQuery(false, true);
     }
-    if (error) {
-        console.error('Error fetching shops:', error);
+    if (result.error && /column.*route_id/i.test(result.error.message)) {
+        result = await buildQuery(true, false);
+    }
+    // Final fallback: both missing
+    if (result.error && (/column.*village/i.test(result.error.message) || /column.*route_id/i.test(result.error.message))) {
+        result = await buildQuery(false, false);
+    }
+
+    if (result.error) {
+        console.error('Error fetching shops:', result.error);
         throw new Error('Failed to fetch shops. Please try again.');
     }
-    return data || [];
+    return result.data || [];
 };
 
 export const createShop = async (shopData: {
@@ -1896,26 +1897,77 @@ export const createShop = async (shopData: {
         updated_at: now,
     };
 
+    console.log('createShop: Attempting to insert:', payload);
     const { data, error } = await supabase
         .from('shops')
         .insert(payload)
         .select()
         .single();
-    if (error && (error.code === '42703' || /column\s+shops\.village\s+does\s+not\s+exist/i.test(error.message || ''))) {
-        const { village, ...withoutVillage } = payload as Record<string, unknown>;
-        const { data: data2, error: err2 } = await supabase
+    
+    // Expanded check for missing column errors
+    const isColumnError = error && (
+        error.code === '42703' || 
+        error.code === 'PGRST204' || 
+        /column.*(village|route_id)/i.test(error.message || '') ||
+        /Could not find the.*column/i.test(error.message || '')
+    );
+
+    if (isColumnError) {
+        console.warn('createShop: Missing column detected, retrying with fallbacks. Error:', error);
+        
+        // STAGE 2: Try without Route/Village, but WITH Timestamps
+        const { village, route_id, ...fallbackPayload2 } = payload as any;
+        console.log('createShop: Fallback Stage 2:', fallbackPayload2);
+        
+        const { data: data2, error: error2 } = await supabase
             .from('shops')
-            .insert(withoutVillage)
+            .insert(fallbackPayload2)
             .select()
             .single();
-        if (err2) {
-            console.error('Error creating shop (fallback):', err2);
-            throw new Error('Failed to create shop. Please try again.');
+            
+        if (!error2 && data2) return data2 as Shop;
+
+        // Check for timestamp errors
+        const isTimestampError = error2 && (
+            error2.code === '42703' || 
+            error2.code === 'PGRST204' || 
+            /column/i.test(error2.message || '')
+        );
+
+        if (isTimestampError) {
+             // STAGE 3: Try without UpdatedAt
+            const { updated_at, ...fallbackPayload3 } = fallbackPayload2;
+            console.log('createShop: Fallback Stage 3:', fallbackPayload3);
+            const { data: data3, error: error3 } = await supabase
+                .from('shops')
+                .insert(fallbackPayload3)
+                .select()
+                .single();
+
+            if (!error3 && data3) return data3 as Shop;
+
+            // STAGE 4: Minimal
+            const { created_at, ...minimalPayload } = fallbackPayload3;
+            console.log('createShop: Fallback Stage 4:', minimalPayload);
+            const { data: data4, error: error4 } = await supabase
+                .from('shops')
+                .insert(minimalPayload)
+                .select()
+                .single();
+
+            if (!error4 && data4) return data4 as Shop;
+
+            if (error4) {
+                console.error('createShop: All fallbacks failed:', error4);
+                throw new Error('Failed to create shop. Please try again.');
+            }
+        } else if (error2) {
+             console.error('createShop: Fallback failed:', error2);
+             throw new Error('Failed to create shop. Please try again.');
         }
-        return data2 as Shop;
     }
     if (error) {
-        console.error('Error creating shop:', error);
+        console.error('createShop: Error creating shop:', error);
         throw new Error('Failed to create shop. Please try again.');
     }
     return data as Shop;
@@ -1952,29 +2004,80 @@ export const updateShop = async (
         }
     }
 
+    console.log('updateShop: Attempting update:', payload);
     const { data, error } = await supabase
         .from('shops')
         .update(payload)
         .eq('id', id)
         .select()
         .single();
-    if (error && (error.code === '42703' || /column\s+shops\.village\s+does\s+not\s+exist/i.test(error.message || ''))) {
-        // Retry without village field
-        const { village, ...withoutVillage } = payload as Record<string, unknown>;
-        const { data: data2, error: err2 } = await supabase
+    
+    // Expanded check for missing column errors
+    const isColumnError = error && (
+        error.code === '42703' || 
+        error.code === 'PGRST204' || 
+        /column.*(village|route_id)/i.test(error.message || '') ||
+        /Could not find the.*column/i.test(error.message || '')
+    );
+
+    if (isColumnError) {
+        console.warn('updateShop: Missing column detected, retrying with fallbacks. Error:', error);
+        
+        // STAGE 2: Try without Route/Village, but WITH Timestamps
+        const { village, route_id, ...fallbackPayload2 } = payload as any;
+        console.log('updateShop: Fallback Stage 2:', fallbackPayload2);
+        
+        const { data: data2, error: error2 } = await supabase
             .from('shops')
-            .update(withoutVillage)
+            .update(fallbackPayload2)
             .eq('id', id)
             .select()
             .single();
-        if (err2) {
-            console.error('Error updating shop (fallback):', err2);
-            throw new Error('Failed to update shop. Please try again.');
+        if (!error2 && data2) return data2 as Shop;
+
+        // Check for timestamp errors
+        const isTimestampError = error2 && (
+            error2.code === '42703' || 
+            error2.code === 'PGRST204' || 
+            /column/i.test(error2.message || '')
+        );
+
+        if (isTimestampError) {
+             // STAGE 3: Try without UpdatedAt
+            const { updated_at, ...fallbackPayload3 } = fallbackPayload2;
+            console.log('updateShop: Fallback Stage 3:', fallbackPayload3);
+            const { data: data3, error: error3 } = await supabase
+                .from('shops')
+                .update(fallbackPayload3)
+                .eq('id', id)
+                .select()
+                .single();
+
+            if (!error3 && data3) return data3 as Shop;
+
+            // STAGE 4: Minimal
+            const { created_at, ...minimalPayload } = fallbackPayload3;
+            console.log('updateShop: Fallback Stage 4:', minimalPayload);
+            const { data: data4, error: error4 } = await supabase
+                .from('shops')
+                .update(minimalPayload)
+                .eq('id', id)
+                .select()
+                .single();
+
+            if (!error4 && data4) return data4 as Shop;
+
+            if (error4) {
+                console.error('updateShop: All fallbacks failed:', error4);
+                throw new Error('Failed to update shop. Please try again.');
+            }
+        } else if (error2) {
+             console.error('updateShop: Fallback failed:', error2);
+             throw new Error('Failed to update shop. Please try again.');
         }
-        return data2 as Shop;
     }
     if (error) {
-        console.error('Error updating shop:', error);
+        console.error('updateShop: Error updating shop:', error);
         throw new Error('Failed to update shop. Please try again.');
     }
     return data as Shop;
@@ -2090,81 +2193,269 @@ export const ensureShopExists = async (
     name: string,
     phone?: string,
     address?: string,
-    routeId?: string
+    routeId?: string,
+    village?: string
 ): Promise<string> => {
     const trimmedName = name.trim();
-    const trimmedPhone = phone?.trim();
-
-    // 1. Check by PHONE first (Primary Unique Identifier)
-    if (trimmedPhone) {
-        const { data: existingByPhone, error: phoneError } = await supabase
-            .from('shops')
-            .select('id')
-            .eq('phone', trimmedPhone)
-            .limit(1);
-
-        if (!phoneError && existingByPhone && existingByPhone.length > 0) {
-            return existingByPhone[0].id;
-        }
+    if (!trimmedName) {
+        throw new Error('Shop name cannot be empty');
     }
 
-    // 2. Fallback: If no phone provided, check by NAME
-    if (!trimmedPhone) {
-        const { data: existingByName, error: nameError } = await supabase
+    // Try to find an existing shop with the same name
+    // We try to select id first, and handle other columns carefully
+    let existingShop: any = null;
+    try {
+        const { data, error } = await supabase
             .from('shops')
-            .select('id')
-            .ilike('name', trimmedName)
-            .limit(1);
-
-        if (!nameError && existingByName && existingByName.length > 0) {
-            return existingByName[0].id;
+            .select('id, phone, address')
+            .eq('name', trimmedName)
+            .maybeSingle();
+        
+        if (!error && data) {
+            existingShop = data;
+            // Try to get village separately in case it doesn't exist
+            try {
+                const { data: vData } = await supabase.from('shops').select('village').eq('id', data.id).single();
+                if (vData) existingShop.village = vData.village;
+            } catch (ve) {}
         }
+    } catch (e) {
+        console.error('Error checking for existing shop:', e);
     }
 
-    // 3. Create new shop
-    // Only include fields that exist in the shops table schema
+    if (existingShop) {
+        // Shop exists, check if we need to update it with missing details
+        const updates: any = {};
+        if (phone && !existingShop.phone) updates.phone = phone;
+        if (address && !existingShop.address) updates.address = address;
+        
+        // Only update village if we have it and it's missing
+        if (village && !existingShop.village) {
+            try {
+                await supabase.from('shops').update({ village }).eq('id', existingShop.id);
+            } catch (ve) {
+                // If village column doesn't exist, this will fail silently
+            }
+        }
+
+        if (Object.keys(updates).length > 0) {
+            await supabase.from('shops').update(updates).eq('id', existingShop.id);
+        }
+
+        return existingShop.id;
+    }
+
+    // If shop does not exist, create it
+    const now = new Date().toISOString();
     const payload: any = {
         name: trimmedName,
-        phone: trimmedPhone || null,
-        address: address?.trim() || null,
+        phone: phone || null,
+        address: address || null,
+        route_id: routeId || null,
+        created_at: now,
+        updated_at: now,
     };
 
-    // Try to include village if it exists in schema
-    const payloadWithVillage = {
-        ...payload,
-        village: address?.trim() || null,
-    };
+    // Try to include village
+    const payloadWithVillage = { ...payload, village: village || null };
 
-    let data, error;
-
-    // First try with village field
-    const result1 = await supabase
-        .from('shops')
-        .insert(payloadWithVillage)
-        .select('id')
-        .single();
-
-    data = result1.data;
-    error = result1.error;
-
-    // If village column doesn't exist, try without it
-    if (error && (error.code === '42703' || /column.*village.*does\s+not\s+exist/i.test(error.message || ''))) {
-        const result2 = await supabase
+    try {
+        console.log('ensureShopExists: Attempting to create shop with payload:', payloadWithVillage);
+        const { data, error } = await supabase
             .from('shops')
-            .insert(payload)
+            .insert(payloadWithVillage)
             .select('id')
             .single();
+        
+        if (!error && data) return data.id;
+        
+        console.error('ensureShopExists: Initial insert failed:', error);
 
-        data = result2.data;
-        error = result2.error;
-    }
+        // Check for missing column errors (village or route_id)
+        // Expanded check to catch any PGRST error or 42* code that mentions columns
+        const isColumnError = error && (
+            error.code === '42703' || 
+            error.code === 'PGRST204' || 
+            /column.*(village|route_id)/i.test(error.message || '') ||
+            /Could not find the.*column/i.test(error.message || '')
+        );
 
-    if (error) {
-        console.error('Error creating shop in ensureShopExists:', error);
+        if (isColumnError) {
+            console.log('ensureShopExists: Detected missing column error, attempting fallback sequence');
+            
+            // STAGE 2: Try without Route/Village, but WITH Timestamps
+            const fallbackPayload2 = {
+                name: trimmedName,
+                phone: phone || null,
+                address: address || null,
+                created_at: now,
+                updated_at: now,
+            };
+
+            console.log('ensureShopExists: Fallback Stage 2 (No Route/Village, With Timestamps):', fallbackPayload2);
+            const { data: data2, error: error2 } = await supabase
+                .from('shops')
+                .insert(fallbackPayload2)
+                .select('id')
+                .single();
+                
+            if (!error2 && data2) return data2.id;
+            
+            // Check if error2 is about updated_at or created_at
+            // Broader check: if it's a schema/column error, try next stage
+            const isTimestampError = error2 && (
+                error2.code === '42703' || 
+                error2.code === 'PGRST204' || 
+                /column/i.test(error2.message || '')
+            );
+
+            if (isTimestampError) {
+                console.log('ensureShopExists: Timestamp column missing, trying fallback Stage 3');
+                
+                // STAGE 3: Try without UpdatedAt, but WITH CreatedAt
+                 const fallbackPayload3 = {
+                    name: trimmedName,
+                    phone: phone || null,
+                    address: address || null,
+                    created_at: now,
+                };
+                console.log('ensureShopExists: Fallback Stage 3 (No UpdatedAt, With CreatedAt):', fallbackPayload3);
+                const { data: data3, error: error3 } = await supabase
+                    .from('shops')
+                    .insert(fallbackPayload3)
+                    .select('id')
+                    .single();
+
+                if (!error3 && data3) return data3.id;
+                
+                // If Stage 3 failed, check if it's because of created_at
+                const isCreatedAtError = error3 && (
+                    error3.code === '42703' || 
+                    error3.code === 'PGRST204' || 
+                    /column/i.test(error3.message || '')
+                );
+
+                if (isCreatedAtError || error3) {
+                     // STAGE 4: Minimal (No Timestamps)
+                    // If Stage 3 failed, try bare minimum
+                    const minimalPayload = {
+                        name: trimmedName,
+                        phone: phone || null,
+                        address: address || null,
+                    };
+                    console.log('ensureShopExists: Fallback Stage 4 (Minimal):', minimalPayload);
+                    const { data: data4, error: error4 } = await supabase
+                        .from('shops')
+                        .insert(minimalPayload)
+                        .select('id')
+                        .single();
+                    
+                    console.log('ensureShopExists: Stage 4 result:', { data4, error4 });
+
+                    if (!error4 && data4) return data4.id;
+
+                    if (error4) {
+                        console.error('ensureShopExists: All fallbacks failed. Last error:', error4);
+                        throw error4;
+                    }
+                }
+            } else if (error2) {
+                 console.error('ensureShopExists: Fallback Stage 2 failed:', error2);
+                 throw error2;
+            }
+        } else if (error) {
+            throw error;
+        }
+    } catch (e) {
+        console.error('ensureShopExists: Unexpected error:', e);
         throw new Error('Failed to create shop');
     }
 
-    return data!.id;
+    throw new Error('Failed to create shop');
+};
+
+/**
+ * Sync missing shops from sales history
+ * Scans all sales and ensures a corresponding shop record exists
+ */
+export const syncMissingShops = async (): Promise<{ total: number; fixed: number }> => {
+    console.log('Starting shop sync...');
+    
+    // Log current session for debugging RLS
+    const { data: sessionData } = await supabase.auth.getSession();
+    console.log('syncMissingShops: Current user:', sessionData?.session?.user?.id || 'No user');
+    console.log('syncMissingShops: Current role:', sessionData?.session?.user?.role || 'No role');
+
+    const { data: sales, error } = await supabase
+        .from('sales')
+        .select('*')
+        .is('shop_id', null); // Only check sales missing shop_id link
+
+    if (error) {
+        console.error('Error fetching sales for sync:', error);
+        throw new Error('Failed to fetch sales history');
+    }
+
+    if (!sales || sales.length === 0) {
+        console.log('No sales found without shop_id');
+        return { total: 0, fixed: 0 };
+    }
+
+    console.log(`Found ${sales.length} sales without shop_id`);
+    let fixedCount = 0;
+
+    for (const sale of sales) {
+        try {
+            // Extract shop info
+            const shopName = sale.shop_name;
+            let shopPhone: string | undefined;
+            let shopAddress: string | undefined;
+            let village: string | undefined;
+
+            if (sale.products_sold && !Array.isArray(sale.products_sold)) {
+                shopPhone = sale.products_sold.shop_phone;
+                shopAddress = sale.products_sold.shop_address;
+                village = sale.products_sold.village;
+            }
+
+            if (!shopName) {
+                console.log(`Sale ${sale.id} has no shop_name, skipping`);
+                continue;
+            }
+
+            console.log(`Syncing shop: "${shopName}" for sale ${sale.id}`);
+
+            // Create/Find shop
+            // We pass route_id from the sale to ensure correct association
+            const shopId = await ensureShopExists(
+                shopName,
+                shopPhone,
+                shopAddress,
+                sale.route_id,
+                village
+            );
+
+            if (shopId) {
+                console.log(`Linking sale ${sale.id} to shopId ${shopId}`);
+                // Update sale with shop_id
+                const { error: updateError } = await supabase
+                    .from('sales')
+                    .update({ shop_id: shopId })
+                    .eq('id', sale.id);
+
+                if (!updateError) {
+                    fixedCount++;
+                } else {
+                    console.error(`Failed to update sale ${sale.id} with shopId ${shopId}:`, updateError);
+                }
+            }
+        } catch (e) {
+            console.error(`Failed to sync shop for sale ${sale.id}:`, e);
+        }
+    }
+
+    console.log(`Sync complete. Fixed ${fixedCount} out of ${sales.length} sales.`);
+    return { total: sales.length, fixed: fixedCount };
 };
 
 /**
@@ -2182,13 +2473,15 @@ export const saveSale = async (salePayload: {
     const uid = session?.session?.user?.id || null;
 
     // Extract shop details from products_sold if available
-    // products_sold can be array or object { items, shop_address, shop_phone }
+    // products_sold can be array or object { items, shop_address, shop_phone, village }
     let shopPhone: string | undefined;
     let shopAddress: string | undefined;
+    let village: string | undefined;
 
     if (salePayload.products_sold && !Array.isArray(salePayload.products_sold)) {
         shopPhone = salePayload.products_sold.shop_phone;
         shopAddress = salePayload.products_sold.shop_address;
+        village = salePayload.products_sold.village;
     }
 
     // Ensure shop exists and get ID
@@ -2198,7 +2491,8 @@ export const saveSale = async (salePayload: {
             salePayload.shop_name,
             shopPhone,
             shopAddress,
-            salePayload.route_id
+            salePayload.route_id,
+            village
         );
     } catch (e) {
         console.error("Failed to ensure shop exists, proceeding without shop_id:", e);
@@ -2248,10 +2542,12 @@ export const saveSaleWithInvoice = async (salePayload: {
     // Extract shop details from products_sold if available
     let shopPhone: string | undefined;
     let shopAddress: string | undefined;
+    let village: string | undefined;
 
     if (salePayload.products_sold && !Array.isArray(salePayload.products_sold)) {
         shopPhone = salePayload.products_sold.shop_phone;
         shopAddress = salePayload.products_sold.shop_address;
+        village = salePayload.products_sold.village;
     }
 
     // Ensure shop exists and get ID
@@ -2261,7 +2557,8 @@ export const saveSaleWithInvoice = async (salePayload: {
             salePayload.shop_name,
             shopPhone,
             shopAddress,
-            salePayload.route_id
+            salePayload.route_id,
+            village
         );
     } catch (e) {
         console.error("Failed to ensure shop exists, proceeding without shop_id:", e);
