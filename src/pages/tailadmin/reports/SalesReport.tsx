@@ -3,6 +3,7 @@ import { Card } from '../../../components/tailadmin/Card';
 import { Table } from '../../../components/tailadmin/Table';
 import { Button } from '../../../components/tailadmin/Button';
 import { Input } from '../../../components/tailadmin/Input';
+import { DatePicker } from '../../../components/tailadmin/DatePicker';
 import { RefreshCw, Download } from 'lucide-react';
 import { buildSalesReport, exportCsv, type SalesReportRow } from '../../../lib/reports';
 
@@ -41,7 +42,7 @@ export const SalesReport: React.FC = () => {
   const reset = () => { setFrom(''); setTo(''); setRows([]); };
 
   const onExport = () => {
-    const headers = ['Date','Driver','Route','Shop','InvoiceID','SoldPCS','ReturnedPCS','Amount'];
+    const headers = ['Date', 'Driver', 'Route', 'Shop', 'InvoiceID', 'SoldPCS', 'ReturnedPCS', 'Amount'];
     const csv = exportCsv(headers, rows.map(r => ({
       Date: r.date,
       Driver: r.driver_name,
@@ -65,8 +66,8 @@ export const SalesReport: React.FC = () => {
     <div className="space-y-6">
       <Card>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Input label="From Date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          <Input label="To Date" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DatePicker label="From Date" value={from} onChange={setFrom} />
+          <DatePicker label="To Date" value={to} onChange={setTo} />
           <div className="flex items-end gap-2">
             <Button variant="primary" onClick={load} disabled={!from || !to || loading}>{loading ? 'Loading...' : 'Filter'}</Button>
             <Button variant="outline" onClick={onExport} disabled={rows.length === 0}><Download className="w-4 h-4 mr-2" />Export</Button>
@@ -76,7 +77,7 @@ export const SalesReport: React.FC = () => {
       </Card>
 
       <Card>
-        <Table columns={columns} data={rows.map(r => ({...r, amount: r.amount.toFixed(2)}))} />
+        <Table columns={columns} data={rows.map(r => ({ ...r, amount: r.amount.toFixed(2) }))} />
       </Card>
     </div>
   );

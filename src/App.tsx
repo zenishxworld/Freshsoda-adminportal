@@ -18,6 +18,7 @@ import { ExpensesPage } from './pages/tailadmin/ExpensesPage';
 import { ReportsPage } from './pages/tailadmin/ReportsPage';
 import { SettingsPage } from './pages/tailadmin/SettingsPage';
 import { ManageProductsPage } from './pages/tailadmin/ManageProductsPage';
+import { NotificationsPage } from './pages/tailadmin/NotificationsPage';
 import EndRouteApprovalPage from './pages/tailadmin/EndRouteApprovalPage';
 
 // Driver Pages
@@ -93,6 +94,7 @@ function AppRoutes() {
                 <Route path="/shops" element={<ShopsPage />} />
                 <Route path="/expenses" element={<ExpensesPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/end-route" element={<EndRouteApprovalPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Routes>
