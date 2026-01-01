@@ -4,6 +4,7 @@ import { Button } from '../../components/tailadmin/Button';
 import { Input } from '../../components/tailadmin/Input';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserProfile, updateUserProfile, type UserProfile } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 export const SettingsPage: React.FC = () => {
@@ -13,6 +14,14 @@ export const SettingsPage: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [profile, setProfile] = useState<{ firstName: string; lastName: string; email: string; phone: string }>({ firstName: '', lastName: '', email: '', phone: '' });
+
+    // Password change state
+    const [passwordForm, setPasswordForm] = useState({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+    });
+    const [changingPassword, setChangingPassword] = useState(false);
 
     useEffect(() => {
         const load = async () => {
@@ -38,6 +47,41 @@ export const SettingsPage: React.FC = () => {
         load();
     }, [user?.id, user?.email]);
 
+    const handlePasswordChange = async () => {
+        // Validation
+        if (!passwordForm.newPassword || !passwordForm.confirmPassword) {
+            toast({ title: 'Error', description: 'Please fill in all password fields', variant: 'destructive' });
+            return;
+        }
+
+        if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+            toast({ title: 'Error', description: 'New passwords do not match', variant: 'destructive' });
+            return;
+        }
+
+        if (passwordForm.newPassword.length < 6) {
+            toast({ title: 'Error', description: 'Password must be at least 6 characters', variant: 'destructive' });
+            return;
+        }
+
+        setChangingPassword(true);
+        try {
+            const { error } = await supabase.auth.updateUser({
+                password: passwordForm.newPassword
+            });
+
+            if (error) throw error;
+
+            toast({ title: 'Success', description: 'Password updated successfully' });
+            setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to update password';
+            toast({ title: 'Error', description: msg, variant: 'destructive' });
+        } finally {
+            setChangingPassword(false);
+        }
+    };
+
     const tabs = [
         { id: 'profile', label: 'Profile' },
         { id: 'password', label: 'Change Password' },
@@ -60,8 +104,8 @@ export const SettingsPage: React.FC = () => {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === tab.id
-                                        ? 'border-primary text-primary'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                     }`}
                             >
                                 {tab.label}
@@ -131,17 +175,40 @@ export const SettingsPage: React.FC = () => {
 
                     {activeTab === 'password' && (
                         <div className="space-y-6 max-w-2xl">
-                            <Input label="Current Password" type="password" placeholder="Enter current password" />
-                            <Input label="New Password" type="password" placeholder="Enter new password" />
-                            <Input label="Confirm New Password" type="password" placeholder="Confirm new password" />
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <p className="text-sm text-blue-800">
+                                    <strong>Note:</strong> Your password must be at least 6 characters long.
+                                </p>
+                            </div>
+
+                            <Input
+                                label="New Password"
+                                type="password"
+                                placeholder="Enter new password"
+                                value={passwordForm.newPassword}
+                                onChange={(e) => setPasswordForm(p => ({ ...p, newPassword: e.target.value }))}
+                            />
+                            <Input
+                                label="Confirm New Password"
+                                type="password"
+                                placeholder="Confirm new password"
+                                value={passwordForm.confirmPassword}
+                                onChange={(e) => setPasswordForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                            />
 
                             <div className="flex justify-end">
-                                <Button variant="primary">Update Password</Button>
+                                <Button
+                                    variant="primary"
+                                    onClick={handlePasswordChange}
+                                    disabled={changingPassword}
+                                >
+                                    {changingPassword ? 'Updating...' : 'Update Password'}
+                                </Button>
                             </div>
                         </div>
                     )}
 
-                    
+
                 </div>
             </Card>
         </div>
