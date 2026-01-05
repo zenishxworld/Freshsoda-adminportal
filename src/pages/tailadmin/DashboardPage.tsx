@@ -211,25 +211,44 @@ export const DashboardPage: React.FC = () => {
   );
   type LowRow = { name: string; boxes: number; pcs: number; threshold: number };
   const lowStockColumns = [
-    { key: "name", header: "Product Name" },
+    {
+      key: "name",
+      header: "Product Name",
+      render: (_: unknown, row: LowRow) => (
+        <span className="font-medium text-gray-900">{row.name}</span>
+      )
+    },
     {
       key: "available",
       header: "Available (boxes/pcs)",
       render: (_: unknown, row: LowRow) => (
-        <span>
-          {row.boxes} boxes / {row.pcs} pcs
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="bg-blue-50 text-blue-700 font-medium px-2.5 py-1 rounded text-sm whitespace-nowrap border border-blue-100">
+            {row.boxes} Boxes
+          </span>
+          <span className="bg-blue-50 text-blue-700 font-medium px-2.5 py-1 rounded text-sm whitespace-nowrap border border-blue-100">
+            {row.pcs} PCS
+          </span>
+        </div>
       ),
     },
     {
       key: "threshold",
       header: "Threshold",
-      render: (_: unknown, row: LowRow) => <span>{row.threshold} pcs</span>,
+      render: (_: unknown, row: LowRow) => <span className="font-semibold text-gray-700">{row.threshold} pcs</span>,
     },
     {
       key: "status",
       header: "Status",
-      render: () => <Badge variant="danger">Low Stock</Badge>,
+      render: () => (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-100">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+          </span>
+          Low Stock
+        </span>
+      ),
     },
   ];
 
