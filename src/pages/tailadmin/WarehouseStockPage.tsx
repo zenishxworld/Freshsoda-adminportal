@@ -246,8 +246,8 @@ export const WarehouseStockPage: React.FC = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Box Price</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PCS Price</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Boxes</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PCS</th>
+                                <th className="px-6 py-3 text-center text-xs font-medium text-blue-600 uppercase tracking-wider">Boxes</th>
+                                <th className="px-6 py-3 text-center text-xs font-medium text-blue-600 uppercase tracking-wider">PCS</th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
@@ -275,15 +275,15 @@ export const WarehouseStockPage: React.FC = () => {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                             ₹{item.pcs_price.toFixed(2)}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <Badge variant="success">
-                                                {item.boxes} Boxes
-                                            </Badge>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                            <div className="bg-blue-50 text-blue-700 font-semibold px-4 py-2 rounded-md inline-block min-w-[3rem] text-center">
+                                                {item.boxes}
+                                            </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <Badge variant="success">
-                                                {item.pcs} PCS
-                                            </Badge>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                            <div className="bg-blue-50 text-blue-700 font-semibold px-4 py-2 rounded-md inline-block min-w-[3rem] text-center">
+                                                {item.pcs}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <div className="flex items-center justify-end gap-3">
@@ -328,8 +328,8 @@ export const WarehouseStockPage: React.FC = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Box Price</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PCS Price</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Boxes</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PCS</th>
+                                <th className="px-6 py-3 text-center text-xs font-medium text-blue-600 uppercase tracking-wider">Boxes</th>
+                                <th className="px-6 py-3 text-center text-xs font-medium text-blue-600 uppercase tracking-wider">PCS</th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
@@ -361,15 +361,15 @@ export const WarehouseStockPage: React.FC = () => {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                             ₹{item.pcs_price.toFixed(2)}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <Badge variant="secondary">
-                                                {item.boxes} Boxes
-                                            </Badge>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                            <div className="bg-blue-50 text-blue-700 font-semibold px-4 py-2 rounded-md inline-block min-w-[3rem] text-center">
+                                                {item.boxes}
+                                            </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <Badge variant="secondary">
-                                                {item.pcs} PCS
-                                            </Badge>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                            <div className="bg-blue-50 text-blue-700 font-semibold px-4 py-2 rounded-md inline-block min-w-[3rem] text-center">
+                                                {item.pcs}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <div className="flex items-center justify-end gap-3">
