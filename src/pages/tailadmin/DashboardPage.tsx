@@ -128,13 +128,38 @@ export const DashboardPage: React.FC = () => {
           0
         );
 
+        // Helper to normalize products
+        const normalizeSaleProducts = (ps: unknown): any[] => {
+          if (!ps) return [];
+          if (Array.isArray(ps)) return ps;
+          if (typeof ps === "string") {
+            try {
+              const parsed = JSON.parse(ps);
+              if (Array.isArray(parsed)) return parsed;
+              if (parsed && Array.isArray(parsed.items)) return parsed.items;
+            } catch (e) { return []; }
+          }
+          if (typeof ps === "object" && ps !== null) {
+            const obj = ps as { items?: unknown };
+            if (Array.isArray(obj.items)) return obj.items;
+          }
+          return [];
+        };
+
         // Calculate sold quantity
         const soldQty = todaySales.reduce((sum, sale) => {
-          const items = Array.isArray(sale.items) ? sale.items : [];
+          const rawItems = sale.products_sold || sale.items;
+          const items = normalizeSaleProducts(rawItems);
+
           return (
             sum +
             items.reduce((s: number, item: any) => {
-              return s + ((item.boxQty || 0) * 24) + (item.pcsQty || 0);
+              // Use item.pcs_per_box if stored, otherwise default to 24
+              const ppb = item.pcs_per_box || 24;
+              // Handling different naming conventions (boxQty vs box_qty etc if any, but usually boxQty in JSON)
+              const box = item.boxQty || item.boxes || 0;
+              const pcs = item.pcsQty || item.pcs || 0;
+              return s + (box * ppb) + pcs;
             }, 0)
           );
         }, 0);
