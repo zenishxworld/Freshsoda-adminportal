@@ -1901,13 +1901,16 @@ export const getAllShops = async (
     // Try combinations of columns
     let result = await buildQuery(true, true);
     if (result.error && /column.*village/i.test(result.error.message)) {
+        console.warn('getAllShops: "village" column missing, falling back.');
         result = await buildQuery(false, true);
     }
     if (result.error && /column.*route_id/i.test(result.error.message)) {
+        console.warn('getAllShops: "route_id" column missing, falling back.');
         result = await buildQuery(true, false);
     }
     // Final fallback: both missing
     if (result.error && (/column.*village/i.test(result.error.message) || /column.*route_id/i.test(result.error.message))) {
+        console.warn('getAllShops: "village" or "route_id" missing, falling back to basic query.');
         result = await buildQuery(false, false);
     }
 

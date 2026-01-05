@@ -143,7 +143,7 @@ export const ShopsPage: React.FC = () => {
                                     <tr key={s.id} className="hover:bg-gray-50">
                                         <td className="px-6 py-4 whitespace-nowrap"><div className="flex items-center"><div className="w-5 h-5 bg-primary rounded mr-3" /><div className="text-sm font-medium text-gray-900">{s.name}</div></div></td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{s.phone || '-'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{s.village || '-'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{s.village || s.address || '-'}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{routeName(s.route_id) || '-'}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{new Date(s.created_at).toLocaleDateString('en-IN')}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
