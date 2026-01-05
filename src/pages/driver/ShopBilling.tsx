@@ -30,6 +30,7 @@ import {
   type Product,
   type DailyStockItem,
   type ShopBillItem,
+  getAllShops,
 } from "../../lib/supabase";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { mapRouteName } from "../../lib/routeUtils";
@@ -78,6 +79,47 @@ const ShopBilling = () => {
   const [shopAddress, setShopAddress] = useState("");
   const [shopPhone, setShopPhone] = useState("");
 
+  // Autocomplete
+  const [shopSuggestions, setShopSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const handleShopNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setShopName(val);
+
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+
+    if (val.trim().length < 1) {
+      setShopSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    searchTimeout.current = setTimeout(async () => {
+      try {
+        const shops = await getAllShops(val);
+        setShopSuggestions(shops);
+        setShowSuggestions(shops.length > 0);
+      } catch (err) {
+        console.error("Failed to search shops", err);
+      }
+    }, 300);
+  };
+
+  const selectShop = (s: any) => {
+    setShopName(s.name);
+    setShopAddress(s.address || s.village || ''); // Fallback to village if address empty? Or combination?
+    // User requested: "name- WXYZ addresss/village- abcd"
+    // Let's stick to simple field population for now. 
+    // Existing fields are Name, Address, Phone.
+    // S.address might be null. S.village is usually present. 
+    const addr = [s.address, s.village].filter(Boolean).join(', ');
+    setShopAddress(addr);
+    setShopPhone(s.phone || '');
+    setShowSuggestions(false);
+  };
+
   const fillDevDetails = () => {
     const name = shopName?.trim() ? shopName : "BHAVYA ENTERPRICE";
     const addr = shopAddress?.trim() ? shopAddress : "Dev Village";
@@ -87,6 +129,7 @@ const ShopBilling = () => {
     setShopPhone(phone);
     console.log("Dev: temporary shop details set", { name, addr, phone });
   };
+
 
   useEffect(() => {
     if (import.meta.env.DEV) {
@@ -287,9 +330,8 @@ const ShopBilling = () => {
       console.error("Error loading stock:", error);
       toast({
         title: "Error",
-        description: `Failed to load assigned stock: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`,
+        description: `Failed to load assigned stock: ${error instanceof Error ? error.message : "Unknown error"
+          }`,
         variant: "destructive",
       });
     } finally {
@@ -541,28 +583,28 @@ const ShopBilling = () => {
           const boxLine =
             ci.boxQty > 0
               ? [
-                  {
-                    productId: ci.product.id,
-                    productName: ci.product.name,
-                    unit: "box" as const,
-                    quantity: ci.boxQty,
-                    price: ci.boxPrice,
-                    total: ci.boxQty * ci.boxPrice,
-                  },
-                ]
+                {
+                  productId: ci.product.id,
+                  productName: ci.product.name,
+                  unit: "box" as const,
+                  quantity: ci.boxQty,
+                  price: ci.boxPrice,
+                  total: ci.boxQty * ci.boxPrice,
+                },
+              ]
               : [];
           const pcsLine =
             ci.pcsQty > 0
               ? [
-                  {
-                    productId: ci.product.id,
-                    productName: ci.product.name,
-                    unit: "pcs" as const,
-                    quantity: ci.pcsQty,
-                    price: ci.pcsPrice,
-                    total: ci.pcsQty * ci.pcsPrice,
-                  },
-                ]
+                {
+                  productId: ci.product.id,
+                  productName: ci.product.name,
+                  unit: "pcs" as const,
+                  quantity: ci.pcsQty,
+                  price: ci.pcsPrice,
+                  total: ci.pcsQty * ci.pcsPrice,
+                },
+              ]
               : [];
           return [...boxLine, ...pcsLine];
         });
@@ -720,28 +762,28 @@ const ShopBilling = () => {
           const boxLine =
             ci.boxQty > 0
               ? [
-                  {
-                    productId: ci.product.id,
-                    productName: ci.product.name,
-                    unit: "box" as const,
-                    quantity: ci.boxQty,
-                    price: ci.boxPrice,
-                    total: ci.boxQty * ci.boxPrice,
-                  },
-                ]
+                {
+                  productId: ci.product.id,
+                  productName: ci.product.name,
+                  unit: "box" as const,
+                  quantity: ci.boxQty,
+                  price: ci.boxPrice,
+                  total: ci.boxQty * ci.boxPrice,
+                },
+              ]
               : [];
           const pcsLine =
             ci.pcsQty > 0
               ? [
-                  {
-                    productId: ci.product.id,
-                    productName: ci.product.name,
-                    unit: "pcs" as const,
-                    quantity: ci.pcsQty,
-                    price: ci.pcsPrice,
-                    total: ci.pcsQty * ci.pcsPrice,
-                  },
-                ]
+                {
+                  productId: ci.product.id,
+                  productName: ci.product.name,
+                  unit: "pcs" as const,
+                  quantity: ci.pcsQty,
+                  price: ci.pcsPrice,
+                  total: ci.pcsQty * ci.pcsPrice,
+                },
+              ]
               : [];
           return [...boxLine, ...pcsLine];
         });
@@ -937,19 +979,44 @@ const ShopBilling = () => {
               <div className="space-y-6 sm:space-y-8">
                 {/* Shop Details */}
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold flex items-center gap-2">
-                      <Store className="w-4 h-4" />
-                      Shop Name *
-                    </Label>
-                    <Input
-                      type="text"
-                      placeholder="Enter shop name"
-                      value={shopName}
-                      onChange={(e) => setShopName(e.target.value)}
-                      className="h-11 sm:h-10"
-                      required
-                    />
+                  <div className="space-y-2 relative">
+                    <Label>Shop Name</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        className="flex-1"
+                        placeholder="Enter Shop Name"
+                        value={shopName}
+                        onChange={handleShopNameChange}
+                        onFocus={() => { if (shopSuggestions.length > 0) setShowSuggestions(true); }}
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                      />
+                      {import.meta.env.DEV && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={fillDevDetails}
+                          title="Fill Dev Details"
+                        >
+                          <Store className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    {showSuggestions && (
+                      <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto top-full mt-1">
+                        {shopSuggestions.map((s) => (
+                          <div
+                            key={s.id}
+                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                            onClick={() => selectShop(s)}
+                          >
+                            <div className="font-medium">{s.name}</div>
+                            <div className="text-gray-500 text-xs">
+                              {[s.village, s.phone].filter(Boolean).join(' • ')}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -1096,11 +1163,10 @@ const ShopBilling = () => {
                           return (
                             <Card
                               key={product.id}
-                              className={`border transition-colors ${
-                                availableStock === 0
-                                  ? "border-destructive/50 opacity-60"
-                                  : "border-border hover:border-primary/50"
-                              }`}
+                              className={`border transition-colors ${availableStock === 0
+                                ? "border-destructive/50 opacity-60"
+                                : "border-border hover:border-primary/50"
+                                }`}
                             >
                               <CardContent className="p-3 sm:p-4">
                                 <div className="space-y-3">
@@ -1145,9 +1211,8 @@ const ShopBilling = () => {
                                           min="0"
                                           step="0.01"
                                           disabled={boxAvail === 0}
-                                          placeholder={`${
-                                            product.box_price ?? product.price
-                                          }`}
+                                          placeholder={`${product.box_price ?? product.price
+                                            }`}
                                         />
                                       </div>
                                       <div className="space-y-1">
@@ -1254,11 +1319,10 @@ const ShopBilling = () => {
                                                 min="0"
                                                 step="0.01"
                                                 disabled={maxPcsCapacity === 0}
-                                                placeholder={`${
-                                                  product.pcs_price ??
+                                                placeholder={`${product.pcs_price ??
                                                   (product.box_price ??
                                                     product.price) / pcsPerBox
-                                                }`}
+                                                  }`}
                                               />
                                             </div>
                                             <div className="space-y-1">
