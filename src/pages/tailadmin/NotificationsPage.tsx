@@ -1,31 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../../components/tailadmin/Card';
 import { Badge } from '../../components/tailadmin/Badge';
-import { Bell, Check, Trash2, Filter } from 'lucide-react';
+import { Bell, Check, Trash2, Filter, Loader2 } from 'lucide-react';
 import { Button } from '../../components/tailadmin/Button';
-
-interface Notification {
-    id: number;
-    title: string;
-    message: string;
-    time: string;
-    type: 'info' | 'warning' | 'success' | 'error';
-    unread: boolean;
-    category: string;
-}
+import { getNotifications, markAllNotificationsAsRead, markNotificationAsRead, deleteNotification as deleteNotificationApi, type Notification } from '../../lib/supabase';
+import { useToast } from '../../hooks/use-toast';
 
 export const NotificationsPage: React.FC = () => {
     const [filter, setFilter] = useState<'all' | 'unread'>('all');
-    const [notifications, setNotifications] = useState<Notification[]>([
-        { id: 1, title: 'Low Stock Alert', message: 'Product A is running low on stock. Current: 50 pcs', time: '5 min ago', type: 'warning', unread: true, category: 'Stock' },
-        { id: 2, title: 'New Assignment', message: 'Route 1 has been assigned to Driver A for today', time: '1 hour ago', type: 'info', unread: true, category: 'Assignment' },
-        { id: 3, title: 'Sales Update', message: 'Today\'s sales have reached ₹45,678', time: '2 hours ago', type: 'success', unread: false, category: 'Sales' },
-        { id: 4, title: 'Payment Received', message: 'Payment of ₹25,000 received from Shop XYZ', time: '3 hours ago', type: 'success', unread: false, category: 'Payment' },
-        { id: 5, title: 'Route Completed', message: 'Driver B has completed Route 2', time: '4 hours ago', type: 'success', unread: false, category: 'Route' },
-        { id: 6, title: 'Stock Added', message: '500 units of Product B added to warehouse', time: '5 hours ago', type: 'info', unread: false, category: 'Stock' },
-        { id: 7, title: 'Critical Stock Alert', message: 'Product C is critically low. Only 10 pcs remaining', time: '6 hours ago', type: 'error', unread: true, category: 'Stock' },
-        { id: 8, title: 'New Driver Added', message: 'Driver C has been added to the system', time: '1 day ago', type: 'info', unread: false, category: 'System' },
-    ]);
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [loading, setLoading] = useState(true);
+    const { toast } = useToast();
+
+    const loadNotifications = async () => {
+        try {
+            // setLoading(true); // Don't block UI on refresh if possible, or handle gracefully
+            const data = await getNotifications();
+            setNotifications(data);
+        } catch (error) {
+            console.error(error);
+            toast({ title: 'Error', description: 'Failed to load notifications', variant: 'destructive' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadNotifications();
+    }, []);
 
     const filteredNotifications = filter === 'unread'
         ? notifications.filter(n => n.unread)
@@ -33,18 +35,35 @@ export const NotificationsPage: React.FC = () => {
 
     const unreadCount = notifications.filter(n => n.unread).length;
 
-    const markAsRead = (id: number) => {
-        setNotifications(notifications.map(n =>
-            n.id === id ? { ...n, unread: false } : n
-        ));
+    const markAsRead = async (id: number) => {
+        try {
+            await markNotificationAsRead(id);
+            setNotifications(notifications.map(n =>
+                n.id === id ? { ...n, unread: false } : n
+            ));
+        } catch (error) {
+            toast({ title: 'Error', description: 'Failed to mark as read', variant: 'destructive' });
+        }
     };
 
-    const markAllAsRead = () => {
-        setNotifications(notifications.map(n => ({ ...n, unread: false })));
+    const markAllAsRead = async () => {
+        try {
+            await markAllNotificationsAsRead();
+            setNotifications(notifications.map(n => ({ ...n, unread: false })));
+            toast({ title: 'Success', description: 'All notifications marked as read' });
+        } catch (error) {
+            toast({ title: 'Error', description: 'Failed to mark all as read', variant: 'destructive' });
+        }
     };
 
-    const deleteNotification = (id: number) => {
-        setNotifications(notifications.filter(n => n.id !== id));
+    const deleteNotification = async (id: number) => {
+        try {
+            await deleteNotificationApi(id);
+            setNotifications(notifications.filter(n => n.id !== id));
+            toast({ title: 'Success', description: 'Notification deleted' });
+        } catch (error) {
+            toast({ title: 'Error', description: 'Failed to delete notification', variant: 'destructive' });
+        }
     };
 
     const getTypeColor = (type: string) => {
@@ -100,8 +119,8 @@ export const NotificationsPage: React.FC = () => {
                         <button
                             onClick={() => setFilter('all')}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === 'all'
-                                    ? 'bg-primary text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                ? 'bg-primary text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                         >
                             All ({notifications.length})
@@ -109,8 +128,8 @@ export const NotificationsPage: React.FC = () => {
                         <button
                             onClick={() => setFilter('unread')}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === 'unread'
-                                    ? 'bg-primary text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                ? 'bg-primary text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                         >
                             Unread ({unreadCount})
@@ -158,7 +177,7 @@ export const NotificationsPage: React.FC = () => {
                                     </div>
                                     <p className="text-gray-700 mb-3">{notification.message}</p>
                                     <div className="flex items-center justify-between">
-                                        <p className="text-sm text-gray-500">{notification.time}</p>
+                                        <p className="text-sm text-gray-500">{new Date(notification.created_at).toLocaleString()}</p>
                                         <div className="flex items-center gap-2">
                                             {notification.unread && (
                                                 <button

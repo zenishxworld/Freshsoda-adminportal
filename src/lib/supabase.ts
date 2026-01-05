@@ -57,10 +57,69 @@ export type WarehouseStock = {
     box_price: number;
     pcs_price: number;
     pcs_per_box: number;
-    boxes: number;
     pcs: number;
     created_at?: string;
     updated_at?: string;
+};
+
+export type Notification = {
+    id: number;
+    created_at: string;
+    title: string;
+    message: string;
+    type: 'info' | 'warning' | 'success' | 'error';
+    category: string;
+    unread: boolean;
+    user_id?: string | null;
+};
+
+export const getNotifications = async (): Promise<Notification[]> => {
+    const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching notifications:', error);
+        throw new Error('Failed to fetch notifications');
+    }
+    return data || [];
+};
+
+export const markNotificationAsRead = async (id: number): Promise<void> => {
+    const { error } = await supabase
+        .from('notifications')
+        .update({ unread: false })
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error marking notification as read:', error);
+        throw error;
+    }
+};
+
+export const markAllNotificationsAsRead = async (): Promise<void> => {
+    const { error } = await supabase
+        .from('notifications')
+        .update({ unread: false })
+        .eq('unread', true);
+
+    if (error) {
+        console.error('Error marking all notifications as read:', error);
+        throw error;
+    }
+};
+
+export const deleteNotification = async (id: number): Promise<void> => {
+    const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error deleting notification:', error);
+        throw error;
+    }
 };
 
 export type WarehouseMovement = {
