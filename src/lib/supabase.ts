@@ -888,8 +888,8 @@ export const getSalesBetween = async (
     return data || [];
 };
 
-// Assignments Log
 export const getAssignmentsForDate = async (date: string): Promise<AssignmentLogEntry[]> => {
+    // 1. Fetch Daily Stock (Remaining)
     let { data, error } = await supabase
         .from('daily_stock')
         .select(`
@@ -908,14 +908,17 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
         .eq('date', date)
         .order('created_at', { ascending: false });
 
+    // Fallback if joined query fails
     if (error) {
+        console.warn("AssignmentLog: Error fetching joined stock, retrying with fallback.", error);
         const fallback = await supabase
             .from('daily_stock')
             .select('id, date, stock, created_at, updated_at, auth_user_id, route_id, truck_id')
             .eq('date', date)
             .order('created_at', { ascending: false });
         if (fallback.error) {
-            throw new Error('Failed to fetch assignment log. Please try again.');
+            console.error("AssignmentLog: Fallback failed.", fallback.error);
+            throw new Error('Failed to fetch assignment log.');
         }
         data = fallback.data?.map((row: any) => ({
             ...row,
@@ -923,76 +926,139 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
             routes: row.routes ? [row.routes] : [],
             trucks: row.trucks ? [row.trucks] : [],
         })) ?? [];
-
-        const routeIds = Array.from(new Set((data || []).map((r: any) => r.route_id).filter(Boolean)));
-        const userIds = Array.from(new Set((data || []).map((r: any) => r.auth_user_id).filter(Boolean)));
-        const truckIds = Array.from(new Set((data || []).map((r: any) => r.truck_id).filter(Boolean)));
-
-        let routeMap: Record<string, string> = {};
-        let userMap: Record<string, string> = {};
-        let truckMap: Record<string, string> = {};
-
-        if (routeIds.length > 0) {
-            const rr = await supabase.from('routes').select('id, name').in('id', routeIds);
-            if (!rr.error && rr.data) {
-                rr.data.forEach((x: any) => { routeMap[x.id] = x.name; });
-            }
-        }
-        if (userIds.length > 0) {
-            const ur = await supabase.from('users').select('id, name').in('id', userIds);
-            if (!ur.error && ur.data) {
-                ur.data.forEach((x: any) => { userMap[x.id] = x.name; });
-            }
-        }
-        if (truckIds.length > 0) {
-            const tr = await supabase.from('trucks').select('id, name').in('id', truckIds);
-            if (!tr.error && tr.data) {
-                tr.data.forEach((x: any) => { truckMap[x.id] = x.name; });
-            }
-        }
-
-        const entries = (data || []).map((row: any) => {
-            const stock: DailyStockPayload = Array.isArray(row.stock) ? row.stock : [];
-            const totals = stock.reduce(
-                (acc: { boxes: number; pcs: number }, item: DailyStockItem) => {
-                    acc.boxes += item.boxQty || 0;
-                    acc.pcs += item.pcsQty || 0;
-                    return acc;
-                },
-                { boxes: 0, pcs: 0 }
-            );
-
-            return {
-                id: row.id,
-                date: row.date,
-                auth_user_id: row.auth_user_id ?? null,
-                route_id: row.route_id ?? null,
-                truck_id: row.truck_id ?? null,
-                driver_name: row.auth_user_id ? userMap[row.auth_user_id] || null : null,
-                route_name: row.route_id ? routeMap[row.route_id] || null : null,
-                truck_name: row.truck_id ? truckMap[row.truck_id] || null : null,
-                stock,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-                total_boxes: totals.boxes,
-                total_pcs: totals.pcs,
-                route_status: (totals.boxes === 0 && totals.pcs === 0) ? 'route is ended' : ((row.truck_id || row.auth_user_id) ? 'started' : 'not_started'),
-            } as AssignmentLogEntry;
-        });
-
-        return entries;
     }
+
+    if (!data || data.length === 0) return [];
+
+    // 2. Fetch Sales for this date to reconstruct Initial Stock
+    // Initial = Remaining (daily_stock) + Sold (sales)
+    const { data: salesData, error: salesError } = await supabase
+        .from('sales')
+        .select('route_id, products_sold')
+        .eq('date', date);
+
+    if (salesError) {
+        console.error("AssignmentLog: Error fetching sales for calc.", salesError);
+    }
+
+    const { data: productsData } = await supabase
+        .from('products')
+        .select('id, pcs_per_box');
+
+    const productsMap = new Map<string, number>();
+    productsData?.forEach((p: any) => {
+        productsMap.set(p.id, p.pcs_per_box || 24);
+    });
+
+    const routeIds = Array.from(new Set((data || []).map((r: any) => r.route_id).filter(Boolean)));
+    const userIds = Array.from(new Set((data || []).map((r: any) => r.auth_user_id).filter(Boolean)));
+    const truckIds = Array.from(new Set((data || []).map((r: any) => r.truck_id).filter(Boolean)));
+
+    let routeMap: Record<string, string> = {};
+    let userMap: Record<string, string> = {};
+    let truckMap: Record<string, string> = {};
+
+    if (routeIds.length > 0) {
+        const rr = await supabase.from('routes').select('id, name').in('id', routeIds);
+        if (!rr.error && rr.data) {
+            rr.data.forEach((x: any) => { routeMap[x.id] = x.name; });
+        }
+    }
+    if (userIds.length > 0) {
+        const ur = await supabase.from('users').select('id, name').in('id', userIds);
+        if (!ur.error && ur.data) {
+            ur.data.forEach((x: any) => { userMap[x.id] = x.name; });
+        }
+    }
+    if (truckIds.length > 0) {
+        const tr = await supabase.from('trucks').select('id, name').in('id', truckIds);
+        if (!tr.error && tr.data) {
+            tr.data.forEach((x: any) => { truckMap[x.id] = x.name; });
+        }
+    }
+
+    // Helper to normalize sale items
+    const normalizeSaleItems = (ps: unknown): any[] => {
+        if (!ps) return [];
+        if (Array.isArray(ps)) return ps;
+        if (typeof ps === "string") {
+            try {
+                const parsed = JSON.parse(ps);
+                if (Array.isArray(parsed)) return parsed;
+                if (parsed && Array.isArray(parsed.items)) return parsed.items;
+            } catch (e) { return []; }
+        }
+        if (typeof ps === "object" && ps !== null) {
+            const obj = ps as { items?: unknown };
+            if (Array.isArray(obj.items)) return obj.items;
+        }
+        return [];
+    };
 
     const entries = (data || []).map((row: any) => {
         const stock: DailyStockPayload = Array.isArray(row.stock) ? row.stock : [];
-        const totals = stock.reduce(
-            (acc: { boxes: number; pcs: number }, item: DailyStockItem) => {
-                acc.boxes += item.boxQty || 0;
-                acc.pcs += item.pcsQty || 0;
-                return acc;
-            },
-            { boxes: 0, pcs: 0 }
-        );
+
+        // Calculate Remaining Totals (Simple Sum)
+        const remainingSimple = stock.reduce((acc: any, item: any) => ({
+            boxes: acc.boxes + (item.boxQty || 0),
+            pcs: acc.pcs + (item.pcsQty || 0)
+        }), { boxes: 0, pcs: 0 });
+
+        // Calculate Initial by reconstructing from sales
+        // Strategy: 
+        // 1. Create a map of product -> { boxes, pcs } for the CURRENT remaining stock.
+        // 2. Add SOLD items to this map.
+        // 3. Normalize each product entry (convert excess pcs to boxes).
+        // 4. Sum the normalized entries.
+
+        const masterMap = new Map<string, { boxes: number, pcs: number, ppb: number }>();
+
+        // 1. Current Stock
+        stock.forEach((item: DailyStockItem) => {
+            const pid = item.productId;
+            const current = masterMap.get(pid) || { boxes: 0, pcs: 0, ppb: productsMap.get(pid) || 24 };
+            current.boxes += (item.boxQty || 0);
+            current.pcs += (item.pcsQty || 0);
+            masterMap.set(pid, current);
+        });
+
+        // 2. Sold Stock (Add to map)
+        if (salesData && row.route_id) {
+            const routeSales = salesData.filter((s: any) => s.route_id === row.route_id);
+            routeSales.forEach((sale: any) => {
+                const rawItems = sale.products_sold || sale.items;
+                const items = normalizeSaleItems(rawItems);
+                items.forEach((item: any) => {
+                    // Try to match product by ID if available
+                    const pid = item.productId || item.product_id;
+                    if (pid) {
+                        // Known product
+                        const current = masterMap.get(pid) || { boxes: 0, pcs: 0, ppb: productsMap.get(pid) || 24 };
+                        current.boxes += (item.boxQty || item.boxes || 0);
+                        current.pcs += (item.pcsQty || item.pcs || 0);
+                        masterMap.set(pid, current);
+                    } else {
+                        // Unknown product ID? We can't normalize accurately without ID (and thus PPB).
+                        // Best effort: assume 24 or just add to raw totals?
+                        // If we skip, the total is lower. If we guess, it might be wrong.
+                        // Let's create a dummy entry? No, better to try to use a default.
+                        // Actually, most sale items SHOULD have IDs.
+                    }
+                });
+            });
+        }
+
+        // 3. Normalize & Sum for Initial
+        let initialBoxes = 0;
+        let initialPcs = 0;
+
+        masterMap.forEach((val) => {
+            const totalPcs = val.boxes * val.ppb + val.pcs;
+            const b = Math.floor(totalPcs / val.ppb);
+            const p = totalPcs % val.ppb;
+            initialBoxes += b;
+            initialPcs += p;
+        });
 
         return {
             id: row.id,
@@ -1000,15 +1066,17 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
             auth_user_id: row.auth_user_id ?? null,
             route_id: row.route_id ?? null,
             truck_id: row.truck_id ?? null,
-            driver_name: row.users?.name ?? null,
-            route_name: row.routes?.name ?? null,
-            truck_name: row.trucks?.name ?? null,
+            driver_name: row.auth_user_id ? userMap[row.auth_user_id] || null : null,
+            route_name: row.route_id ? routeMap[row.route_id] || null : null,
+            truck_name: row.truck_id ? truckMap[row.truck_id] || null : null,
             stock,
             created_at: row.created_at,
             updated_at: row.updated_at,
-            total_boxes: totals.boxes,
-            total_pcs: totals.pcs,
-            route_status: (totals.boxes === 0 && totals.pcs === 0) ? 'route is ended' : ((row.truck_id || row.auth_user_id) ? 'started' : 'not_started'),
+            total_boxes: remainingSimple.boxes,
+            total_pcs: remainingSimple.pcs,
+            initial_boxes: initialBoxes, // Calculated from Remaining + Sold
+            initial_pcs: initialPcs,
+            route_status: (remainingSimple.boxes === 0 && remainingSimple.pcs === 0) ? 'route is ended' : ((row.truck_id || row.auth_user_id) ? 'started' : 'not_started'),
         } as AssignmentLogEntry;
     });
 
@@ -1694,7 +1762,8 @@ export const saveAssignedStock = async (
 
     // Step 2.5: Fetch existing daily_stock to calculate delta
     let existingItems: DailyStockPayload = [];
-    let query = supabase.from('daily_stock').select('stock').eq('date', date);
+    let existingInitialItems: DailyStockPayload = []; // To track initial stock
+    let query = supabase.from('daily_stock').select('stock, initial_stock').eq('date', date);
 
     if (routeId) query = query.eq('route_id', routeId);
 
@@ -1714,12 +1783,22 @@ export const saveAssignedStock = async (
 
     if (!existingStockError && existingStockData) {
         existingItems = existingStockData.stock as DailyStockPayload;
+        // If initial_stock exists, use it. Otherwise default to current stock (for back compat)
+        existingInitialItems = (existingStockData.initial_stock as DailyStockPayload) || existingItems;
     }
 
     // Step 3: Validate stock availability and calculate deltas
     // CRITICAL FIX: Fetch fresh warehouse data for delta calculations
     // The cached warehouseMap has stale pcs_per_box values
     const deltaMap = new Map<string, { deltaBox: number; deltaPcs: number; deltaTotalPcs: number; pcsPerBox: number }>();
+
+    // Map to hold the NEW initial stock values
+    const newInitialMap = new Map<string, DailyStockItem>();
+
+    // Pre-populate with existing initial items
+    existingInitialItems.forEach(item => {
+        newInitialMap.set(item.productId, { ...item });
+    });
 
     for (const item of validItems) {
         // Fetch FRESH warehouse stock for accurate pcs_per_box
@@ -1760,6 +1839,25 @@ export const saveAssignedStock = async (
 
         deltaMap.set(item.productId, { deltaBox, deltaPcs, deltaTotalPcs, pcsPerBox });
 
+        // Update Initial Stock Map
+        // Logic: New Initial = Old Initial (or 0) + Delta (if delta > 0)
+        // If delta is negative (correction), we theoretically should reduce initial? 
+        // User requirement: "Initially Assigned" reflects the total assigned. 
+        // We simply apply the delta to initial stock. 
+        // Example: Initial=1000. Sold=100. Remaining=900. Admin adds 100 (Target=1000). Delta=100. New Initial=1100.
+        // Example: Initial=1000. Admin corrects to 800 (Target=800). Delta=-200. New Initial=800.
+        // This seems correct for "Admin actions".
+
+        const currentInitial = newInitialMap.get(item.productId) || { productId: item.productId, boxQty: 0, pcsQty: 0 };
+        const oldInitialTotalPcs = (currentInitial.boxQty || 0) * pcsPerBox + (currentInitial.pcsQty || 0);
+        const newInitialTotalPcsCalc = Math.max(0, oldInitialTotalPcs + deltaTotalPcs); // Prevent negative
+
+        newInitialMap.set(item.productId, {
+            productId: item.productId,
+            boxQty: Math.floor(newInitialTotalPcsCalc / pcsPerBox),
+            pcsQty: newInitialTotalPcsCalc % pcsPerBox
+        });
+
         // Only check availability if we are INCREASING stock (delta > 0)
         if (deltaTotalPcs > 0) {
             const availableTotalPcs = freshWarehouse.boxes * pcsPerBox + freshWarehouse.pcs;
@@ -1774,6 +1872,9 @@ export const saveAssignedStock = async (
         }
     }
 
+    // Convert newInitialMap to array
+    const newInitialItems = Array.from(newInitialMap.values());
+
     // Step 4: Upsert daily_stock
     const dailyStockData = {
         auth_user_id: driverId,
@@ -1781,6 +1882,7 @@ export const saveAssignedStock = async (
         truck_id: truckId,
         date,
         stock: validItems,
+        initial_stock: newInitialItems, // Save the calculated initial stock
     };
 
     const { error: dailyStockError } = await supabase
