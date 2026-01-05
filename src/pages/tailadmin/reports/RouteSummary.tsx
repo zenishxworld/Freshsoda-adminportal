@@ -18,9 +18,9 @@ export const RouteSummary: React.FC = () => {
 
   const columns = useMemo(() => ([
     { key: 'route_name', header: 'Route' },
-    { key: 'assigned_pcs', header: 'Assigned (PCS)' },
-    { key: 'sold_pcs', header: 'Sold (PCS)' },
-    { key: 'returned_pcs', header: 'Returned (PCS)' },
+    { key: 'assigned_summary', header: 'Assigned', render: (_: any, r: any) => `${r.assigned_boxes} BOX | ${r.assigned_extra_pcs} PCS` },
+    { key: 'sold_summary', header: 'Sold', render: (_: any, r: any) => `${r.sold_boxes} BOX | ${r.sold_extra_pcs} PCS` },
+    { key: 'returned_summary', header: 'Returned', render: (_: any, r: any) => `${r.returned_boxes} BOX | ${r.returned_extra_pcs} PCS` },
     { key: 'revenue', header: 'Revenue' },
     { key: 'unique_drivers', header: 'Drivers' },
     { key: 'invoices', header: 'Invoices' },
@@ -65,9 +65,9 @@ export const RouteSummary: React.FC = () => {
   };
 
   const totals = useMemo(() => {
-    const assigned = rows.reduce((s, r) => s + r.assigned_pcs, 0);
-    const sold = rows.reduce((s, r) => s + r.sold_pcs, 0);
-    const returned = rows.reduce((s, r) => s + r.returned_pcs, 0);
+    const assigned = rows.reduce((s, r) => ({ boxes: s.boxes + r.assigned_boxes, pcs: s.pcs + r.assigned_extra_pcs }), { boxes: 0, pcs: 0 });
+    const sold = rows.reduce((s, r) => ({ boxes: s.boxes + r.sold_boxes, pcs: s.pcs + r.sold_extra_pcs }), { boxes: 0, pcs: 0 });
+    const returned = rows.reduce((s, r) => ({ boxes: s.boxes + r.returned_boxes, pcs: s.pcs + r.returned_extra_pcs }), { boxes: 0, pcs: 0 });
     const revenue = rows.reduce((s, r) => s + r.revenue, 0);
     const invoices = rows.reduce((s, r) => s + r.invoices, 0);
     return { assigned, sold, returned, revenue, invoices };
@@ -95,9 +95,9 @@ export const RouteSummary: React.FC = () => {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card><p className="text-sm text-gray-600 mb-1">Total Assigned</p><h3 className="text-2xl font-bold text-gray-900">{totals.assigned}</h3></Card>
-        <Card><p className="text-sm text-gray-600 mb-1">Total Sold</p><h3 className="text-2xl font-bold text-success">{totals.sold}</h3></Card>
-        <Card><p className="text-sm text-gray-600 mb-1">Total Returned</p><h3 className="text-2xl font-bold text-danger">{totals.returned}</h3></Card>
+        <Card><p className="text-sm text-gray-600 mb-1">Total Assigned</p><h3 className="text-2xl font-bold text-gray-900">{totals.assigned.boxes} BOX | {totals.assigned.pcs} PCS</h3></Card>
+        <Card><p className="text-sm text-gray-600 mb-1">Total Sold</p><h3 className="text-2xl font-bold text-success">{totals.sold.boxes} BOX | {totals.sold.pcs} PCS</h3></Card>
+        <Card><p className="text-sm text-gray-600 mb-1">Total Returned</p><h3 className="text-2xl font-bold text-danger">{totals.returned.boxes} BOX | {totals.returned.pcs} PCS</h3></Card>
         <Card><p className="text-sm text-gray-600 mb-1">Total Revenue</p><h3 className="text-2xl font-bold text-primary">{totals.revenue.toFixed(2)}</h3></Card>
       </div>
 

@@ -19,7 +19,7 @@ export const SalesReport: React.FC = () => {
     { key: 'route_name', header: 'Route' },
     { key: 'shop_name', header: 'Shop Name' },
     { key: 'id', header: 'Invoice ID' },
-    { key: 'total_sold_pcs', header: 'Sold (PCS)' },
+    { key: 'sold_summary', header: 'Sold', render: (_: any, r: any) => `${r.total_sold_boxes} BOX | ${r.total_sold_extra_pcs} PCS` },
     { key: 'returned_pcs', header: 'Returned (PCS)' },
     { key: 'amount', header: 'Amount' },
   ]), []);
