@@ -9,18 +9,12 @@ import { buildRouteSummary, exportCsv, type RouteSummaryRow } from '../../../lib
 import { getActiveRoutes, type RouteOption } from '../../../lib/supabase';
 
 export const RouteSummary: React.FC = () => {
-  const [from, setFrom] = useState<string>('');
-  const [to, setTo] = useState<string>('');
+  const [from, setFrom] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [to, setTo] = useState<string>(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState<boolean>(false);
   const [rows, setRows] = useState<RouteSummaryRow[]>([]);
   const [routes, setRoutes] = useState<RouteOption[]>([]);
   const [routeId, setRouteId] = useState<string>('');
-
-  useEffect(() => {
-    (async () => {
-      try { const r = await getActiveRoutes(); setRoutes(r); } catch { setRoutes([]); }
-    })();
-  }, []);
 
   const columns = useMemo(() => ([
     { key: 'route_name', header: 'Route' },
@@ -43,6 +37,10 @@ export const RouteSummary: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    load();
+  }, []);
 
   const reset = () => { setFrom(''); setTo(''); setRouteId(''); setRows([]); };
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Card } from '../../../components/tailadmin/Card';
 import { Table } from '../../../components/tailadmin/Table';
 import { Button } from '../../../components/tailadmin/Button';
@@ -8,8 +8,8 @@ import { RefreshCw, Download } from 'lucide-react';
 import { buildProductSummary, exportCsv, type ProductSummaryRow } from '../../../lib/reports';
 
 export const ProductSummary: React.FC = () => {
-  const [from, setFrom] = useState<string>('');
-  const [to, setTo] = useState<string>('');
+  const [from, setFrom] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [to, setTo] = useState<string>(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState<boolean>(false);
   const [rows, setRows] = useState<ProductSummaryRow[]>([]);
 
@@ -32,6 +32,10 @@ export const ProductSummary: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    load();
+  }, []);
 
   const reset = () => { setFrom(''); setTo(''); setRows([]); };
 
