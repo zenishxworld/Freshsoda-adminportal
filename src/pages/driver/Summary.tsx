@@ -42,6 +42,7 @@ import {
   TrendingUp,
   Package,
   DollarSign,
+  Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Calendar } from "../../components/ui/calendar";
@@ -122,6 +123,7 @@ const Summary = () => {
   const [routes, setRoutes] = useState<RouteOption[]>([]);
   const [summaryData, setSummaryData] = useState<SummaryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingLoadOut, setLoadingLoadOut] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [hasAssignedStock, setHasAssignedStock] = useState(false);
   const loadOutTimerRef = useRef<number | null>(null);
@@ -289,9 +291,9 @@ const Summary = () => {
                     typeof p.total === "number"
                       ? p.total
                       : q *
-                        (typeof p.price === "number"
-                          ? p.price
-                          : u === "box"
+                      (typeof p.price === "number"
+                        ? p.price
+                        : u === "box"
                           ? boxPrice
                           : pcsPrice);
                   totalRevenue += lineTotal;
@@ -355,6 +357,7 @@ const Summary = () => {
 
   const handleLoadOut = async () => {
     try {
+      setLoadingLoadOut(true);
       console.log("LoadOut -> Calling RPC", {
         route_id: selectedRoute,
         p_work_date: selectedDate,
@@ -367,7 +370,7 @@ const Summary = () => {
           title: "Processing Return",
           description: "Returning remaining stock to warehouse...",
         });
-        
+
         const stockReturnPromises = summaryData.map(async (item) => {
           if (item.remainingBox > 0 || item.remainingPcs > 0) {
             await addWarehouseStock(
@@ -450,6 +453,8 @@ const Summary = () => {
         description: error?.message || "Failed to return remaining stock",
         variant: "destructive",
       });
+    } finally {
+      setLoadingLoadOut(false);
     }
   };
 
@@ -946,10 +951,17 @@ const Summary = () => {
             <div className="mt-4 print:hidden">
               <Button
                 onClick={handleLoadOut}
-                disabled={!showSummary || !hasAssignedStock}
+                disabled={!showSummary || !hasAssignedStock || loadingLoadOut}
                 className="w-full h-11 text-base font-semibold"
               >
-                LoadOut / Return Remaining Stock
+                {loadingLoadOut ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Processing Return...
+                  </>
+                ) : (
+                  "LoadOut / Return Remaining Stock"
+                )}
               </Button>
             </div>
           </div>
