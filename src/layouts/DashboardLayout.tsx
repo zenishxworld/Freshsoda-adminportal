@@ -7,8 +7,8 @@ interface DashboardLayoutProps {
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
-    // Start with sidebar closed for better mobile experience
-    const [sidebarOpen, setSidebarOpen] = useState(false);
+    // Start with sidebar open for better desktop experience
+    const [sidebarOpen, setSidebarOpen] = useState(true);
 
     const toggleSidebar = () => {
         setSidebarOpen(!sidebarOpen);

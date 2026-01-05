@@ -51,6 +51,7 @@ export type Sale = {
 };
 
 export type WarehouseStock = {
+    boxes: number;
     id: string;
     product_id: string;
     product_name: string;
