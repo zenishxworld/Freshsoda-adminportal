@@ -42,6 +42,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     const location = useLocation();
     const { user, logout } = useAuth();
+    const [isHovered, setIsHovered] = React.useState(false);
 
     // Auto-close sidebar on navigation for mobile
     React.useEffect(() => {
@@ -62,17 +63,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
             {/* Sidebar */}
             <aside
-                className={`fixed top-0 left-0 z-50 h-screen bg-sidebar transition-all duration-300 ${isOpen ? 'w-64' : '-translate-x-full lg:translate-x-0 lg:w-20'
-                    } overflow-hidden`}
+                className={`fixed top-0 left-0 z-50 h-screen bg-sidebar transition-all duration-300 ease-in-out ${isOpen || isHovered ? 'w-64' : '-translate-x-full lg:translate-x-0 lg:w-20'
+                    } overflow-hidden group`}
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
             >
                 <div className="flex flex-col h-full">
                     {/* Logo */}
                     <div className="flex items-center justify-between h-16 px-6 border-b border-sidebar-light">
-                        <div className={`flex items-center gap-3 ${!isOpen && 'lg:hidden'}`}>
+                        <div className={`flex items-center gap-3 ${!(isOpen || isHovered) && 'lg:hidden'}`}>
                             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                                 <span className="text-white font-bold text-lg">FS</span>
                             </div>
-                            <span className="text-white font-semibold text-lg">FreshSoda</span>
+                            <span className="text-white font-semibold text-lg whitespace-nowrap">FreshSoda</span>
                         </div>
                         {/* Desktop toggle button to minimize/maximize sidebar */}
                         <button
@@ -101,7 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                                             <span className={isActive ? 'text-white' : 'text-gray-400 group-hover:text-white'}>
                                                 {item.icon}
                                             </span>
-                                            <span className={`text-sm font-medium ${!isOpen && 'lg:hidden'}`}>
+                                            <span className={`text-sm font-medium whitespace-nowrap ${!(isOpen || isHovered) && 'lg:hidden'}`}>
                                                 {item.label}
                                             </span>
                                         </Link>
@@ -112,7 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                     </nav>
 
                     {/* Footer */}
-                    <div className={`border-t border-sidebar-light ${!isOpen && 'lg:hidden'}`}>
+                    <div className={`border-t border-sidebar-light ${!(isOpen || isHovered) && 'lg:hidden'}`}>
                         {/* User Info */}
                         <div className="p-4">
                             <div className="flex items-center gap-3 mb-3">
