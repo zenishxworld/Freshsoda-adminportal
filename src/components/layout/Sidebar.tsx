@@ -74,10 +74,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
                             </div>
                             <span className="text-white font-semibold text-lg">FreshSoda</span>
                         </div>
-                        {/* Desktop toggle hidden as per user request to keep sidebar fixed */}
+                        {/* Desktop toggle button to minimize/maximize sidebar */}
                         <button
                             onClick={onToggle}
-                            className="hidden lg:hidden items-center justify-center w-8 h-8 rounded-md hover:bg-sidebar-light text-white transition-colors"
+                            className="hidden lg:flex items-center justify-center w-8 h-8 rounded-md hover:bg-sidebar-light text-white transition-colors"
                         >
                             {isOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
                         </button>
