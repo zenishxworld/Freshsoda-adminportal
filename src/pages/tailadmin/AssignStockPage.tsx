@@ -550,7 +550,7 @@ export const AssignStockPage: React.FC = () => {
                                                             {product.product_name}
                                                         </div>
                                                         <div className="text-xs text-gray-500">
-                                                            ₹{product.box_price}/box • ₹{product.pcs_price}/pcs
+                                                            ₹{product.box_price.toFixed(2)}/box • ₹{product.pcs_price.toFixed(2)}/pcs
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
