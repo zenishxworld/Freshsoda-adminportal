@@ -571,7 +571,7 @@ export const AssignStockPage: React.FC = () => {
                                                                 const v = Math.min(product.boxes, sanitizeNumber(e.target.value));
                                                                 updateAssignment(product.product_id, 'boxQty', v);
                                                             }}
-                                                            className="max-w-24"
+                                                            className="w-28 min-w-[100px] text-center"
                                                             placeholder="0"
                                                         />
                                                     </td>
@@ -585,7 +585,7 @@ export const AssignStockPage: React.FC = () => {
                                                                 const v = Math.min(product.pcs, sanitizeNumber(e.target.value));
                                                                 updateAssignment(product.product_id, 'pcsQty', v);
                                                             }}
-                                                            className="max-w-24"
+                                                            className="w-28 min-w-[100px] text-center"
                                                             placeholder="0"
                                                         />
                                                     </td>
