@@ -1155,7 +1155,7 @@ const StartRoute = () => {
   const isDateNotToday =
     selectedDate &&
     format(new Date(selectedDate), "yyyy-MM-dd") !==
-      format(new Date(), "yyyy-MM-dd");
+    format(new Date(), "yyyy-MM-dd");
 
   // Cleanup intervals on unmount
   useEffect(() => {
@@ -1579,20 +1579,19 @@ const StartRoute = () => {
                               return (
                                 <tr
                                   key={product.id}
-                                  className={`border-t hover:bg-muted/30 transition-all duration-500 ease-in-out ${
-                                    isHighlighted
+                                  className={`border-t hover:bg-muted/30 transition-all duration-500 ease-in-out ${isHighlighted
                                       ? "bg-blue-50 animate-pulse"
                                       : isPrefilled
-                                      ? "bg-green-50"
-                                      : ""
-                                  }`}
+                                        ? "bg-green-50"
+                                        : ""
+                                    }`}
                                 >
                                   <td className="px-4 py-3">
                                     <div className="font-medium">
                                       {product.name}
                                     </div>
                                     {(stockItem.boxQty || 0) > 0 ||
-                                    (stockItem.pcsQty || 0) > 0 ? (
+                                      (stockItem.pcsQty || 0) > 0 ? (
                                       <div className="text-xs text-muted-foreground mt-1">
                                         Total PCS: {totalPcsForProduct}
                                       </div>
@@ -1641,7 +1640,7 @@ const StartRoute = () => {
                                       </Button>
                                       <Input
                                         type="number"
-                                        className="w-20 text-center h-8"
+                                        className="flex-1 text-center h-8"
                                         value={stockItem.boxQty || 0}
                                         min={0}
                                         onChange={(e) => {
@@ -1756,7 +1755,7 @@ const StartRoute = () => {
                                       </Button>
                                       <Input
                                         type="number"
-                                        className="w-20 text-center h-8"
+                                        className="flex-1 text-center h-8"
                                         value={stockItem.pcsQty || 0}
                                         min={0}
                                         onChange={(e) => {

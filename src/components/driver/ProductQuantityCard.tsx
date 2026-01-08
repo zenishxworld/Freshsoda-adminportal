@@ -61,7 +61,7 @@ const ProductQuantityCard = ({
     const newValue = Math.max(0, Math.min(availableBoxQty, currentBoxQty + direction));
     setCurrentBoxQty(newValue);
     onBoxQtyChange(newValue);
-    
+
     // Then repeat
     boxIntervalRef.current = setInterval(() => {
       setCurrentBoxQty((prev) => {
@@ -84,7 +84,7 @@ const ProductQuantityCard = ({
     const newValue = Math.max(0, Math.min(maxPcsQty, currentPcsQty + direction));
     setCurrentPcsQty(newValue);
     onPcsQtyChange(newValue);
-    
+
     // Then repeat
     pcsIntervalRef.current = setInterval(() => {
       setCurrentPcsQty((prev) => {
@@ -152,7 +152,7 @@ const ProductQuantityCard = ({
               </Button>
               <Input
                 type="number"
-                className="w-20 text-center h-9"
+                className="flex-1 text-center h-9"
                 value={boxQty}
                 onChange={(e) => {
                   const value = Math.max(0, Math.min(availableBoxQty, parseInt(e.target.value || "0", 10)));
@@ -215,7 +215,7 @@ const ProductQuantityCard = ({
               </Button>
               <Input
                 type="number"
-                className="w-20 text-center h-9"
+                className="flex-1 text-center h-9"
                 value={pcsQty}
                 onChange={(e) => {
                   const value = Math.max(0, Math.min(maxPcsQty, parseInt(e.target.value || "0", 10)));

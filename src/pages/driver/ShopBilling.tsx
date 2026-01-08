@@ -1252,7 +1252,7 @@ const ShopBilling = () => {
                                                 newQuantity
                                               );
                                             }}
-                                            className="w-16 text-center text-sm h-9"
+                                            className="flex-1 text-center text-sm h-9"
                                             inputMode="numeric"
                                             pattern="[0-9]*"
                                             disabled={boxAvail === 0}
@@ -1364,7 +1364,7 @@ const ShopBilling = () => {
                                                       newQuantity
                                                     );
                                                   }}
-                                                  className="w-16 text-center text-sm h-9"
+                                                  className="flex-1 text-center text-sm h-9"
                                                   inputMode="numeric"
                                                   pattern="[0-9]*"
                                                   disabled={
