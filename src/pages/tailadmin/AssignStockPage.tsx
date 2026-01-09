@@ -579,10 +579,9 @@ export const AssignStockPage: React.FC = () => {
                                                         <Input
                                                             type="number"
                                                             min="0"
-                                                            max={product.pcs}
                                                             value={assignment.pcsQty === 0 ? '' : String(assignment.pcsQty)}
                                                             onChange={(e) => {
-                                                                const v = Math.min(product.pcs, sanitizeNumber(e.target.value));
+                                                                const v = sanitizeNumber(e.target.value);
                                                                 updateAssignment(product.product_id, 'pcsQty', v);
                                                             }}
                                                             className="w-28 min-w-[100px] text-center"

@@ -377,7 +377,7 @@ const Summary = () => {
               item.productId,
               item.remainingBox,
               item.remainingPcs,
-              `Return from Route: ${selectedRoute} (Driver Load-out)`
+              `Return from Route: ${selectedRoute} (Salesman Load-out)`
             );
           }
         });

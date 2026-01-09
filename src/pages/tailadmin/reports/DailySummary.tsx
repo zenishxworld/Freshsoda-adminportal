@@ -19,7 +19,7 @@ export const DailySummary: React.FC = () => {
   const columns = useMemo(() => ([
     { key: 'date', header: 'Date' },
     { key: 'route_name', header: 'Route' },
-    { key: 'driver_name', header: 'Driver' },
+    { key: 'driver_name', header: 'Salesman' },
     { key: 'assigned_summary', header: 'Assigned', render: (_: any, r: any) => `${r.assigned_boxes} BOX | ${r.assigned_extra_pcs} PCS` },
     { key: 'sold_summary', header: 'Sold', render: (_: any, r: any) => `${r.sold_boxes} BOX | ${r.sold_extra_pcs} PCS` },
     { key: 'returned_summary', header: 'Returned', render: (_: any, r: any) => `${r.returned_boxes} BOX | ${r.returned_extra_pcs} PCS` },
@@ -44,11 +44,11 @@ export const DailySummary: React.FC = () => {
   const reset = () => { setFrom(''); setTo(''); setRows([]); };
 
   const onExport = () => {
-    const headers = ['Date', 'Route', 'Driver', 'AssignedPCS', 'SoldPCS', 'ReturnedPCS', 'Revenue'];
+    const headers = ['Date', 'Route', 'Salesman', 'AssignedPCS', 'SoldPCS', 'ReturnedPCS', 'Revenue'];
     const csv = exportCsv(headers, rows.map(r => ({
       Date: r.date,
       Route: r.route_name,
-      Driver: r.driver_name,
+      Salesman: r.driver_name,
       AssignedPCS: r.assigned_pcs,
       SoldPCS: r.sold_pcs,
       ReturnedPCS: r.returned_pcs,

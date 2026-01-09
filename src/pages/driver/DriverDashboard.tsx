@@ -26,7 +26,7 @@ const DriverDashboard = () => {
   const { user, logout } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {}, [navigate]);
+  useEffect(() => { }, [navigate]);
 
   const handleLogout = async () => {
     await logout();
@@ -89,7 +89,7 @@ const DriverDashboard = () => {
                   Fresh Soda
                 </h1>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Driver Dashboard
+                  Salesman Dashboard
                 </p>
               </div>
             </div>
@@ -98,7 +98,7 @@ const DriverDashboard = () => {
               <div className="hidden sm:flex items-center gap-2 text-sm">
                 <User className="w-4 h-4" />
                 <span className="font-medium">
-                  {user?.email?.split("@")[0] || "Driver"}
+                  Salesman
                 </span>
               </div>
               <Button

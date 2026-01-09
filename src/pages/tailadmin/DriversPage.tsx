@@ -54,12 +54,12 @@ export const DriversPage: React.FC = () => {
             {/* Page Header */}
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Driver Management</h1>
-                    <p className="text-gray-600 mt-1">Manage drivers and their assignments</p>
+                    <h1 className="text-3xl font-bold text-gray-900">Salesman Management</h1>
+                    <p className="text-gray-600 mt-1">Manage salesmen and their assignments</p>
                 </div>
                 <Button variant="primary" onClick={() => setIsModalOpen(true)}>
                     <Plus className="w-5 h-5 mr-2" />
-                    Add Driver
+                    Add Salesman
                 </Button>
             </div>
 
@@ -72,18 +72,18 @@ export const DriversPage: React.FC = () => {
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                title="Add New Driver"
+                title="Add New Salesman"
                 footer={
                     <>
                         <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
                             Cancel
                         </Button>
-                        <Button variant="primary">Add Driver</Button>
+                        <Button variant="primary">Add Salesman</Button>
                     </>
                 }
             >
                 <div className="space-y-4">
-                    <Input label="Driver Name" placeholder="Enter driver name" />
+                    <Input label="Salesman Name" placeholder="Enter salesman name" />
                     <Input label="Phone Number" type="tel" placeholder="+91 98765 43210" />
                     <Input label="Email" type="email" placeholder="driver@example.com" />
                     <Select

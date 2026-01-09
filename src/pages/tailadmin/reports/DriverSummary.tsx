@@ -23,7 +23,7 @@ export const DriverSummary: React.FC = () => {
   }, []);
 
   const columns = useMemo(() => ([
-    { key: 'driver_name', header: 'Driver' },
+    { key: 'driver_name', header: 'Salesman' },
     { key: 'routes', header: 'Routes' },
     { key: 'assigned_pcs', header: 'Assigned (PCS)' },
     { key: 'sold_pcs', header: 'Sold (PCS)' },
@@ -47,9 +47,9 @@ export const DriverSummary: React.FC = () => {
   const reset = () => { setFrom(''); setTo(''); setDriverId(''); setRows([]); };
 
   const onExport = () => {
-    const headers = ['Driver', 'Routes', 'AssignedPCS', 'SoldPCS', 'ReturnedPCS', 'Revenue', 'Bills'];
+    const headers = ['Salesman', 'Routes', 'AssignedPCS', 'SoldPCS', 'ReturnedPCS', 'Revenue', 'Bills'];
     const csv = exportCsv(headers, rows.map(r => ({
-      Driver: r.driver_name,
+      Salesman: r.driver_name,
       Routes: r.routes.join(' | '),
       AssignedPCS: r.assigned_pcs,
       SoldPCS: r.sold_pcs,
@@ -61,7 +61,7 @@ export const DriverSummary: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'driver_summary.csv';
+    a.download = 'salesman_summary.csv';
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -82,9 +82,9 @@ export const DriverSummary: React.FC = () => {
           <DatePicker label="From Date" value={from} onChange={setFrom} />
           <DatePicker label="To Date" value={to} onChange={setTo} />
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Driver</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Salesman</label>
             <select value={driverId} onChange={(e) => setDriverId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
-              <option value="">All Drivers</option>
+              <option value="">All Salesmen</option>
               {drivers.map(d => (<option key={d.id} value={d.id}>{d.name}</option>))}
             </select>
           </div>

@@ -126,7 +126,7 @@ export const EndRouteApprovalPage: React.FC = () => {
     if (!selectedDriver || !selectedRoute || !selectedDate) {
       toast({
         title: "Validation",
-        description: "Select driver, route and date",
+        description: "Select salesman, route and date",
         variant: "destructive",
       });
       return;
@@ -166,11 +166,11 @@ export const EndRouteApprovalPage: React.FC = () => {
             <div>
               <label className="block text-sm font-medium mb-1 flex items-center gap-2">
                 <User className="w-4 h-4" />
-                Driver
+                Salesman
               </label>
               <Select value={selectedDriver} onValueChange={setSelectedDriver}>
                 <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="Select driver" />
+                  <SelectValue placeholder="Select salesman" />
                 </SelectTrigger>
                 <SelectContent className="bg-white">
                   {drivers.map((d) => (

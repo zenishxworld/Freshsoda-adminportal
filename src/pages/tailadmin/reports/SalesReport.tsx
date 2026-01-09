@@ -15,7 +15,7 @@ export const SalesReport: React.FC = () => {
 
   const columns = useMemo(() => ([
     { key: 'date', header: 'Date' },
-    { key: 'driver_name', header: 'Driver' },
+    { key: 'driver_name', header: 'Salesman' },
     { key: 'route_name', header: 'Route' },
     { key: 'shop_name', header: 'Shop Name' },
     { key: 'id', header: 'Invoice ID' },
@@ -46,10 +46,10 @@ export const SalesReport: React.FC = () => {
   const reset = () => { setFrom(''); setTo(''); setRows([]); };
 
   const onExport = () => {
-    const headers = ['Date', 'Driver', 'Route', 'Shop', 'InvoiceID', 'SoldPCS', 'ReturnedPCS', 'Amount'];
+    const headers = ['Date', 'Salesman', 'Route', 'Shop', 'InvoiceID', 'SoldPCS', 'ReturnedPCS', 'Amount'];
     const csv = exportCsv(headers, rows.map(r => ({
       Date: r.date,
-      Driver: r.driver_name,
+      Salesman: r.driver_name,
       Route: r.route_name,
       Shop: r.shop_name,
       InvoiceID: r.id,

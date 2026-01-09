@@ -22,7 +22,7 @@ export const RouteSummary: React.FC = () => {
     { key: 'sold_summary', header: 'Sold', render: (_: any, r: any) => `${r.sold_boxes} BOX | ${r.sold_extra_pcs} PCS` },
     { key: 'returned_summary', header: 'Returned', render: (_: any, r: any) => `${r.returned_boxes} BOX | ${r.returned_extra_pcs} PCS` },
     { key: 'revenue', header: 'Revenue' },
-    { key: 'unique_drivers', header: 'Drivers' },
+    { key: 'unique_drivers', header: 'Salesmen' },
     { key: 'invoices', header: 'Invoices' },
   ]), []);
 
@@ -45,14 +45,14 @@ export const RouteSummary: React.FC = () => {
   const reset = () => { setFrom(''); setTo(''); setRouteId(''); setRows([]); };
 
   const onExport = () => {
-    const headers = ['Route', 'AssignedPCS', 'SoldPCS', 'ReturnedPCS', 'Revenue', 'Drivers', 'Invoices'];
+    const headers = ['Route', 'AssignedPCS', 'SoldPCS', 'ReturnedPCS', 'Revenue', 'Salesmen', 'Invoices'];
     const csv = exportCsv(headers, rows.map(r => ({
       Route: r.route_name,
       AssignedPCS: r.assigned_pcs,
       SoldPCS: r.sold_pcs,
       ReturnedPCS: r.returned_pcs,
       Revenue: r.revenue,
-      Drivers: r.unique_drivers,
+      Salesmen: r.unique_drivers,
       Invoices: r.invoices,
     })));
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
