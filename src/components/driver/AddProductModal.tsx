@@ -18,8 +18,8 @@ interface AddProductModalProps {
 const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: AddProductModalProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<{ product: Product; stock: DailyStockItem } | null>(null);
-  const [unitMode, setUnitMode] = useState<"box" | "pcs">("box");
-  const [quantity, setQuantity] = useState<number>(0);
+  const [boxQty, setBoxQty] = useState<number>(0);
+  const [pcsQty, setPcsQty] = useState<number>(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const filteredProducts = availableProducts.filter(({ product }) => {
@@ -30,8 +30,8 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
   const resetModal = () => {
     setSearchQuery("");
     setSelectedProduct(null);
-    setUnitMode("box");
-    setQuantity(0);
+    setBoxQty(0);
+    setPcsQty(0);
   };
 
   const handleClose = () => {
@@ -41,59 +41,50 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
 
   const handleSelectProduct = (product: Product, stock: DailyStockItem) => {
     setSelectedProduct({ product, stock });
-    setQuantity(0);
-    setUnitMode("box");
+    setBoxQty(0);
+    setPcsQty(0);
   };
 
   const handleBackToSearch = () => {
     setSelectedProduct(null);
-    setQuantity(0);
+    setBoxQty(0);
+    setPcsQty(0);
   };
 
-  const adjustQuantity = (delta: number) => {
+  const adjustBoxQty = (delta: number) => {
     if (!selectedProduct) return;
-
-    const { stock, product } = selectedProduct;
-    const pcsPerBox = product.pcs_per_box || 24;
-
-    let maxQty = 0;
-    if (unitMode === "box") {
-      maxQty = stock.boxQty || 0;
-    } else {
-      // For pcs, allow using boxes too (auto-cut)
-      maxQty = (stock.boxQty || 0) * pcsPerBox + (stock.pcsQty || 0);
-    }
-
-    setQuantity((prev) => Math.max(0, Math.min(maxQty, prev + delta)));
+    const maxBoxQty = selectedProduct.stock.boxQty || 0;
+    setBoxQty((prev) => Math.max(0, Math.min(maxBoxQty, prev + delta)));
   };
 
-  const handleQuantityChange = (value: string) => {
+  const adjustPcsQty = (delta: number) => {
     if (!selectedProduct) return;
+    const pcsPerBox = selectedProduct.product.pcs_per_box || 24;
+    // Max pcs = available pcs + (boxes that can be cut * pcs_per_box)
+    const maxPcsQty = (selectedProduct.stock.boxQty || 0) * pcsPerBox + (selectedProduct.stock.pcsQty || 0);
+    setPcsQty((prev) => Math.max(0, Math.min(maxPcsQty, prev + delta)));
+  };
 
+  const handleBoxQtyChange = (value: string) => {
+    if (!selectedProduct) return;
     const sanitized = value.replace(/[^0-9]/g, "").replace(/^0+/, "") || "0";
     const numValue = parseInt(sanitized) || 0;
+    const maxBoxQty = selectedProduct.stock.boxQty || 0;
+    setBoxQty(Math.max(0, Math.min(maxBoxQty, numValue)));
+  };
 
-    const { stock, product } = selectedProduct;
-    const pcsPerBox = product.pcs_per_box || 24;
-
-    let maxQty = 0;
-    if (unitMode === "box") {
-      maxQty = stock.boxQty || 0;
-    } else {
-      maxQty = (stock.boxQty || 0) * pcsPerBox + (stock.pcsQty || 0);
-    }
-
-    setQuantity(Math.max(0, Math.min(maxQty, numValue)));
+  const handlePcsQtyChange = (value: string) => {
+    if (!selectedProduct) return;
+    const sanitized = value.replace(/[^0-9]/g, "").replace(/^0+/, "") || "0";
+    const numValue = parseInt(sanitized) || 0;
+    const pcsPerBox = selectedProduct.product.pcs_per_box || 24;
+    const maxPcsQty = (selectedProduct.stock.boxQty || 0) * pcsPerBox + (selectedProduct.stock.pcsQty || 0);
+    setPcsQty(Math.max(0, Math.min(maxPcsQty, numValue)));
   };
 
   const handleAddToCart = () => {
-    if (!selectedProduct || quantity <= 0) return;
-
-    const { product, stock } = selectedProduct;
-    const boxQty = unitMode === "box" ? quantity : 0;
-    const pcsQty = unitMode === "pcs" ? quantity : 0;
-
-    onAddProduct(product, stock, boxQty, pcsQty);
+    if (!selectedProduct || (boxQty <= 0 && pcsQty <= 0)) return;
+    onAddProduct(selectedProduct.product, selectedProduct.stock, boxQty, pcsQty);
     handleClose();
   };
 
@@ -114,13 +105,14 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
   }, [open]);
 
   // Calculate prices
-  const currentPrice = selectedProduct
-    ? (unitMode === "box"
-      ? (selectedProduct.product.box_price || selectedProduct.product.price || 0)
-      : (selectedProduct.product.pcs_price || ((selectedProduct.product.box_price || selectedProduct.product.price || 0) / (selectedProduct.product.pcs_per_box || 24))))
+  const boxPrice = selectedProduct
+    ? (selectedProduct.product.box_price || selectedProduct.product.price || 0)
+    : 0;
+  const pcsPrice = selectedProduct
+    ? (selectedProduct.product.pcs_price || (boxPrice / (selectedProduct.product.pcs_per_box || 24)))
     : 0;
 
-  const totalAmount = quantity * currentPrice;
+  const totalAmount = (boxQty * boxPrice) + (pcsQty * pcsPrice);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -173,7 +165,7 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
                 {filteredProducts.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground gap-2">
                     <Package className="w-12 h-12 opacity-20" />
-                    <p>{searchQuery ? "No matching products matched" : "No products available"}</p>
+                    <p>{searchQuery ? "No matching products found" : "No products available"}</p>
                   </div>
                 ) : (
                   filteredProducts.map(({ product, stock }) => (
@@ -213,11 +205,11 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
               </div>
             </div>
           ) : (
-            /* Quantity Selection View */
+            /* Quantity Selection View - Now with BOTH Box and Pieces */
             <div className="flex-1 flex flex-col">
 
               {/* Stats Card */}
-              <div className="bg-white dark:bg-zinc-800 rounded-xl p-4 shadow-md border border-border mb-6 flex items-center justify-between">
+              <div className="bg-white dark:bg-zinc-800 rounded-xl p-4 shadow-md border border-border mb-4 flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Available Stock</p>
                   <div className="flex items-center gap-3">
@@ -233,91 +225,99 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Price / {unitMode}</p>
-                  <p className="text-xl font-bold text-primary">₹{currentPrice.toFixed(2)}</p>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Box / Pcs Price</p>
+                  <p className="text-lg font-bold text-primary">₹{boxPrice.toFixed(0)} / ₹{pcsPrice.toFixed(2)}</p>
                 </div>
               </div>
 
-              {/* Unit Selection Content */}
-              <div className="bg-white dark:bg-zinc-800 rounded-2xl p-1 shadow-md border border-border flex mb-8">
-                <button
-                  onClick={() => { setUnitMode("box"); setQuantity(0); }}
-                  className={cn(
-                    "flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2",
-                    unitMode === "box"
-                      ? "bg-primary text-primary-foreground shadow-md"
-                      : "text-muted-foreground hover:bg-muted/50"
-                  )}
-                >
-                  <Box className="w-4 h-4" />
-                  Box Unit
-                </button>
-                <button
-                  onClick={() => { setUnitMode("pcs"); setQuantity(0); }}
-                  className={cn(
-                    "flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2",
-                    unitMode === "pcs"
-                      ? "bg-primary text-primary-foreground shadow-md"
-                      : "text-muted-foreground hover:bg-muted/50"
-                  )}
-                >
-                  <Layers className="w-4 h-4" />
-                  Pieces Unit
-                </button>
-              </div>
-
-              {/* Quantity Controls */}
-              <div className="flex flex-col items-center justify-center gap-4 mb-6">
-                <div className="flex items-center justify-center gap-6 w-full">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-16 w-16 rounded-2xl border-2 bg-white dark:bg-zinc-800 hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-all shadow-md active:scale-95"
-                    onClick={() => adjustQuantity(-1)}
-                    disabled={quantity <= 0}
-                  >
-                    <Minus className="w-8 h-8" />
-                  </Button>
-
-                  <div className="w-32 text-center">
+              {/* Dual Quantity Inputs */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                {/* Box Quantity */}
+                <div className="bg-white dark:bg-zinc-800 rounded-xl p-4 shadow-md border border-border">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Box className="w-5 h-5 text-primary" />
+                    <span className="text-sm font-bold text-foreground">Boxes</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 rounded-xl border-2 bg-white dark:bg-zinc-700 hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-all shadow-sm active:scale-95"
+                      onClick={() => adjustBoxQty(-1)}
+                      disabled={boxQty <= 0}
+                    >
+                      <Minus className="w-5 h-5" />
+                    </Button>
                     <Input
                       type="text"
-                      value={String(quantity)}
-                      onChange={(e) => handleQuantityChange(e.target.value)}
-                      className="text-center h-16 text-4xl font-bold border-none bg-transparent shadow-none focus-visible:ring-0 p-0"
+                      value={String(boxQty)}
+                      onChange={(e) => handleBoxQtyChange(e.target.value)}
+                      className="text-center w-16 h-12 text-2xl font-bold border-none bg-transparent shadow-none focus-visible:ring-0 p-0"
                       inputMode="numeric"
                     />
-                    <p className="text-sm font-medium text-muted-foreground mt-1 uppercase tracking-wide">
-                      {unitMode === "box" ? "Boxes" : "Pieces"}
-                    </p>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 rounded-xl border-2 bg-white dark:bg-zinc-700 hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-all shadow-sm active:scale-95"
+                      onClick={() => adjustBoxQty(1)}
+                    >
+                      <Plus className="w-5 h-5" />
+                    </Button>
                   </div>
-
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-16 w-16 rounded-2xl border-2 bg-white dark:bg-zinc-800 hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-all shadow-md active:scale-95"
-                    onClick={() => adjustQuantity(1)}
-                  >
-                    <Plus className="w-8 h-8" />
-                  </Button>
+                  <p className="text-xs text-muted-foreground text-center mt-2">
+                    Max: {selectedProduct.stock.boxQty || 0}
+                  </p>
                 </div>
 
-                <div className="text-center">
-                  <Badge variant="outline" className={cn(
-                    "font-normal",
-                    quantity >= (unitMode === "box"
-                      ? (selectedProduct.stock.boxQty || 0)
-                      : ((selectedProduct.stock.boxQty || 0) * (selectedProduct.product.pcs_per_box || 24) + (selectedProduct.stock.pcsQty || 0)))
-                      ? "border-destructive/50 text-destructive bg-destructive/5"
-                      : "text-muted-foreground border-transparent"
-                  )}>
-                    Max Available: {unitMode === "box"
-                      ? selectedProduct.stock.boxQty || 0
-                      : (selectedProduct.stock.boxQty || 0) * (selectedProduct.product.pcs_per_box || 24) + (selectedProduct.stock.pcsQty || 0)
-                    }
-                  </Badge>
+                {/* Pieces Quantity */}
+                <div className="bg-white dark:bg-zinc-800 rounded-xl p-4 shadow-md border border-border">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Layers className="w-5 h-5 text-primary" />
+                    <span className="text-sm font-bold text-foreground">Pieces</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 rounded-xl border-2 bg-white dark:bg-zinc-700 hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-all shadow-sm active:scale-95"
+                      onClick={() => adjustPcsQty(-1)}
+                      disabled={pcsQty <= 0}
+                    >
+                      <Minus className="w-5 h-5" />
+                    </Button>
+                    <Input
+                      type="text"
+                      value={String(pcsQty)}
+                      onChange={(e) => handlePcsQtyChange(e.target.value)}
+                      className="text-center w-16 h-12 text-2xl font-bold border-none bg-transparent shadow-none focus-visible:ring-0 p-0"
+                      inputMode="numeric"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 rounded-xl border-2 bg-white dark:bg-zinc-700 hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-all shadow-sm active:scale-95"
+                      onClick={() => adjustPcsQty(1)}
+                    >
+                      <Plus className="w-5 h-5" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center mt-2">
+                    Max: {(selectedProduct.stock.boxQty || 0) * (selectedProduct.product.pcs_per_box || 24) + (selectedProduct.stock.pcsQty || 0)}
+                  </p>
                 </div>
               </div>
+
+              {/* Summary */}
+              {(boxQty > 0 || pcsQty > 0) && (
+                <div className="bg-muted/30 rounded-lg p-3 mb-4">
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <span>Adding:</span>
+                    {boxQty > 0 && <Badge variant="secondary" className="font-semibold">{boxQty} Box</Badge>}
+                    {boxQty > 0 && pcsQty > 0 && <span>+</span>}
+                    {pcsQty > 0 && <Badge variant="secondary" className="font-semibold">{pcsQty} Pcs</Badge>}
+                  </div>
+                </div>
+              )}
 
               {/* Footer Total & Action */}
               <div className="mt-auto">
@@ -329,7 +329,7 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
                 <Button
                   className="w-full h-14 text-lg font-bold rounded-xl shadow-lg shadow-primary/20"
                   onClick={handleAddToCart}
-                  disabled={quantity <= 0}
+                  disabled={boxQty <= 0 && pcsQty <= 0}
                 >
                   <ShoppingCart className="w-5 h-5 mr-2" />
                   Add to Cart
@@ -345,4 +345,5 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
 };
 
 export default AddProductModal;
+
 
