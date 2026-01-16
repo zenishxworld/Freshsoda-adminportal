@@ -16,11 +16,31 @@ export const ReportsPage: React.FC = () => {
       </div>
       <Card>
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full gap-1">
-            <TabsTrigger value="daily">Daily Summary</TabsTrigger>
-            <TabsTrigger value="route">Route Summary</TabsTrigger>
-            <TabsTrigger value="product">Product Summary</TabsTrigger>
-            <TabsTrigger value="sales">Sales Report</TabsTrigger>
+          <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full gap-1 bg-gray-100 p-1">
+            <TabsTrigger
+              value="daily"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all"
+            >
+              Daily Summary
+            </TabsTrigger>
+            <TabsTrigger
+              value="route"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all"
+            >
+              Route Summary
+            </TabsTrigger>
+            <TabsTrigger
+              value="product"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all"
+            >
+              Product Summary
+            </TabsTrigger>
+            <TabsTrigger
+              value="sales"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all"
+            >
+              Sales Report
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="daily"><DailySummary /></TabsContent>
           <TabsContent value="route"><RouteSummary /></TabsContent>
