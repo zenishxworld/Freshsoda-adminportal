@@ -52,23 +52,6 @@ const StatCard: React.FC<StatCardProps> = ({
           ) : (
             <h3 className="text-3xl font-bold text-gray-900">{value}</h3>
           )}
-          {change !== undefined && !loading && (
-            <div className="flex items-center mt-2">
-              {change >= 0 ? (
-                <TrendingUp className="w-4 h-4 text-success mr-1" />
-              ) : (
-                <TrendingDown className="w-4 h-4 text-danger mr-1" />
-              )}
-              <span
-                className={`text-sm font-semibold ${change >= 0 ? "text-success" : "text-danger"
-                  }`}
-              >
-                {change >= 0 ? "+" : ""}
-                {change.toFixed(1)}%
-              </span>
-              <span className="text-xs text-gray-500 ml-1">vs yesterday</span>
-            </div>
-          )}
         </div>
         <div
           className={`w-16 h-16 rounded-2xl flex items-center justify-center ${gradient} shadow-md`}
@@ -112,13 +95,13 @@ export const DashboardPage: React.FC = () => {
         // Get warehouse stock
         const warehouseData = await getWarehouseStock();
         const totalWarehouse = warehouseData.reduce((sum, item) => {
-          return sum + (item.boxes * item.pcs_per_box) + item.pcs;
+          return sum + item.boxes;
         }, 0);
 
         // Get today's assignments
         const todayAssignments = await getAssignmentsForDate(today);
         const totalAssigned = todayAssignments.reduce((sum, assignment) => {
-          return sum + (assignment.total_boxes * 24) + assignment.total_pcs;
+          return sum + assignment.total_boxes;
         }, 0);
 
         // Get today's sales
@@ -154,12 +137,9 @@ export const DashboardPage: React.FC = () => {
           return (
             sum +
             items.reduce((s: number, item: any) => {
-              // Use item.pcs_per_box if stored, otherwise default to 24
-              const ppb = item.pcs_per_box || 24;
-              // Handling different naming conventions (boxQty vs box_qty etc if any, but usually boxQty in JSON)
+              // Count only boxes
               const box = item.boxQty || item.boxes || 0;
-              const pcs = item.pcsQty || item.pcs || 0;
-              return s + (box * ppb) + pcs;
+              return s + box;
             }, 0)
           );
         }, 0);
@@ -173,7 +153,7 @@ export const DashboardPage: React.FC = () => {
 
         const yesterdayAssignments = await getAssignmentsForDate(yesterdayDate);
         const yesterdayAssigned = yesterdayAssignments.reduce((sum, assignment) => {
-          return sum + (assignment.total_boxes * 24) + assignment.total_pcs;
+          return sum + assignment.total_boxes;
         }, 0);
 
         const yesterdaySales = await getSalesFor(yesterdayDate);
