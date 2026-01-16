@@ -104,6 +104,11 @@ export const DashboardPage: React.FC = () => {
           return sum + (assignment.initial_boxes || assignment.total_boxes);
         }, 0);
 
+        // Calculate remaining stock from actual remaining in assignments
+        const remaining = todayAssignments.reduce((sum, assignment) => {
+          return sum + assignment.total_boxes;
+        }, 0);
+
         // Get today's sales
         const todaySales = await getSalesFor(today);
         const totalSalesAmount = todaySales.reduce(
@@ -129,23 +134,6 @@ export const DashboardPage: React.FC = () => {
           return [];
         };
 
-        // Calculate sold quantity
-        const soldQty = todaySales.reduce((sum, sale) => {
-          const rawItems = sale.products_sold || sale.items;
-          const items = normalizeSaleProducts(rawItems);
-
-          return (
-            sum +
-            items.reduce((s: number, item: any) => {
-              // Count only boxes
-              const box = item.boxQty || item.boxes || 0;
-              return s + box;
-            }, 0)
-          );
-        }, 0);
-
-        const remaining = totalAssigned - soldQty;
-
         // Get yesterday's data for comparison
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
@@ -153,7 +141,7 @@ export const DashboardPage: React.FC = () => {
 
         const yesterdayAssignments = await getAssignmentsForDate(yesterdayDate);
         const yesterdayAssigned = yesterdayAssignments.reduce((sum, assignment) => {
-          return sum + assignment.total_boxes;
+          return sum + (assignment.initial_boxes || assignment.total_boxes);
         }, 0);
 
         const yesterdaySales = await getSalesFor(yesterdayDate);
