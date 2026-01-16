@@ -101,7 +101,7 @@ export const DashboardPage: React.FC = () => {
         // Get today's assignments
         const todayAssignments = await getAssignmentsForDate(today);
         const totalAssigned = todayAssignments.reduce((sum, assignment) => {
-          return sum + assignment.total_boxes;
+          return sum + (assignment.initial_boxes || assignment.total_boxes);
         }, 0);
 
         // Get today's sales
@@ -344,7 +344,7 @@ export const DashboardPage: React.FC = () => {
                   row.driver_name ||
                   row.truck_name ||
                   "Unknown";
-                const units = `${row.total_boxes} boxes${row.total_pcs ? `, ${row.total_pcs} pcs` : ""
+                const units = `${row.initial_boxes || row.total_boxes} boxes${row.initial_pcs !== undefined && row.initial_pcs !== null ? `, ${row.initial_pcs} pcs` : ""
                   }`;
                 const time = (() => {
                   try {

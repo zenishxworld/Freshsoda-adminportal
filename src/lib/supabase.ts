@@ -896,6 +896,7 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
             id,
             date,
             stock,
+            initial_stock,
             created_at,
             updated_at,
             auth_user_id,
@@ -913,7 +914,7 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
         console.warn("AssignmentLog: Error fetching joined stock, retrying with fallback.", error);
         const fallback = await supabase
             .from('daily_stock')
-            .select('id, date, stock, created_at, updated_at, auth_user_id, route_id, truck_id')
+            .select('id, date, stock, initial_stock, created_at, updated_at, auth_user_id, route_id, truck_id')
             .eq('date', date)
             .order('created_at', { ascending: false });
         if (fallback.error) {
@@ -930,25 +931,15 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
 
     if (!data || data.length === 0) return [];
 
-    // 2. Fetch Sales for this date to reconstruct Initial Stock
-    // Initial = Remaining (daily_stock) + Sold (sales)
+    // Fetch sales data for fallback calculation (if initial_stock is not set)
     const { data: salesData, error: salesError } = await supabase
         .from('sales')
-        .select('route_id, products_sold')
+        .select('route_id, products_sold, items')
         .eq('date', date);
 
     if (salesError) {
-        console.error("AssignmentLog: Error fetching sales for calc.", salesError);
+        console.error("AssignmentLog: Error fetching sales for fallback calc.", salesError);
     }
-
-    const { data: productsData } = await supabase
-        .from('products')
-        .select('id, pcs_per_box');
-
-    const productsMap = new Map<string, number>();
-    productsData?.forEach((p: any) => {
-        productsMap.set(p.id, p.pcs_per_box || 24);
-    });
 
     const routeIds = Array.from(new Set((data || []).map((r: any) => r.route_id).filter(Boolean)));
     const userIds = Array.from(new Set((data || []).map((r: any) => r.auth_user_id).filter(Boolean)));
@@ -977,8 +968,8 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
         }
     }
 
-    // Helper to normalize sale items
-    const normalizeSaleItems = (ps: unknown): any[] => {
+    // Helper to normalize sale products
+    const normalizeSaleProducts = (ps: unknown): any[] => {
         if (!ps) return [];
         if (Array.isArray(ps)) return ps;
         if (typeof ps === "string") {
@@ -997,6 +988,7 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
 
     const entries = (data || []).map((row: any) => {
         const stock: DailyStockPayload = Array.isArray(row.stock) ? row.stock : [];
+        const initialStock: DailyStockPayload = Array.isArray(row.initial_stock) ? row.initial_stock : [];
 
         // Calculate Remaining Totals (Simple Sum)
         const remainingSimple = stock.reduce((acc: any, item: any) => ({
@@ -1004,61 +996,34 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
             pcs: acc.pcs + (item.pcsQty || 0)
         }), { boxes: 0, pcs: 0 });
 
-        // Calculate Initial by reconstructing from sales
-        // Strategy: 
-        // 1. Create a map of product -> { boxes, pcs } for the CURRENT remaining stock.
-        // 2. Add SOLD items to this map.
-        // 3. Normalize each product entry (convert excess pcs to boxes).
-        // 4. Sum the normalized entries.
+        // Calculate Initial Totals
+        // Priority 1: Use initial_stock field if it has data
+        // Priority 2: Calculate from remaining + sold (fallback for old records)
+        let initialSimple = initialStock.reduce((acc: any, item: any) => ({
+            boxes: acc.boxes + (item.boxQty || 0),
+            pcs: acc.pcs + (item.pcsQty || 0)
+        }), { boxes: 0, pcs: 0 });
 
-        const masterMap = new Map<string, { boxes: number, pcs: number, ppb: number }>();
-
-        // 1. Current Stock
-        stock.forEach((item: DailyStockItem) => {
-            const pid = item.productId;
-            const current = masterMap.get(pid) || { boxes: 0, pcs: 0, ppb: productsMap.get(pid) || 24 };
-            current.boxes += (item.boxQty || 0);
-            current.pcs += (item.pcsQty || 0);
-            masterMap.set(pid, current);
-        });
-
-        // 2. Sold Stock (Add to map)
-        if (salesData && row.route_id) {
+        // If initial_stock is empty, calculate from remaining + sold
+        if (initialSimple.boxes === 0 && initialSimple.pcs === 0 && salesData && row.route_id) {
+            let soldBoxes = 0;
+            let soldPcs = 0;
+            
             const routeSales = salesData.filter((s: any) => s.route_id === row.route_id);
             routeSales.forEach((sale: any) => {
                 const rawItems = sale.products_sold || sale.items;
-                const items = normalizeSaleItems(rawItems);
+                const items = normalizeSaleProducts(rawItems);
                 items.forEach((item: any) => {
-                    // Try to match product by ID if available
-                    const pid = item.productId || item.product_id;
-                    if (pid) {
-                        // Known product
-                        const current = masterMap.get(pid) || { boxes: 0, pcs: 0, ppb: productsMap.get(pid) || 24 };
-                        current.boxes += (item.boxQty || item.boxes || 0);
-                        current.pcs += (item.pcsQty || item.pcs || 0);
-                        masterMap.set(pid, current);
-                    } else {
-                        // Unknown product ID? We can't normalize accurately without ID (and thus PPB).
-                        // Best effort: assume 24 or just add to raw totals?
-                        // If we skip, the total is lower. If we guess, it might be wrong.
-                        // Let's create a dummy entry? No, better to try to use a default.
-                        // Actually, most sale items SHOULD have IDs.
-                    }
+                    soldBoxes += (item.boxQty || item.boxes || 0);
+                    soldPcs += (item.pcsQty || item.pcs || 0);
                 });
             });
+            
+            initialSimple = {
+                boxes: remainingSimple.boxes + soldBoxes,
+                pcs: remainingSimple.pcs + soldPcs
+            };
         }
-
-        // 3. Normalize & Sum for Initial
-        let initialBoxes = 0;
-        let initialPcs = 0;
-
-        masterMap.forEach((val) => {
-            const totalPcs = val.boxes * val.ppb + val.pcs;
-            const b = Math.floor(totalPcs / val.ppb);
-            const p = totalPcs % val.ppb;
-            initialBoxes += b;
-            initialPcs += p;
-        });
 
         return {
             id: row.id,
@@ -1074,8 +1039,8 @@ export const getAssignmentsForDate = async (date: string): Promise<AssignmentLog
             updated_at: row.updated_at,
             total_boxes: remainingSimple.boxes,
             total_pcs: remainingSimple.pcs,
-            initial_boxes: initialBoxes, // Calculated from Remaining + Sold
-            initial_pcs: initialPcs,
+            initial_boxes: initialSimple.boxes, // From initial_stock field or calculated
+            initial_pcs: initialSimple.pcs,
             route_status: (remainingSimple.boxes === 0 && remainingSimple.pcs === 0) ? 'route is ended' : ((row.truck_id || row.auth_user_id) ? 'started' : 'not_started'),
         } as AssignmentLogEntry;
     });
