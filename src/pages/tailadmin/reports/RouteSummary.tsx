@@ -2,19 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Card } from '../../../components/tailadmin/Card';
 import { Table } from '../../../components/tailadmin/Table';
 import { Button } from '../../../components/tailadmin/Button';
-import { Input } from '../../../components/tailadmin/Input';
 import { DatePicker } from '../../../components/tailadmin/DatePicker';
 import { RefreshCw, Download } from 'lucide-react';
 import { buildRouteSummary, exportCsv, type RouteSummaryRow } from '../../../lib/reports';
-import { getActiveRoutes, type RouteOption } from '../../../lib/supabase';
 
 export const RouteSummary: React.FC = () => {
   const [from, setFrom] = useState<string>(new Date().toISOString().split('T')[0]);
   const [to, setTo] = useState<string>(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState<boolean>(false);
   const [rows, setRows] = useState<RouteSummaryRow[]>([]);
-  const [routes, setRoutes] = useState<RouteOption[]>([]);
-  const [routeId, setRouteId] = useState<string>('');
 
   const columns = useMemo(() => ([
     { key: 'route_name', header: 'Route' },
@@ -31,8 +27,7 @@ export const RouteSummary: React.FC = () => {
     setLoading(true);
     try {
       const data = await buildRouteSummary({ from, to });
-      const filtered = routeId ? data.filter(r => r.route_id === routeId) : data;
-      setRows(filtered);
+      setRows(data);
     } finally {
       setLoading(false);
     }
@@ -42,7 +37,7 @@ export const RouteSummary: React.FC = () => {
     load();
   }, []);
 
-  const reset = () => { setFrom(''); setTo(''); setRouteId(''); setRows([]); };
+  const reset = () => { setFrom(''); setTo(''); setRows([]); };
 
   const onExport = () => {
     const headers = ['Route', 'AssignedPCS', 'SoldPCS', 'ReturnedPCS', 'Revenue', 'Salesmen', 'Invoices'];
@@ -79,14 +74,7 @@ export const RouteSummary: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <DatePicker label="From Date" value={from} onChange={setFrom} />
           <DatePicker label="To Date" value={to} onChange={setTo} />
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Route</label>
-            <select value={routeId} onChange={(e) => setRouteId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
-              <option value="">All Routes</option>
-              {routes.map(r => (<option key={r.id} value={r.id}>{r.name}</option>))}
-            </select>
-          </div>
-          <div className="flex items-end gap-2">
+          <div className="flex items-end gap-2 md:col-span-3">
             <Button variant="primary" onClick={load} disabled={!from || !to || loading}>{loading ? 'Loading...' : 'Filter'}</Button>
             <Button variant="outline" onClick={onExport} disabled={rows.length === 0}><Download className="w-4 h-4 mr-2" />Export</Button>
             <Button variant="secondary" onClick={reset}><RefreshCw className="w-4 h-4 mr-2" />Reset</Button>
