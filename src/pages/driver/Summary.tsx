@@ -516,11 +516,20 @@ const Summary = () => {
     return route.name;
   };
 
-  // Helper function to build the receipt content string
-  const getReceiptContent = () => {
-    const t = totals;
-    const grandTotalStr = grandTotal.toFixed(2);
-    const generatedDate = new Date()
+  // Helper function to get formatted date
+  const getFormattedDate = () => {
+    return new Date(selectedDate)
+      .toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+      .replace(/\//g, "-");
+  };
+
+  // Helper function to get generated timestamp
+  const getGeneratedTimestamp = () => {
+    return new Date()
       .toLocaleString("en-IN", {
         day: "2-digit",
         month: "2-digit",
@@ -529,57 +538,7 @@ const Summary = () => {
         minute: "2-digit",
         hour12: true,
       })
-      .replace(",", ""); // Remove comma for cleaner output
-
-    const routeName = getRouteName();
-    // Format date as DD-MM-YYYY to match image
-    const formattedDate = new Date(selectedDate)
-      .toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      })
-      .replace(/\//g, "-");
-
-    // 32-character width for 58mm printer
-    let content = "";
-    content += "================================\n";
-    content += "       FRESH SODA SALES       \n"; // Centered
-    content += "================================\n";
-    content += `Date  : ${formattedDate}\n`;
-    content += `Route : ${routeName}\n`;
-    content += "--------------------------------\n";
-    content += `Start : ${t.startBox}B | ${t.startPcs}p\n`;
-    content += `Sold  : ${t.soldBox}B | ${t.soldPcs}p\n`;
-    content += `Left  : ${t.remainingBox}B | ${t.remainingPcs}p\n`;
-    content += `Total Revenue: ₹${grandTotalStr}\n`;
-    content += "--------------------------------\n";
-    // Header fits exactly 32 characters with vertical separators: 15 + 1 + 8 + 1 + 7
-    content += `${"Item".padEnd(15, " ")}|${"S(B|p)".padEnd(
-      8,
-      " "
-    )}|${"L(B|p)".padEnd(7, " ")}\n`;
-    content += "---------------+--------+-------\n";
-
-    summaryData.forEach((item) => {
-      // Keep line width to 32 chars with separators: 15 + 1 + 8 + 1 + 7 = 32
-      const name = item.productName.substring(0, 15).padEnd(15, " ");
-      const sold = `${item.soldBox}|${item.soldPcs}`.padEnd(8, " ");
-      const left = `${item.remainingBox}|${item.remainingPcs}`.padEnd(7, " ");
-      content += `${name}|${sold}|${left}\n`;
-    });
-
-    content += "--------------------------------\n";
-    content += `Totals Sold  : ${t.soldBox}B | ${t.soldPcs}p\n`;
-    content += `Totals Left  : ${t.remainingBox}B | ${t.remainingPcs}p\n`;
-    content += "--------------------------------\n";
-    content += `Grand Total: ₹${grandTotalStr}\n`;
-    content += "--------------------------------\n";
-    content += `Generated: ${generatedDate}\n`;
-    content += "Powered by apexdeploy.in\n";
-    content += "================================\n";
-
-    return content;
+      .replace(",", "");
   };
 
   return (
@@ -973,23 +932,65 @@ const Summary = () => {
         createPortal(
           <div
             id="print-summary-receipt"
-            // These inline styles are a fallback, the @media print CSS is primary
-            style={{
-              whiteSpace: "pre",
-              fontFamily: '"Courier New", Courier, monospace',
-              fontSize: "11px",
-              lineHeight: "1.3",
-              color: "#000",
-              display: "none", // Hidden by default, only shown by print CSS
-            }}
+            className="receipt-58mm"
           >
-            {getReceiptContent()}
+            {/* Header */}
+            <div className="receipt-header">
+              <div className="receipt-header-title">FRESH SODA SALES</div>
+            </div>
+
+            {/* Date and Route - Compact */}
+            <div className="receipt-section">
+              <div className="receipt-info-line"><span className="receipt-bold">Date:</span> {getFormattedDate()}</div>
+              <div className="receipt-info-line"><span className="receipt-bold">Route:</span> {getRouteName()}</div>
+            </div>
+
+            <div className="receipt-divider"></div>
+
+            {/* Summary - Single Line Format */}
+            <div className="receipt-section">
+              <div className="receipt-info-line"><span className="receipt-bold">Opening:</span> {totals.startBox}Box {totals.startPcs}pcs</div>
+              <div className="receipt-info-line"><span className="receipt-bold">Sold:</span> {totals.soldBox}Box {totals.soldPcs}pcs → ₹{grandTotal.toFixed(0)}</div>
+              <div className="receipt-info-line"><span className="receipt-bold">Closing:</span> {totals.remainingBox}Box {totals.remainingPcs}pcs</div>
+            </div>
+
+            <div className="receipt-divider"></div>
+
+            {/* Items - Compact Format */}
+            <div className="receipt-section">
+              {summaryData.map((item) => (
+                <div className="receipt-item" key={item.productId}>
+                  <div className="receipt-item-name">{item.productName}</div>
+                  <div className="receipt-item-details">Sold: {item.soldBox}Box {item.soldPcs}pcs | Left: {item.remainingBox}Box {item.remainingPcs}pcs</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="receipt-divider"></div>
+
+            {/* Grand Total - Highlighted */}
+            <div className="receipt-total-section">
+              TOTAL: ₹{grandTotal.toFixed(2)}
+            </div>
+
+            {/* Footer */}
+            <div className="receipt-footer">
+              <div>{getGeneratedTimestamp()}</div>
+              <div>apexdeploy.in</div>
+            </div>
+
+            <div className="receipt-bottom-border"></div>
           </div>,
           document.body
         )}
 
-      {/* Print Styles for 58mm receipt */}
+      {/* Print Styles for 58mm receipt - Matching the compact receipt design */}
       <style>{`
+        /* Receipt base styles - visible only in print */
+        .receipt-58mm {
+          display: none;
+        }
+
         @media print {
           /* Hide everything except the receipt container */
           body > *:not(#print-summary-receipt) { display: none !important; }
@@ -997,7 +998,7 @@ const Summary = () => {
 
           @page {
             size: 58mm auto;
-            margin: 2mm; /* Add a little margin */
+            margin: 0;
           }
           
           html, body {
@@ -1011,26 +1012,98 @@ const Summary = () => {
             -webkit-print-color-adjust: exact !important;
             color-adjust: exact !important;
             print-color-adjust: exact !important;
-            color: #000 !important; /* Ensure all text is black */
-            background: #fff !important; /* Ensure background is white */
+            color: #000 !important;
             box-shadow: none !important;
-            border-radius: 0 !important;
           }
 
-          #print-summary-receipt {
+          .receipt-58mm {
             display: block !important;
-            width: 100% !important; /* Use 100% of the page width */
-            max-width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important; /* Padding is on @page */
-            font-family: 'Courier New', Courier, monospace !important; /* Force monospace */
-            font-size: 12px !important; /* Readable size for 58mm */
-            font-weight: 700 !important; /* Bold for thermal print readability */
+            width: 58mm !important;
+            background: white !important;
+            padding: 3mm !important;
+            font-family: 'Courier New', monospace !important;
+            font-size: 10px !important;
             line-height: 1.3 !important;
-            white-space: pre !important; /* CRITICAL: Respect whitespace and newlines */
-            page-break-after: avoid !important;
-            page-break-inside: avoid !important;
-            box-sizing: border-box !important;
+            color: #000 !important;
+            font-weight: 700 !important; /* Bold for thermal print visibility */
+          }
+
+          .receipt-header {
+            text-align: center;
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+            padding: 3px 0;
+            margin-bottom: 6px;
+          }
+
+          .receipt-header-title {
+            font-size: 12px;
+            font-weight: 900;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+          }
+
+          .receipt-info-line {
+            font-size: 10px;
+            margin-bottom: 2px;
+            font-weight: 700;
+          }
+
+          .receipt-section {
+            margin-bottom: 6px;
+            font-size: 10px;
+            font-weight: 700;
+          }
+
+          .receipt-divider {
+            border-bottom: 2px dashed #000;
+            margin: 5px 0;
+          }
+
+          .receipt-bold {
+            font-weight: 900;
+          }
+
+          .receipt-item {
+            margin-bottom: 4px;
+            font-size: 10px;
+            font-weight: 700;
+          }
+
+          .receipt-item-name {
+            font-weight: 900;
+            margin-bottom: 1px;
+            font-size: 10px;
+          }
+
+          .receipt-item-details {
+            color: #000;
+            font-size: 9px;
+            font-weight: 700;
+          }
+
+          .receipt-total-section {
+            font-size: 12px;
+            font-weight: 900;
+            text-align: center;
+            padding: 4px 3mm;
+            background: transparent !important;
+            margin: 6px -3mm;
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+          }
+
+          .receipt-footer {
+            text-align: center;
+            font-size: 9px;
+            line-height: 1.4;
+            margin-top: 6px;
+            font-weight: 700;
+          }
+
+          .receipt-bottom-border {
+            border-top: 3px solid #000;
+            margin-top: 6px;
           }
         }
       `}</style>
