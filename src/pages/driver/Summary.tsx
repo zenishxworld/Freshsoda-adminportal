@@ -1022,10 +1022,10 @@ const Summary = () => {
             background: white !important;
             padding: 3mm !important;
             font-family: 'Courier New', monospace !important;
-            font-size: 10px !important;
-            line-height: 1.3 !important;
+            font-size: 11px !important;
+            line-height: 1.4 !important;
             color: #000 !important;
-            font-weight: 700 !important; /* Bold for thermal print visibility */
+            font-weight: 400 !important;
           }
 
           .receipt-header {
@@ -1037,54 +1037,54 @@ const Summary = () => {
           }
 
           .receipt-header-title {
-            font-size: 12px;
-            font-weight: 900;
+            font-size: 13px;
+            font-weight: 600;
             letter-spacing: 0.5px;
             text-transform: uppercase;
           }
 
           .receipt-info-line {
-            font-size: 10px;
+            font-size: 11px;
             margin-bottom: 2px;
-            font-weight: 700;
+            font-weight: 400;
           }
 
           .receipt-section {
             margin-bottom: 6px;
-            font-size: 10px;
-            font-weight: 700;
+            font-size: 11px;
+            font-weight: 400;
           }
 
           .receipt-divider {
-            border-bottom: 2px dashed #000;
+            border-bottom: 1px dashed #000;
             margin: 5px 0;
           }
 
           .receipt-bold {
-            font-weight: 900;
+            font-weight: 600;
           }
 
           .receipt-item {
             margin-bottom: 4px;
-            font-size: 10px;
-            font-weight: 700;
+            font-size: 11px;
+            font-weight: 400;
           }
 
           .receipt-item-name {
-            font-weight: 900;
+            font-weight: 600;
             margin-bottom: 1px;
-            font-size: 10px;
+            font-size: 11px;
           }
 
           .receipt-item-details {
             color: #000;
-            font-size: 9px;
-            font-weight: 700;
+            font-size: 10px;
+            font-weight: 400;
           }
 
           .receipt-total-section {
-            font-size: 12px;
-            font-weight: 900;
+            font-size: 13px;
+            font-weight: 600;
             text-align: center;
             padding: 4px 3mm;
             background: transparent !important;
@@ -1095,14 +1095,14 @@ const Summary = () => {
 
           .receipt-footer {
             text-align: center;
-            font-size: 9px;
+            font-size: 10px;
             line-height: 1.4;
             margin-top: 6px;
-            font-weight: 700;
+            font-weight: 400;
           }
 
           .receipt-bottom-border {
-            border-top: 3px solid #000;
+            border-top: 2px solid #000;
             margin-top: 6px;
           }
         }
