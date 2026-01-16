@@ -339,23 +339,29 @@ const ShopBilling = () => {
     }
   };
 
-  const handleAddProduct = (product: Product, stock: DailyStockItem) => {
+  const handleAddProduct = (product: Product, stock: DailyStockItem, boxQty: number, pcsQty: number) => {
     const pcsPerBox = product.pcs_per_box || 24;
     const boxPrice = product.box_price || product.price || 0;
     const pcsPrice = product.pcs_price || boxPrice / pcsPerBox || 0;
+    const totalAmount = boxQty * boxPrice + pcsQty * pcsPrice;
 
     setCartItems((prev) => ({
       ...prev,
       [product.id]: {
         product,
         stock,
-        boxQty: 0,
-        pcsQty: 0,
+        boxQty,
+        pcsQty,
         boxPrice,
         pcsPrice,
-        totalAmount: 0,
+        totalAmount,
       },
     }));
+
+    toast({
+      title: "Product Added",
+      description: `${product.name} - ${boxQty > 0 ? `${boxQty} Box` : ''}${boxQty > 0 && pcsQty > 0 ? ' + ' : ''}${pcsQty > 0 ? `${pcsQty} pcs` : ''} added to cart`,
+    });
   };
 
   const updateBoxQty = (productId: string, value: number) => {
@@ -1808,10 +1814,8 @@ const ShopBilling = () => {
       <AddProductModal
         open={showAddProductModal}
         onClose={() => setShowAddProductModal(false)}
-        onSelectProduct={handleAddProduct}
-        availableProducts={availableProducts.filter(
-          ({ product }) => !cartItems[product.id]
-        )}
+        onAddProduct={handleAddProduct}
+        availableProducts={availableProducts}
       />
     </div>
   );
