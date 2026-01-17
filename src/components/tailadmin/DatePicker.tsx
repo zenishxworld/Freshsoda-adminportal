@@ -56,8 +56,8 @@ export const DatePicker: React.FC<DatePickerProps> = ({
 
     const handleDateClick = (day: number) => {
         const { year, month } = getDaysInMonth(currentMonth);
-        const selectedDate = new Date(year, month, day);
-        const formattedDate = selectedDate.toISOString().split('T')[0];
+        // Format date as YYYY-MM-DD without timezone conversion
+        const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         onChange(formattedDate);
         setIsOpen(false);
     };
@@ -73,8 +73,21 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth);
     const monthName = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-    const selectedDate = value ? new Date(value) : null;
-    const isSelectedMonth = selectedDate && selectedDate.getMonth() === month && selectedDate.getFullYear() === year;
+    // Parse selected date without timezone conversion
+    let selectedDate = null;
+    let selectedDay = null;
+    let selectedMonth = null;
+    let selectedYear = null;
+
+    if (value) {
+        const parts = value.split('-');
+        selectedYear = parseInt(parts[0]);
+        selectedMonth = parseInt(parts[1]) - 1; // Month is 0-indexed
+        selectedDay = parseInt(parts[2]);
+        selectedDate = new Date(selectedYear, selectedMonth, selectedDay);
+    }
+
+    const isSelectedMonth = selectedDate && selectedMonth === month && selectedYear === year;
 
     const today = new Date();
     const isCurrentMonth = today.getMonth() === month && today.getFullYear() === year;
@@ -144,7 +157,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                             {/* Days of the month */}
                             {Array.from({ length: daysInMonth }).map((_, index) => {
                                 const day = index + 1;
-                                const isSelected = isSelectedMonth && selectedDate?.getDate() === day;
+                                const isSelected = isSelectedMonth && selectedDay === day;
                                 const isToday = isCurrentMonth && today.getDate() === day;
 
                                 return (
@@ -153,10 +166,10 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                                         type="button"
                                         onClick={() => handleDateClick(day)}
                                         className={`aspect-square rounded-lg text-sm font-medium transition-all duration-150 ${isSelected
-                                                ? 'bg-primary text-white shadow-md scale-105'
-                                                : isToday
-                                                    ? 'bg-primary/10 text-primary font-bold'
-                                                    : 'text-gray-700 hover:bg-gray-100'
+                                            ? 'bg-primary text-white shadow-md scale-105'
+                                            : isToday
+                                                ? 'bg-primary/10 text-primary font-bold'
+                                                : 'text-gray-700 hover:bg-gray-100'
                                             }`}
                                     >
                                         {day}
@@ -171,7 +184,8 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                         <button
                             type="button"
                             onClick={() => {
-                                const today = new Date().toISOString().split('T')[0];
+                                const now = new Date();
+                                const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
                                 onChange(today);
                                 setIsOpen(false);
                             }}
