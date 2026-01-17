@@ -98,7 +98,7 @@ function toItemsArray(products_sold: unknown): Array<any> {
   return [];
 }
 
-function qtyToPCS(item: any, pm: ProductMinimal): { boxQty: number; pcsQty: number; totalPCS: number; unitPrice: number } {
+function qtyToPCS(item: any, pm: ProductMinimal): { boxQty: number; pcsQty: number; totalPCS: number; unitPrice: number; lineTotal: number } {
   let boxQty = 0;
   let pcsQty = 0;
   let unitPrice = 0;
@@ -111,7 +111,20 @@ function qtyToPCS(item: any, pm: ProductMinimal): { boxQty: number; pcsQty: numb
     if (item.unit === 'pcs') pcsQty = item.quantity;
   }
   const totalPCS = boxQty * (pm.pcs_per_box || 24) + pcsQty;
-  return { boxQty, pcsQty, totalPCS, unitPrice };
+
+  // Use the saved total from the bill if available (correct revenue)
+  // Otherwise fallback to calculating it (for backward compatibility)
+  let lineTotal = 0;
+  if (typeof item.total === 'number') {
+    lineTotal = item.total;
+  } else {
+    // Fallback: calculate based on box/pcs quantities and their respective prices
+    const boxPrice = (pm as any).box_price || (pm as any).price || 0;
+    const pcsPrice = (pm as any).pcs_price || boxPrice / (pm.pcs_per_box || 24);
+    lineTotal = boxQty * boxPrice + pcsQty * pcsPrice;
+  }
+
+  return { boxQty, pcsQty, totalPCS, unitPrice, lineTotal };
 }
 
 function normalizeQty(totalPCS: number, pcsPerBox: number) {
@@ -179,7 +192,7 @@ async function buildDailySummaryCorrect(assignedRows: any[], salesRows: any[], p
       if (!pm) continue;
       const q = qtyToPCS(it, pm);
       map.set(it.productId, (map.get(it.productId) || 0) + q.totalPCS);
-      rev += q.totalPCS * (q.unitPrice || 0);
+      rev += q.lineTotal;
     }
     revenueByKey.set(key, rev);
   }
@@ -295,7 +308,7 @@ export async function buildRouteSummary(range: DateRange): Promise<RouteSummaryR
       const q = qtyToPCS(it, pm);
       const p = getRouteProd(key, it.productId);
       p.sold += q.totalPCS;
-      stats.revenue += q.totalPCS * (q.unitPrice || 0);
+      stats.revenue += q.lineTotal;
     }
   }
 
@@ -397,7 +410,7 @@ export async function buildDriverSummary(range: DateRange): Promise<DriverSummar
       const q = qtyToPCS(it, pm);
       const p = getDriverProd(did, it.productId);
       p.sold += q.totalPCS;
-      stats.revenue += q.totalPCS * (q.unitPrice || 0);
+      stats.revenue += q.lineTotal;
     }
   }
 
@@ -472,7 +485,7 @@ export async function buildProductSummary(range: DateRange): Promise<ProductSumm
       const q = qtyToPCS(it, pm);
       const p = getAgg(it.productId);
       p.sold += q.totalPCS;
-      p.revenue += q.totalPCS * (q.unitPrice || 0);
+      p.revenue += q.lineTotal;
       if (q.unitPrice) { p.unitPriceSum += q.unitPrice; p.count++; }
     }
   }
@@ -512,7 +525,7 @@ export async function buildSalesReport(range: DateRange): Promise<SalesReportRow
       const pm = pmMap[it.productId];
       if (!pm) return { product_id: it.productId, product_name: '', boxQty: 0, pcsQty: 0, unitPrice: 0, totalPCS: 0, lineRevenue: 0 };
       const q = qtyToPCS(it, pm);
-      return { product_id: it.productId, product_name: pm.name, boxQty: q.boxQty, pcsQty: q.pcsQty, unitPrice: q.unitPrice || 0, totalPCS: q.totalPCS, lineRevenue: q.totalPCS * (q.unitPrice || 0) };
+      return { product_id: it.productId, product_name: pm.name, boxQty: q.boxQty, pcsQty: q.pcsQty, unitPrice: q.unitPrice || 0, totalPCS: q.totalPCS, lineRevenue: q.lineTotal };
     });
 
     // Calculate totals for the row

@@ -1325,9 +1325,9 @@ const ShopBilling = () => {
                                                 min="0"
                                                 step="0.01"
                                                 disabled={maxPcsCapacity === 0}
-                                                placeholder={`${product.pcs_price ??
+                                                placeholder={`${(product.pcs_price ??
                                                   (product.box_price ??
-                                                    product.price) / pcsPerBox
+                                                    product.price) / pcsPerBox).toFixed(2)
                                                   }`}
                                               />
                                             </div>
