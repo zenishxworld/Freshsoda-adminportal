@@ -528,18 +528,36 @@ const ShopBilling = () => {
     setShowBillPreviewUI(true); // Show the preview UI
   };
 
-  // Get sold items for preview/print
+  // Get sold items for preview/print - separate rows for boxes and pieces
   const getSoldItems = () => {
     return Object.values(cartItems)
       .filter((item) => item.boxQty > 0 || item.pcsQty > 0)
-      .map((item) => ({
-        productId: item.product.id,
-        productName: item.product.name,
-        boxQty: item.boxQty,
-        pcsQty: item.pcsQty,
-        price: item.boxQty > 0 ? item.boxPrice : item.pcsPrice,
-        total: item.totalAmount,
-      }));
+      .flatMap((item) => {
+        const rows = [];
+        // Add box row if box quantity > 0
+        if (item.boxQty > 0) {
+          rows.push({
+            productId: item.product.id,
+            productName: item.product.name,
+            boxQty: item.boxQty,
+            pcsQty: 0,
+            price: item.boxPrice,
+            total: item.boxQty * item.boxPrice,
+          });
+        }
+        // Add pcs row if pcs quantity > 0
+        if (item.pcsQty > 0) {
+          rows.push({
+            productId: item.product.id,
+            productName: item.product.name,
+            boxQty: 0,
+            pcsQty: item.pcsQty,
+            price: item.pcsPrice,
+            total: item.pcsQty * item.pcsPrice,
+          });
+        }
+        return rows;
+      });
   };
 
   // Handle print bill - saves and prints
