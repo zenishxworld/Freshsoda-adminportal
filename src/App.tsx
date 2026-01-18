@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProtectedRouteAdmin } from './components/ProtectedRouteAdmin';
@@ -6,6 +6,7 @@ import { ProtectedRouteDriver } from './components/ProtectedRouteDriver';
 import { DashboardLayout } from './layouts/DashboardLayout';
 import { DriverLayout } from './layouts/DriverLayout';
 import { isWithinAuthGracePeriod } from './lib/utils';
+import { initializeNotificationChecks } from './lib/notificationService';
 
 // Admin Pages
 import { LoginPage } from './pages/tailadmin/LoginPage';
@@ -127,6 +128,11 @@ function AppRoutes() {
 }
 
 function App() {
+  // Initialize notification monitoring on app startup
+  useEffect(() => {
+    initializeNotificationChecks();
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>

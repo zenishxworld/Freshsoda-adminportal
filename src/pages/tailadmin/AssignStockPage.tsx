@@ -17,6 +17,7 @@ import {
     type DailyStockPayload,
 } from '@/lib/supabase';
 import { getAssignmentsForDate, subscribeAssignmentsForDate, type AssignmentLogEntry } from '@/lib/supabase';
+import { notifyStockAssignment } from '@/lib/notificationService';
 
 interface AssignmentQuantity {
     boxQty: number;
@@ -372,6 +373,20 @@ export const AssignStockPage: React.FC = () => {
             const route = routes.find(r => r.id === selectedRoute);
             const assignmentTarget = route?.name || 'selected route';
             alert(`Stock successfully assigned to ${assignmentTarget} on ${selectedDate}`);
+
+            // Create notifications for each product assigned
+            for (const item of payload) {
+                const product = products.find(p => p.id === item.product_id);
+                if (product && (item.boxes > 0 || item.pcs > 0)) {
+                    await notifyStockAssignment(
+                        'Route Assignment',
+                        assignmentTarget,
+                        product.name,
+                        item.boxes,
+                        item.pcs
+                    ).catch(err => console.error('Failed to create notification:', err));
+                }
+            }
 
             // Refresh assignment log immediately
             try {

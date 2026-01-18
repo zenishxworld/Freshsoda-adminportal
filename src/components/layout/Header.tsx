@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Menu, Bell, User, LogOut, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { getNotifications, type Notification } from '@/lib/supabase';
 
 interface HeaderProps {
     onMenuToggle: () => void;
@@ -10,9 +11,30 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
     const [showNotifications, setShowNotifications] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
+    const [notifications, setNotifications] = useState<Notification[]>([]);
     const notificationRef = useRef<HTMLDivElement>(null);
     const userMenuRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
+
+    // Load notifications
+    const loadNotifications = async () => {
+        try {
+            const data = await getNotifications();
+            // Show only latest 5 notifications in header dropdown
+            setNotifications(data.slice(0, 5));
+        } catch (error) {
+            console.error('Failed to load notifications:', error);
+        }
+    };
+
+    useEffect(() => {
+        loadNotifications();
+        
+        // Refresh notifications every 2 minutes
+        const interval = setInterval(loadNotifications, 2 * 60 * 1000);
+        
+        return () => clearInterval(interval);
+    }, []);
 
     // Close dropdowns when clicking outside
     useEffect(() => {
@@ -34,14 +56,18 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
         navigate('/login');
     };
 
-    // Mock notifications - replace with real data
-    const notifications = [
-        { id: 1, title: 'Low Stock Alert', message: 'Product A is running low', time: '5 min ago', unread: true },
-        { id: 2, title: 'New Assignment', message: 'Route 1 assigned to Driver A', time: '1 hour ago', unread: true },
-        { id: 3, title: 'Sales Update', message: 'Today\'s sales: ₹45,678', time: '2 hours ago', unread: false },
-    ];
-
     const unreadCount = notifications.filter(n => n.unread).length;
+
+    const formatTimeAgo = (dateString: string): string => {
+        const date = new Date(dateString);
+        const now = new Date();
+        const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+        
+        if (seconds < 60) return 'Just now';
+        if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)} hour${Math.floor(seconds / 3600) > 1 ? 's' : ''} ago`;
+        return `${Math.floor(seconds / 86400)} day${Math.floor(seconds / 86400) > 1 ? 's' : ''} ago`;
+    };
 
     return (
         <header className="sticky top-0 z-30 bg-white border-b border-gray-200 h-16">
@@ -93,21 +119,25 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
                                                 key={notification.id}
                                                 className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${notification.unread ? 'bg-blue-50' : ''
                                                     }`}
+                                                onClick={() => {
+                                                    setShowNotifications(false);
+                                                    navigate('/admin/notifications');
+                                                }}
                                             >
                                                 <div className="flex items-start justify-between">
                                                     <div className="flex-1">
                                                         <p className="font-medium text-sm text-gray-900">
                                                             {notification.title}
                                                         </p>
-                                                        <p className="text-sm text-gray-600 mt-1">
+                                                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">
                                                             {notification.message}
                                                         </p>
                                                         <p className="text-xs text-gray-500 mt-2">
-                                                            {notification.time}
+                                                            {formatTimeAgo(notification.created_at)}
                                                         </p>
                                                     </div>
                                                     {notification.unread && (
-                                                        <span className="w-2 h-2 bg-primary rounded-full mt-1"></span>
+                                                        <span className="w-2 h-2 bg-primary rounded-full mt-1 flex-shrink-0 ml-2"></span>
                                                     )}
                                                 </div>
                                             </div>
