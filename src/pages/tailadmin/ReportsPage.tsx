@@ -17,34 +17,34 @@ export const ReportsPage: React.FC = () => {
       </div>
       <Card>
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid grid-cols-2 sm:grid-cols-5 w-full gap-1 bg-gray-100 p-1">
+          <TabsList className="flex flex-nowrap sm:grid sm:grid-cols-5 w-full gap-1 bg-gray-100 p-1 overflow-x-auto">
             <TabsTrigger
               value="daily"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all whitespace-nowrap flex-shrink-0 min-w-fit px-3 sm:px-4"
             >
               Daily Summary
             </TabsTrigger>
             <TabsTrigger
               value="route"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all whitespace-nowrap flex-shrink-0 min-w-fit px-3 sm:px-4"
             >
               Route Summary
             </TabsTrigger>
             <TabsTrigger
               value="product"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all whitespace-nowrap flex-shrink-0 min-w-fit px-3 sm:px-4"
             >
               Product Summary
             </TabsTrigger>
             <TabsTrigger
               value="sales"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all whitespace-nowrap flex-shrink-0 min-w-fit px-3 sm:px-4"
             >
               Sales Report
             </TabsTrigger>
             <TabsTrigger
               value="discounts"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all whitespace-nowrap flex-shrink-0 min-w-fit px-3 sm:px-4"
             >
               Discounted Sales
             </TabsTrigger>
