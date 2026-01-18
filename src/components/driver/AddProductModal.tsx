@@ -11,7 +11,7 @@ import { cn } from "../../lib/utils";
 interface AddProductModalProps {
   open: boolean;
   onClose: () => void;
-  onAddProduct: (product: Product, stock: DailyStockItem, boxQty: number, pcsQty: number) => void;
+  onAddProduct: (product: Product, stock: DailyStockItem, boxQty: number, pcsQty: number, boxPrice: number, pcsPrice: number) => void;
   availableProducts: Array<{ product: Product; stock: DailyStockItem }>;
 }
 
@@ -20,6 +20,8 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
   const [selectedProduct, setSelectedProduct] = useState<{ product: Product; stock: DailyStockItem } | null>(null);
   const [boxQty, setBoxQty] = useState<number>(0);
   const [pcsQty, setPcsQty] = useState<number>(0);
+  const [boxPrice, setBoxPrice] = useState<number>(0);
+  const [pcsPrice, setPcsPrice] = useState<number>(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const filteredProducts = availableProducts.filter(({ product }) => {
@@ -32,6 +34,8 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
     setSelectedProduct(null);
     setBoxQty(0);
     setPcsQty(0);
+    setBoxPrice(0);
+    setPcsPrice(0);
   };
 
   const handleClose = () => {
@@ -43,12 +47,19 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
     setSelectedProduct({ product, stock });
     setBoxQty(0);
     setPcsQty(0);
+    // Initialize prices from product
+    const initialBoxPrice = product.box_price || product.price || 0;
+    const initialPcsPrice = product.pcs_price || (initialBoxPrice / (product.pcs_per_box || 24));
+    setBoxPrice(initialBoxPrice);
+    setPcsPrice(initialPcsPrice);
   };
 
   const handleBackToSearch = () => {
     setSelectedProduct(null);
     setBoxQty(0);
     setPcsQty(0);
+    setBoxPrice(0);
+    setPcsPrice(0);
   };
 
   const adjustBoxQty = (delta: number) => {
@@ -82,9 +93,21 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
     setPcsQty(Math.max(0, Math.min(maxPcsQty, numValue)));
   };
 
+  const handleBoxPriceChange = (value: string) => {
+    const sanitized = value.replace(/[^0-9.]/g, "");
+    const numValue = parseFloat(sanitized) || 0;
+    setBoxPrice(Math.max(0, numValue));
+  };
+
+  const handlePcsPriceChange = (value: string) => {
+    const sanitized = value.replace(/[^0-9.]/g, "");
+    const numValue = parseFloat(sanitized) || 0;
+    setPcsPrice(Math.max(0, numValue));
+  };
+
   const handleAddToCart = () => {
     if (!selectedProduct || (boxQty <= 0 && pcsQty <= 0)) return;
-    onAddProduct(selectedProduct.product, selectedProduct.stock, boxQty, pcsQty);
+    onAddProduct(selectedProduct.product, selectedProduct.stock, boxQty, pcsQty, boxPrice, pcsPrice);
     handleClose();
   };
 
@@ -104,14 +127,7 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
     }
   }, [open]);
 
-  // Calculate prices
-  const boxPrice = selectedProduct
-    ? (selectedProduct.product.box_price || selectedProduct.product.price || 0)
-    : 0;
-  const pcsPrice = selectedProduct
-    ? (selectedProduct.product.pcs_price || (boxPrice / (selectedProduct.product.pcs_per_box || 24)))
-    : 0;
-
+  // Calculate total amount using editable prices
   const totalAmount = (boxQty * boxPrice) + (pcsQty * pcsPrice);
 
   return (
@@ -304,6 +320,47 @@ const AddProductModal = ({ open, onClose, onAddProduct, availableProducts }: Add
                   <p className="text-xs text-muted-foreground text-center mt-2">
                     Max: {(selectedProduct.stock.boxQty || 0) * (selectedProduct.product.pcs_per_box || 24) + (selectedProduct.stock.pcsQty || 0)}
                   </p>
+                </div>
+              </div>
+
+              {/* Price Editing Section */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                {/* Box Price */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <Box className="w-3 h-3" />
+                    Box Price
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₹</span>
+                    <Input
+                      type="text"
+                      value={boxPrice > 0 ? boxPrice.toString() : ""}
+                      onChange={(e) => handleBoxPriceChange(e.target.value)}
+                      placeholder="0.00"
+                      className="pl-7 h-10 text-base font-semibold"
+                      inputMode="decimal"
+                    />
+                  </div>
+                </div>
+
+                {/* Pcs Price */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <Layers className="w-3 h-3" />
+                    Pcs Price
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₹</span>
+                    <Input
+                      type="text"
+                      value={pcsPrice > 0 ? pcsPrice.toString() : ""}
+                      onChange={(e) => handlePcsPriceChange(e.target.value)}
+                      placeholder="0.00"
+                      className="pl-7 h-10 text-base font-semibold"
+                      inputMode="decimal"
+                    />
+                  </div>
                 </div>
               </div>
 

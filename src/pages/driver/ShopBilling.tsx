@@ -339,10 +339,7 @@ const ShopBilling = () => {
     }
   };
 
-  const handleAddProduct = (product: Product, stock: DailyStockItem, boxQty: number, pcsQty: number) => {
-    const pcsPerBox = product.pcs_per_box || 24;
-    const boxPrice = product.box_price || product.price || 0;
-    const pcsPrice = product.pcs_price || boxPrice / pcsPerBox || 0;
+  const handleAddProduct = (product: Product, stock: DailyStockItem, boxQty: number, pcsQty: number, boxPrice: number, pcsPrice: number) => {
     const totalAmount = boxQty * boxPrice + pcsQty * pcsPrice;
 
     setCartItems((prev) => ({
