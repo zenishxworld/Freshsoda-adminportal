@@ -89,14 +89,14 @@ export const DiscountedSales: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <DatePicker label="From Date" value={from} onChange={setFrom} />
                     <DatePicker label="To Date" value={to} onChange={setTo} />
-                    <div className="flex items-end gap-2">
-                        <Button variant="primary" onClick={load} disabled={!from || !to || loading}>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 md:col-span-2">
+                        <Button variant="primary" onClick={load} disabled={!from || !to || loading} className="w-full sm:w-auto">
                             {loading ? 'Loading...' : 'Filter'}
                         </Button>
-                        <Button variant="outline" onClick={onExport} disabled={rows.length === 0}>
+                        <Button variant="outline" onClick={onExport} disabled={rows.length === 0} className="w-full sm:w-auto">
                             <Download className="w-4 h-4 mr-2" />Export
                         </Button>
-                        <Button variant="secondary" onClick={reset}>
+                        <Button variant="secondary" onClick={reset} className="w-full sm:w-auto">
                             <RefreshCw className="w-4 h-4 mr-2" />Reset
                         </Button>
                     </div>
