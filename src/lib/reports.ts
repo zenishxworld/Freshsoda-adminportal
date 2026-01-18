@@ -89,6 +89,28 @@ export interface SalesReportRow {
   items: Array<{ product_id: string; product_name: string; boxQty: number; pcsQty: number; unitPrice: number; totalPCS: number; lineRevenue: number }>;
 }
 
+export interface DiscountedSaleItem {
+  route_id: string;
+  route_name: string;
+  product_id: string;
+  product_name: string;
+  unit: 'box' | 'pcs';
+  default_price: number;
+  sold_price: number;
+  discount_per_unit: number;
+  quantity_sold: number;
+  total_discount: number;
+  sale_date: string;
+  shop_name: string;
+}
+
+export interface DiscountedSalesRow {
+  route_id: string;
+  route_name: string;
+  total_discount: number;
+  items: DiscountedSaleItem[];
+}
+
 function toItemsArray(products_sold: unknown): Array<any> {
   if (Array.isArray(products_sold)) return products_sold as Array<any>;
   if (products_sold && typeof products_sold === 'object') {
@@ -563,4 +585,144 @@ export function exportCsv(headers: string[], rows: Array<Record<string, string |
   const headerLine = headers.join(',');
   const bodyLines = rows.map(r => headers.map(h => String(r[h] ?? '')).join(',')).join('\n');
   return [headerLine, bodyLines].join('\n');
+}
+
+export async function buildDiscountedSalesReport(range: DateRange): Promise<DiscountedSalesRow[]> {
+  const [pmMap, routesMap, salesRows] = await Promise.all([
+    getProductsMap(),
+    getRoutesMap(),
+    getSalesBetween(range.from, range.to),
+  ]);
+
+  // Collect all discounted items
+  const discountedItems: DiscountedSaleItem[] = [];
+
+  for (const sale of salesRows) {
+    const items = toItemsArray(sale.products_sold);
+    const routeId = sale.route_id || '';
+    const routeName = routeId ? routesMap[routeId] || '' : '';
+    const saleDate = sale.date;
+    const shopName = sale.shop_name || '';
+
+    for (const item of items) {
+      const pm = pmMap[item.productId];
+      if (!pm) continue;
+
+      // Determine unit type and quantities
+      let unit: 'box' | 'pcs' = 'box';
+      let quantity = 0;
+      let soldPrice = 0;
+      let defaultPrice = 0;
+
+      // Parse item data
+      if (typeof item.unit === 'string') {
+        unit = item.unit === 'pcs' ? 'pcs' : 'box';
+        quantity = item.quantity || 0;
+        soldPrice = item.price || 0;
+      } else {
+        // Handle boxQty/pcsQty format
+        const boxQty = item.boxQty || 0;
+        const pcsQty = item.pcsQty || 0;
+
+        // If both exist, create separate entries for each
+        if (boxQty > 0) {
+          const boxDefaultPrice = pm.box_price || pm.price || 0;
+          const boxSoldPrice = item.price || 0;
+
+          if (boxSoldPrice > 0 && boxSoldPrice < boxDefaultPrice) {
+            const discountPerUnit = boxDefaultPrice - boxSoldPrice;
+            discountedItems.push({
+              route_id: routeId,
+              route_name: routeName,
+              product_id: item.productId,
+              product_name: pm.name,
+              unit: 'box',
+              default_price: boxDefaultPrice,
+              sold_price: boxSoldPrice,
+              discount_per_unit: discountPerUnit,
+              quantity_sold: boxQty,
+              total_discount: discountPerUnit * boxQty,
+              sale_date: saleDate,
+              shop_name: shopName,
+            });
+          }
+        }
+
+        if (pcsQty > 0) {
+          const pcsDefaultPrice = pm.pcs_price || (pm.box_price || pm.price || 0) / (pm.pcs_per_box || 24);
+          const pcsSoldPrice = item.price || 0;
+
+          if (pcsSoldPrice > 0 && pcsSoldPrice < pcsDefaultPrice) {
+            const discountPerUnit = pcsDefaultPrice - pcsSoldPrice;
+            discountedItems.push({
+              route_id: routeId,
+              route_name: routeName,
+              product_id: item.productId,
+              product_name: pm.name,
+              unit: 'pcs',
+              default_price: pcsDefaultPrice,
+              sold_price: pcsSoldPrice,
+              discount_per_unit: discountPerUnit,
+              quantity_sold: pcsQty,
+              total_discount: discountPerUnit * pcsQty,
+              sale_date: saleDate,
+              shop_name: shopName,
+            });
+          }
+        }
+        continue;
+      }
+
+      // Get default price based on unit
+      if (unit === 'box') {
+        defaultPrice = pm.box_price || pm.price || 0;
+      } else {
+        defaultPrice = pm.pcs_price || (pm.box_price || pm.price || 0) / (pm.pcs_per_box || 24);
+      }
+
+      // Check if this is a discounted sale
+      if (soldPrice > 0 && soldPrice < defaultPrice && quantity > 0) {
+        const discountPerUnit = defaultPrice - soldPrice;
+        discountedItems.push({
+          route_id: routeId,
+          route_name: routeName,
+          product_id: item.productId,
+          product_name: pm.name,
+          unit,
+          default_price: defaultPrice,
+          sold_price: soldPrice,
+          discount_per_unit: discountPerUnit,
+          quantity_sold: quantity,
+          total_discount: discountPerUnit * quantity,
+          sale_date: saleDate,
+          shop_name: shopName,
+        });
+      }
+    }
+  }
+
+  // Group by route
+  const routeMap = new Map<string, DiscountedSaleItem[]>();
+  for (const item of discountedItems) {
+    const key = item.route_id;
+    if (!routeMap.has(key)) {
+      routeMap.set(key, []);
+    }
+    routeMap.get(key)!.push(item);
+  }
+
+  // Build result rows
+  const result: DiscountedSalesRow[] = [];
+  for (const [routeId, items] of routeMap.entries()) {
+    const totalDiscount = items.reduce((sum, item) => sum + item.total_discount, 0);
+    result.push({
+      route_id: routeId,
+      route_name: items[0]?.route_name || '',
+      total_discount: totalDiscount,
+      items: items.sort((a, b) => b.total_discount - a.total_discount), // Sort by discount descending
+    });
+  }
+
+  // Sort routes by total discount descending
+  return result.sort((a, b) => b.total_discount - a.total_discount);
 }

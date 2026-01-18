@@ -5,6 +5,7 @@ import { DailySummary } from './reports/DailySummary';
 import { RouteSummary } from './reports/RouteSummary';
 import { ProductSummary } from './reports/ProductSummary';
 import { SalesReport } from './reports/SalesReport';
+import { DiscountedSales } from './reports/DiscountedSales';
 
 export const ReportsPage: React.FC = () => {
   const [tab, setTab] = useState<string>('daily');
@@ -16,7 +17,7 @@ export const ReportsPage: React.FC = () => {
       </div>
       <Card>
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full gap-1 bg-gray-100 p-1">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-5 w-full gap-1 bg-gray-100 p-1">
             <TabsTrigger
               value="daily"
               className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all"
@@ -41,11 +42,18 @@ export const ReportsPage: React.FC = () => {
             >
               Sales Report
             </TabsTrigger>
+            <TabsTrigger
+              value="discounts"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all"
+            >
+              Discounted Sales
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="daily"><DailySummary /></TabsContent>
           <TabsContent value="route"><RouteSummary /></TabsContent>
           <TabsContent value="product"><ProductSummary /></TabsContent>
           <TabsContent value="sales"><SalesReport /></TabsContent>
+          <TabsContent value="discounts"><DiscountedSales /></TabsContent>
         </Tabs>
       </Card>
     </div>
