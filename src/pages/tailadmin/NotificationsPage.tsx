@@ -3,7 +3,7 @@ import { Card } from '../../components/tailadmin/Card';
 import { Badge } from '../../components/tailadmin/Badge';
 import { Bell, Check, Trash2, Filter, Loader2 } from 'lucide-react';
 import { Button } from '../../components/tailadmin/Button';
-import { getNotifications, markAllNotificationsAsRead, markNotificationAsRead, deleteNotification as deleteNotificationApi, type Notification } from '../../lib/supabase';
+import { getNotifications, markAllNotificationsAsRead, markNotificationAsRead, deleteNotification as deleteNotificationApi, deleteAllNotifications, type Notification } from '../../lib/supabase';
 import { useToast } from '../../hooks/use-toast';
 
 export const NotificationsPage: React.FC = () => {
@@ -66,6 +66,19 @@ export const NotificationsPage: React.FC = () => {
         }
     };
 
+    const deleteAll = async () => {
+        if (!window.confirm('Are you sure you want to delete all notifications? This action cannot be undone.')) {
+            return;
+        }
+        try {
+            await deleteAllNotifications();
+            setNotifications([]);
+            toast({ title: 'Success', description: 'All notifications deleted' });
+        } catch (error) {
+            toast({ title: 'Error', description: 'Failed to delete all notifications', variant: 'destructive' });
+        }
+    };
+
     const getTypeColor = (type: string) => {
         switch (type) {
             case 'warning': return 'bg-amber-100 text-amber-800 border-amber-200';
@@ -94,15 +107,25 @@ export const NotificationsPage: React.FC = () => {
                         {unreadCount > 0 ? `You have ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}` : 'All caught up!'}
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                     {unreadCount > 0 && (
                         <Button
                             variant="outline"
                             onClick={markAllAsRead}
-                            className="flex items-center gap-2"
+                            className="flex items-center gap-2 justify-center"
                         >
                             <Check className="w-4 h-4" />
                             Mark all as read
+                        </Button>
+                    )}
+                    {notifications.length > 0 && (
+                        <Button
+                            variant="outline"
+                            onClick={deleteAll}
+                            className="flex items-center gap-2 justify-center text-danger hover:bg-red-50 hover:border-red-300"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Delete all
                         </Button>
                     )}
                 </div>

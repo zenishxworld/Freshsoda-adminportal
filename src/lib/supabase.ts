@@ -123,6 +123,18 @@ export const deleteNotification = async (id: number): Promise<void> => {
     }
 };
 
+export const deleteAllNotifications = async (): Promise<void> => {
+    const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .neq('id', 0); // Delete all records (id is never 0)
+
+    if (error) {
+        console.error('Error deleting all notifications:', error);
+        throw error;
+    }
+};
+
 export type WarehouseMovement = {
     id: string;
     product_id: string;
